@@ -19,4 +19,5 @@ class Config(object):
     POSTGRES_HOST = os.environ.get('POSTGRES_HOST')
     OPENF1_API_URL = 'https://api.openf1.org/v1/'
     OPENF1_API_MEETINGS_ENDPOINT = 'meetings'
+    OPENF1_API_SESSIONS_ENDPOINT = 'sessions'
     LOG_FILE = 'theundercut_etl.log'

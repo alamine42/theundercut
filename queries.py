@@ -24,3 +24,15 @@ MEETING_INSERT_SQL = """
     (%d, '%s', '%s', %d, '%s', %d, '%s');
 """
 
+SESSION_SELECT_SQL = """
+    SELECT *
+    FROM tuc_sessions
+    WHERE session_key = %d
+"""
+
+SESSION_INSERT_SQL = """
+    INSERT INTO tuc_sessions
+    (session_key, meeting_key, circuit_key, session_name, session_type, date_start, date_end, year, last_updated_dt)
+    VALUES 
+    (%d, %d, %d, '%s', '%s', '%s', '%s', %d, '%s');
+"""

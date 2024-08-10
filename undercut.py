@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from config import Config
 from utils import db_connect, select_query, run_query
 
-def get_list_of_meetings(query_year=None):
+def get_meetings(query_year=None, query_start_dt=None):
     """ 
     Call the OpenF1 API Meetings Endpoint to get the list of meetings for a select year
 
@@ -26,7 +26,9 @@ def get_list_of_meetings(query_year=None):
     logging.debug('Retrieving list of meetings from OpenF1 for %s ...' % (query_year))
     meetings_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_MEETINGS_ENDPOINT)
     
-    if query_year is not None:
+    if query_start_dt is not None:
+        meetings_url = meetings_url + '?date_start>' + str(query_start_dt)
+    elif query_year is not None:
         meetings_url = meetings_url + '?year=' + str(query_year)
 
     logging.debug('URL: %s' % meetings_url)
@@ -45,6 +47,38 @@ def get_list_of_meetings(query_year=None):
         raise e
 
     return meetings_list
+
+def get_sessions(query_year=None, query_start_dt=None):
+    """ 
+    Call the OpenF1 API Sessions Endpoint to get the list of sessions for a select year
+
+    /meetings?year=YYYY
+
+    """
+    logging.debug('Retrieving list of sessions from OpenF1 for %s ...' % (query_year))
+    sessions_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_SESSIONS_ENDPOINT)
+    
+    if query_start_dt is not None:
+        sessions_url = sessions_url + '?date_start>' + str(query_start_dt)
+    elif query_year is not None:
+        sessions_url = sessions_url + '?year=' + str(query_year)
+
+    logging.info('URL: %s' % sessions_url)
+
+    sessions_list = []
+    try:
+        
+        response = requests.get(sessions_url)
+
+        if response.status_code == 200:
+            sessions_list = json.loads(response.text)
+            logging.debug(sessions_list)
+
+    except Exception as e:
+        logging.error(sessions_url)
+        raise e
+
+    return sessions_list
 
 def load_meetings(meetings_list):
 
@@ -86,51 +120,61 @@ def load_meetings(meetings_list):
                 )
             run_query(meeting_add_sql)
 
-        # meeting_data_str = '\',\''.join(
-        #     [
-        #         meeting['id'],
-        #         meeting['date'],
-        #         meeting['title'],
-        #         meeting['description'],
-        #         meeting['score_type'],
-        #         meeting['results_link'],
-        #         current_time_str
-        #     ]
-        # )
-        # meeting_data_str = "'" + meeting_data_str + "'"
+def load_sessions(sessions_list):
 
-        # # Delete the meeting if it exists
-        # try:
-        #     cursor.execute(queries.WORKOUT_DELETE_SQL % meeting['id'])
-        # except Exception as e:
-        #     logging.error('Error deleting meeting!')
-        #     raise e
+    current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # # Insert the meeting
-        # try:
-        #     cursor.execute(queries.WORKOUT_INSERT_SQL % (Config.SUGARWOD_WORKOUT_DATA_HEADER, meeting_data_str))
-        # except Exception as e:
-        #     logging.error('Error inserting meeting!')
-        #     raise e
+    for session in sessions_list:
 
-def main(filter_year=None, download_only=False):
+        # Check to see if the circuit exists, if not add it to the circuits table
+        session_select_sql = queries.SESSION_SELECT_SQL % session['session_key']
+        list_of_sessions = select_query(session_select_sql)
+
+        if len(list_of_sessions) == 0:
+            logging.info('Session with session key %s does not exist! Loading it into DB ...' % (session['session_key']))
+            session_add_sql = queries.SESSION_INSERT_SQL % (
+                    session['session_key'],
+                    session['meeting_key'],
+                    session['circuit_key'],
+                    session['session_name'],
+                    session['session_type'],
+                    session['date_start'],
+                    session['date_end'],
+                    session['year'],
+                    current_time_str
+                )
+            run_query(session_add_sql)
+
+def main(filter_year=None, start_date=None,download_only=False):
 
     logging.info('------------------')
     logging.info('The UnderCut - ETL')
 
     # Setting up query date
     query_year = datetime.now().year
+    query_start_dt = None
 
     # If year is specified, use the provided selection, otherwise use the current year
     if filter_year is not None:
         query_year = filter_year
 
+    if start_date is not None:
+        query_start_dt = start_date
+        query_year = None
+
     logging.info('Getting meeting data for %s' % (query_year))
-    meetings = get_list_of_meetings(query_year)
+    meetings = get_meetings(query_year, query_start_dt)
     logging.info('Retrieved %d meetings ...' % (len(meetings)))
 
     logging.info('Loading meetings in DB ...')
     load_meetings(meetings)
+
+    logging.info('Getting session data for %s' % (query_year))
+    sessions = get_sessions(query_year, query_start_dt)
+    logging.info('Retrieved %d sessions ...' % (len(sessions)))
+
+    logging.info('Loading sessions in DB ...')
+    load_sessions(sessions)
 
     # conn = db_connect()
     # cur = conn.cursor()
@@ -189,6 +233,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--print', action='store_true', help='Specifies logging to command line instead of file')
     parser.add_argument('-l', '--log_level', type=str, action='store', help='Log level (INFO, DEBUG, ERROR)', default='INFO')
     parser.add_argument('-y', '--year', type=int, action='store', help='Specify the year for which to retrieve the meetings. Default is current year.')
+    parser.add_argument('-s', '--start_date', type=str, action='store', help='Specifies the date after which the data is to be retrieved (i.e. all data since that date). SUPERCEDES the Year argument. Format: YYYY-MM-DD.')
 
     args = parser.parse_args()
     log_format = '%(levelname)s:%(asctime)s:%(message)s'
@@ -205,4 +250,4 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(format=log_format, level=log_level, filename=Config.LOG_FILE)
 
-    main(filter_year=args.year, download_only=args.download_only)
+    main(filter_year=args.year, start_date=args.start_date, download_only=args.download_only)
