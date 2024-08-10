@@ -166,63 +166,17 @@ def main(filter_year=None, start_date=None,download_only=False):
     meetings = get_meetings(query_year, query_start_dt)
     logging.info('Retrieved %d meetings ...' % (len(meetings)))
 
-    logging.info('Loading meetings in DB ...')
-    load_meetings(meetings)
+    if not download_only:
+        logging.info('Loading meetings in DB ...')
+        load_meetings(meetings)
 
     logging.info('Getting session data for %s' % (query_year))
     sessions = get_sessions(query_year, query_start_dt)
     logging.info('Retrieved %d sessions ...' % (len(sessions)))
 
-    logging.info('Loading sessions in DB ...')
-    load_sessions(sessions)
-
-    # conn = db_connect()
-    # cur = conn.cursor()
-
-    # logging.debug('Start %s, End %s, Load %s' % (data_start_dt, data_end_dt, data_load_dt))
-    # latest_scores_filename = 'latest_scores.csv'
-    
-    # if not reload_last:
-    #     os.remove(latest_scores_filename) if os.path.exists(latest_scores_filename) else logging.info('No scores file')
-
-    #     logging.info('Fetching meeting data ...')
-    #     meetings_list = get_list_of_meetings(data_start_dt, data_end_dt)
-    #     logging.info('Retrieved %d meetings ...' % len(meetings_list))
-
-    #     logging.info('Loading meetings to database ...')
-    #     load_meetings(cur, meetings_list)
-
-    #     for meeting in meetings_list:
-    #         logging.debug(meeting)
-    #         logging.info('Fetching athlete & results data for meeting %s ...' % meeting['id'])
-    #         athletes_list = get_list_of_athletes(meeting['id'])
-    #         logging.info('%d athletes logged a score for this meeting!' % len(athletes_list))
-    #         logging.debug('Loading athletes to database ...')
-    #         load_meeting_athletes(cur, meeting['id'], athletes_list)
-
-    #     # old_scores_filename = locate_scores_files()
-    #     # if old_scores_filename is not None:
-    #     #     logging.debug('Renaming downloaded file from %s to %s ...' % (old_scores_filename, latest_scores_filename))
-    #     #     shutil.move(old_scores_filename, latest_scores_filename)
-
-    # else:
-    #     logging.info('Reloading last downloaded scores file ...')
-
-    # conn.commit()
-    # cur.close()
-    # conn.close()
-
-    # List of archive game months
-    # archives_response = get_player_game_archives(Config.CHESS_COM_USERNAME)
-    # list_of_months_in_archive = json.loads(archives_response.text)
-    # for month_url in list_of_months_in_archive['archives']:
-    #     logging.debug(month_url)
-
-    # Player Stats -- not needed
-    # player_stats_response = get_player_stats(Config.CHESS_COM_USERNAME)
-    # player_stats_json = json.loads(player_stats_response.text)
-    # print(json.dumps(player_stats_json, indent=4))
-
+    if not download_only:
+        logging.info('Loading sessions in DB ...')
+        load_sessions(sessions)
 
     logging.info('All done.')
 
