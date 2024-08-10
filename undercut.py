@@ -70,6 +70,22 @@ def load_meetings(meetings_list):
                 )
             run_query(circuit_add_sql)
 
+        # Check ot see if the meeting exists, if not add it to the meetings table
+        meetings_select_sql = queries.MEETING_SELECT_SQL % meeting['meeting_key']
+        list_of_meetings = select_query(meetings_select_sql)
+        if len(list_of_meetings) == 0:
+            logging.info('Meeting %s with meeting key %s does not exist. Loading it into DB ...' % (meeting['meeting_name'], meeting['meeting_key']))
+            meeting_add_sql = queries.MEETING_INSERT_SQL % (
+                    meeting['meeting_key'],
+                    meeting['meeting_name'],
+                    meeting['meeting_official_name'].replace("'", "''"),
+                    meeting['circuit_key'],
+                    meeting['date_start'],
+                    meeting['year'],
+                    current_time_str
+                )
+            run_query(meeting_add_sql)
+
         # meeting_data_str = '\',\''.join(
         #     [
         #         meeting['id'],
