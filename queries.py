@@ -36,3 +36,47 @@ SESSION_INSERT_SQL = """
     VALUES 
     (%d, %d, %d, '%s', '%s', '%s', '%s', %d, '%s');
 """
+
+DRIVER_SELECT_SQL = """
+    SELECT *
+    FROM tuc_drivers
+    WHERE full_name = '%s' and country_code = '%s'
+"""
+
+DRIVER_INSERT_SQL = """
+    INSERT INTO tuc_drivers
+    (driver_number, first_name, last_name, full_name, headshot_url, name_acronym, country_code, broadcast_name, team_color, team_name, driver_hash, last_updated_dt)
+    VALUES 
+    (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
+"""
+
+DRIVER_UPDATE_SQL = """
+    UPDATE tuc_drivers
+    SET 
+        driver_number = %d,
+        first_name = '%s',
+        last_name = '%s',
+        full_name = '%s',
+        headshot_url = '%s',
+        name_acronym = '%s',
+        country_code = '%s',
+        broadcast_name = '%s',
+        team_color = '%s',
+        team_name = '%s',
+        driver_hash = '%s',
+        last_updated_dt = '%s'
+    WHERE
+        driver_key = %d
+"""
+
+SESSION_DRIVERS_DELETE_SQL = """
+    DELETE FROM tuc_session_drivers
+    WHERE session_key = '%s'
+"""
+
+SESSION_DRIVER_INSERT_SQL = """
+    INSERT INTO tuc_session_drivers
+    (driver_key, session_key, meeting_key, team_name, team_color, driver_number, full_name, headshot_url, last_updated_dt)
+    VALUES
+    (%d, %d, %d, '%s', '%s', %d, '%s', '%s', '%s');
+"""

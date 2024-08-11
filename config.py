@@ -20,4 +20,5 @@ class Config(object):
     OPENF1_API_URL = 'https://api.openf1.org/v1/'
     OPENF1_API_MEETINGS_ENDPOINT = 'meetings'
     OPENF1_API_SESSIONS_ENDPOINT = 'sessions'
+    OPENF1_API_DRIVERS_ENDPOINT = 'drivers'
     LOG_FILE = 'theundercut_etl.log'
