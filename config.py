@@ -21,4 +21,5 @@ class Config(object):
     OPENF1_API_MEETINGS_ENDPOINT = 'meetings'
     OPENF1_API_SESSIONS_ENDPOINT = 'sessions'
     OPENF1_API_DRIVERS_ENDPOINT = 'drivers'
+    ERGAST_API_URL = 'https://ergast.com/api/f1/'
     LOG_FILE = 'theundercut_etl.log'

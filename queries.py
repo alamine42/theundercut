@@ -1,3 +1,10 @@
+SCHEDULE_SELECT_SQL = """
+    SELECT *
+    FROM tuc_schedule
+    WHERE race_name = '%s'
+"""
+
+
 CIRCUIT_SELECT_SQL = """
     SELECT *
     FROM tuc_circuits
@@ -19,9 +26,9 @@ MEETING_SELECT_SQL = """
 
 MEETING_INSERT_SQL = """
     INSERT INTO tuc_meetings
-    (meeting_key, meeting_name, meeting_official_name, circuit_key, date_start, year, last_updated_dt)
+    (meeting_key, meeting_name, meeting_official_name, meeting_round, circuit_key, date_start, year, last_updated_dt)
     VALUES 
-    (%d, '%s', '%s', %d, '%s', %d, '%s');
+    (%d, '%s', '%s', %d, %d, '%s', %d, '%s');
 """
 
 SESSION_SELECT_SQL = """
@@ -40,7 +47,7 @@ SESSION_INSERT_SQL = """
 DRIVER_SELECT_SQL = """
     SELECT *
     FROM tuc_drivers
-    WHERE full_name = '%s' and country_code = '%s'
+    WHERE lower(full_name) = lower('%s')
 """
 
 DRIVER_INSERT_SQL = """
@@ -69,6 +76,14 @@ DRIVER_UPDATE_SQL = """
         driver_key = %d
 """
 
+SESSION_DRIVER_SELECT_SQL = """
+    SELECT *
+    FROM tuc_session_drivers
+    WHERE lower(full_name) = lower('%s')
+    AND session_key = '%s'
+    AND meeting_key = '%s'
+"""
+
 SESSION_DRIVERS_DELETE_SQL = """
     DELETE FROM tuc_session_drivers
     WHERE session_key = '%s'
@@ -79,4 +94,16 @@ SESSION_DRIVER_INSERT_SQL = """
     (driver_key, session_key, meeting_key, team_name, team_color, driver_number, full_name, headshot_url, last_updated_dt)
     VALUES
     (%d, %d, %d, '%s', '%s', %d, '%s', '%s', '%s');
+"""
+
+RESULTS_CLEANUP_SQL = """
+    DELETE FROM tuc_results
+    WHERE meeting_key = %d and session_key = %d
+"""
+
+RESULT_INSERT_SQL = """
+    INSERT INTO tuc_results
+    (meeting_key, session_key, driver_key, position, points, grid, laps, status_id, status_text, fastest_lap_rank, last_updated_dt)
+    VALUES
+    (%d, %d, %d, '%s', %d, '%s', %d, %d, '%s', %d, '%s');
 """

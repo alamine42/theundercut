@@ -3,7 +3,7 @@ import calendar
 import os
 import shutil
 import csv
-import psycopg2
+# import psycopg2
 import logging
 import argparse
 import queries
@@ -11,13 +11,91 @@ import uuid
 import json
 import requests
 import hashlib
+import xmltodict
 
 from urllib.parse import urljoin
 from datetime import date, datetime, timedelta
 from config import Config
 from utils import db_connect, select_query, run_query
 
-def get_meetings(query_year=None, query_start_dt=None):
+def request_json_data(url):
+    response_data = None
+    try:
+        
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            response_data = json.loads(response.text)
+            logging.debug(response_data)
+
+    except Exception as e:
+        logging.error(url)
+        raise e
+
+    return response_data
+
+def get_race_schedule_from_ergast(query_year=None):
+    """
+    Call the Ergast API race schedule endpoint to get the list of events for a select year.
+    If no year is specified, the default behavior is to get the race schedule for the current year.
+
+    Example: https://ergast.com/api/f1/2024
+
+    """
+    logging.debug('Retrieving the schedule for %s ' % (query_year if query_year is not None else 'this year'))
+    if query_year is None:
+        schedule_url = urljoin(Config.ERGAST_API_URL, 'current')
+    else:
+        schedule_url = urljoin(Config.ERGAST_API_URL, str(query_year))
+
+    logging.debug('URL: %s' % schedule_url)
+
+    response = requests.get(schedule_url)
+    schedule_dict = xmltodict.parse(response.text)
+    
+    return schedule_dict
+
+def get_race_results_from_ergast(meeting_info):
+    """
+    Call the Ergast API race results endpoint to get the winners.
+    If no year is specified, the default behavior is to get the race schedule for the current year.
+
+    Example: hhttps://ergast.com/api/f1/2024/5/results
+
+    """
+    logging.debug('Retrieving the race results for %s ' % meeting_info['meeting_name'])
+    results_url = urljoin(Config.ERGAST_API_URL, str(meeting_info['year']) + '/' + str(meeting_info['meeting_round']) + '/results')
+    logging.debug('URL: %s' % results_url)
+
+    response = requests.get(results_url)
+    results_dict = xmltodict.parse(response.text)
+    logging.debug(results_dict)
+    
+    return results_dict['MRData']['RaceTable']['Race']['ResultsList']
+
+def get_meeting(meeting_year=None, meeting_name=None):
+    """ 
+    Call the OpenF1 API Meetings Endpoint to get a specific meeting.
+    If a meeting name & year are not specified, then the most recent meeting is retrieved.
+
+    https://api.openf1.org/v1/meetings?year=2024&meeting_name=Bahrain%20Grand%20Prix
+
+    """
+
+    meeting_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_MEETINGS_ENDPOINT)
+
+    if meeting_year is None or meeting_name is None:
+        logging.debug('Retrieving latest meeting from OpenF1 ...')
+        meeting_url = meeting_url + '?meeting_key=latest'
+    else:
+        logging.debug('Retrieving the %s %s meeting from OpenF1 ...' % (str(meeting_year), meeting_name))
+        meeting_url = meeting_url + '?year=%s&meeting_name=%s' % (str(meeting_year), meeting_name)
+
+    logging.debug('URL: %s' % meeting_url)
+
+    return request_json_data(meeting_url)
+
+def get_meetings_historical(query_year=None, query_start_dt=None):
     """ 
     Call the OpenF1 API Meetings Endpoint to get the list of meetings for a select year
 
@@ -49,7 +127,7 @@ def get_meetings(query_year=None, query_start_dt=None):
 
     return meetings_list
 
-def get_sessions(query_year=None, query_start_dt=None):
+def get_sessions_historical(query_year=None, query_start_dt=None):
     """ 
     Call the OpenF1 API Sessions Endpoint to get the list of sessions for a select year
 
@@ -133,45 +211,58 @@ def get_drivers_by_session(session_key):
 
     return drivers_list
 
-def load_meetings(meetings_list):
+def load_meeting(meeting):
 
     current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    for meeting in meetings_list:
+    # Check to see if the circuit exists, if not add it to the circuits table
+    circuit_select_sql = queries.CIRCUIT_SELECT_SQL % meeting['circuit_key']
+    list_of_circuits = select_query(circuit_select_sql)
 
-        # Check to see if the circuit exists, if not add it to the circuits table
-        circuit_select_sql = queries.CIRCUIT_SELECT_SQL % meeting['circuit_key']
-        list_of_circuits = select_query(circuit_select_sql)
+    if len(list_of_circuits) == 0:
+        logging.info('Circuit %s with circuit key %s does not exist! Loading it into DB ...' % (meeting['circuit_short_name'], meeting['circuit_key']))
+        circuit_add_sql = queries.CIRCUIT_INSERT_SQL % (
+                meeting['circuit_key'],
+                meeting['circuit_short_name'],
+                meeting['country_code'],
+                meeting['country_key'],
+                meeting['country_name'],
+                meeting['gmt_offset'],
+                meeting['location'],
+                current_time_str
+            )
+        run_query(circuit_add_sql)
 
-        if len(list_of_circuits) == 0:
-            logging.info('Circuit %s with circuit key %s does not exist! Loading it into DB ...' % (meeting['circuit_short_name'], meeting['circuit_key']))
-            circuit_add_sql = queries.CIRCUIT_INSERT_SQL % (
-                    meeting['circuit_key'],
-                    meeting['circuit_short_name'],
-                    meeting['country_code'],
-                    meeting['country_key'],
-                    meeting['country_name'],
-                    meeting['gmt_offset'],
-                    meeting['location'],
-                    current_time_str
-                )
-            run_query(circuit_add_sql)
+    # Check to see if the meeting is on the schedule
+    schedule_select_sql = queries.SCHEDULE_SELECT_SQL % meeting['meeting_name']
+    schedule_select_result = select_query(schedule_select_sql)
+    if len(schedule_select_result) == 0:
+        logging.info('Meeting %s does not exist on the schedule!' % meeting['meeting_name'])
+        return (meeting, 'error')
+    else:
+
+        meeting['meeting_round'] = schedule_select_result[0][1]
 
         # Check ot see if the meeting exists, if not add it to the meetings table
         meetings_select_sql = queries.MEETING_SELECT_SQL % meeting['meeting_key']
         list_of_meetings = select_query(meetings_select_sql)
         if len(list_of_meetings) == 0:
-            logging.info('Meeting %s with meeting key %s does not exist. Loading it into DB ...' % (meeting['meeting_name'], meeting['meeting_key']))
+            logging.debug('Meeting %s with meeting key %s does not exist. Loading it into DB ...' % (meeting['meeting_name'], meeting['meeting_key']))
             meeting_add_sql = queries.MEETING_INSERT_SQL % (
                     meeting['meeting_key'],
                     meeting['meeting_name'],
                     meeting['meeting_official_name'].replace("'", "''"),
+                    meeting['meeting_round'],
                     meeting['circuit_key'],
                     meeting['date_start'],
                     meeting['year'],
                     current_time_str
                 )
             run_query(meeting_add_sql)
+        else:
+            logging.debug('Meeting %s with meeting key %s exists already. Skipping load ...' % (meeting['meeting_name'], meeting['meeting_key']))
+
+        return (meeting, 'success')
 
 def load_sessions(sessions_list):
 
@@ -209,7 +300,7 @@ def update_drivers(drivers_list):
         driver_hash = hashlib.md5(concatenated_driver_info.encode("utf-8")).hexdigest()
 
         # Check to see if the circuit exists, if not add it to the circuits table
-        driver_select_sql = queries.DRIVER_SELECT_SQL % (driver['full_name'], driver['country_code'])
+        driver_select_sql = queries.DRIVER_SELECT_SQL % (driver['full_name'])
         list_of_drivers = select_query(driver_select_sql)
 
         if len(list_of_drivers) == 0:
@@ -262,7 +353,7 @@ def load_session_drivers(drivers_list, session_key):
 
     for driver in drivers_list:
 
-        driver_select_sql = queries.DRIVER_SELECT_SQL % (driver['full_name'], driver['country_code'])
+        driver_select_sql = queries.DRIVER_SELECT_SQL % (driver['full_name'])
         list_of_drivers = select_query(driver_select_sql)
 
         if len(list_of_drivers) == 0:
@@ -283,6 +374,44 @@ def load_session_drivers(drivers_list, session_key):
             )
             run_query(session_driver_add_sql)
 
+def identify_key_sessions(sessions_list):
+    race_session_key = 0
+    qualifying_session_key = 0
+    for session in sessions_list:
+        if session['session_name'] == 'Qualifying':
+            qualifying_session_key = session['session_key']
+        elif session['session_name'] == 'Race':
+            race_session_key = session['session_key']
+    return (race_session_key, qualifying_session_key)
+
+def add_session_results(meeting_key, session_key, results_list):
+    current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Step 1 -- clean up any prior existing results for this session
+    results_cleanup_sql = queries.RESULTS_CLEANUP_SQL % (meeting_key, session_key)
+
+    for result in results_list['Result']:
+        # Find the driver
+        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (result['Driver']['GivenName'] + ' ' + result['Driver']['FamilyName'], session_key, meeting_key)
+        driver_select_result = select_query(driver_select_sql)
+        
+        if len(driver_select_result) > 0:
+            driver_key = driver_select_result[0][0]
+            result_add_sql = queries.RESULT_INSERT_SQL % (
+                    meeting_key,
+                    session_key,
+                    driver_key,
+                    result['@position'],
+                    int(result['@points']),
+                    result['Grid'],
+                    int(result['Laps']),
+                    int(result['Status']['@statusId']),
+                    result['Status']['#text'],
+                    int(result['FastestLap']['@rank']),
+                    current_time_str
+                )
+            run_query(result_add_sql)
+
 
 def main(filter_year=None, start_date=None,download_only=False):
 
@@ -297,29 +426,29 @@ def main(filter_year=None, start_date=None,download_only=False):
     if filter_year is not None:
         query_year = filter_year
 
-    if start_date is not None:
-        query_start_dt = start_date
-        query_year = None
-
-    logging.info('Getting meeting data for %s' % (query_year))
-    meetings = get_meetings(query_year, query_start_dt)
-    logging.info('Retrieved %d meetings ...' % (len(meetings)))
+    meeting_info = get_meeting()
 
     if not download_only:
-        logging.info('Loading meetings in DB ...')
-        load_meetings(meetings)
+        meeting_info, load_result = load_meeting(meeting_info[0])
+    else:
+        logging.info('Download only specified -- skipping DB load ...')
+        load_result = 'success'
 
-    for meeting in meetings:
-        logging.info('Getting session data for %s ...' % (meeting['meeting_name']))
-        sessions = get_sessions_by_meeting(meeting['meeting_key'])
+    if load_result == 'success':
+
+        logging.info('Getting session data for %s ...' % (meeting_info['meeting_name']))
+        sessions = get_sessions_by_meeting(meeting_info['meeting_key'])
         logging.info('Retrieved %d sessions ...' % (len(sessions)))
+
+        race_session_key, qualifying_session_key = identify_key_sessions(sessions)
+        logging.debug('Race session key: %d -- Qualifying session key: %d' % (race_session_key, qualifying_session_key))
 
         if not download_only:
             logging.info('Loading sessions in DB ...')
             load_sessions(sessions)
 
         for session in sessions:
-            logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting['meeting_name']))
+            logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
             drivers = get_drivers_by_session(session['session_key'])
             logging.info('Retrieved %d drivers ...' % len(drivers))
 
@@ -330,6 +459,17 @@ def main(filter_year=None, start_date=None,download_only=False):
                 logging.info('Complete. Loading session driver data ...')
                 load_session_drivers(drivers, session['session_key'])
 
+        # Getting Race and Qualifying Results from Ergast
+        logging.info('Getting race session results ...')
+        meeting_results = get_race_results_from_ergast(meeting_info)
+        logging.debug(meeting_results)
+
+        if not download_only:
+            logging.info('Loading race session results into DB ...')
+            add_session_results(meeting_info['meeting_key'], race_session_key, meeting_results)
+
+    else:
+        logging.info('Failed to load meeting info ...')
 
     logging.info('All done.')
 
