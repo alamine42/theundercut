@@ -1,0 +1,48 @@
+import time
+import calendar
+import logging
+import json
+import requests
+import xmltodict
+
+from urllib.parse import urljoin
+from config import Config
+
+def get_race_schedule_from_ergast(query_year=None):
+    """
+    Call the Ergast API race schedule endpoint to get the list of events for a select year.
+    If no year is specified, the default behavior is to get the race schedule for the current year.
+
+    Example: https://ergast.com/api/f1/2024
+
+    """
+    logging.debug('Retrieving the schedule for %s ' % (query_year if query_year is not None else 'this year'))
+    if query_year is None:
+        schedule_url = urljoin(Config.ERGAST_API_URL, 'current')
+    else:
+        schedule_url = urljoin(Config.ERGAST_API_URL, str(query_year))
+
+    logging.debug('URL: %s' % schedule_url)
+
+    response = requests.get(schedule_url)
+    schedule_dict = xmltodict.parse(response.text)
+    
+    return schedule_dict
+
+def get_race_results_from_ergast(meeting_info):
+    """
+    Call the Ergast API race results endpoint to get the winners.
+    If no year is specified, the default behavior is to get the race schedule for the current year.
+
+    Example: hhttps://ergast.com/api/f1/2024/5/results
+
+    """
+    logging.debug('Retrieving the race results for %s ' % meeting_info['meeting_name'])
+    results_url = urljoin(Config.ERGAST_API_URL, str(meeting_info['year']) + '/' + str(meeting_info['meeting_round']) + '/results')
+    logging.debug('URL: %s' % results_url)
+
+    response = requests.get(results_url)
+    results_dict = xmltodict.parse(response.text)
+    logging.debug(results_dict)
+    
+    return results_dict['MRData']['RaceTable']['Race']['ResultsList']

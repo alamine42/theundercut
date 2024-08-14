@@ -17,199 +17,7 @@ from urllib.parse import urljoin
 from datetime import date, datetime, timedelta
 from config import Config
 from utils import db_connect, select_query, run_query
-
-def request_json_data(url):
-    response_data = None
-    try:
-        
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            response_data = json.loads(response.text)
-            logging.debug(response_data)
-
-    except Exception as e:
-        logging.error(url)
-        raise e
-
-    return response_data
-
-def get_race_schedule_from_ergast(query_year=None):
-    """
-    Call the Ergast API race schedule endpoint to get the list of events for a select year.
-    If no year is specified, the default behavior is to get the race schedule for the current year.
-
-    Example: https://ergast.com/api/f1/2024
-
-    """
-    logging.debug('Retrieving the schedule for %s ' % (query_year if query_year is not None else 'this year'))
-    if query_year is None:
-        schedule_url = urljoin(Config.ERGAST_API_URL, 'current')
-    else:
-        schedule_url = urljoin(Config.ERGAST_API_URL, str(query_year))
-
-    logging.debug('URL: %s' % schedule_url)
-
-    response = requests.get(schedule_url)
-    schedule_dict = xmltodict.parse(response.text)
-    
-    return schedule_dict
-
-def get_race_results_from_ergast(meeting_info):
-    """
-    Call the Ergast API race results endpoint to get the winners.
-    If no year is specified, the default behavior is to get the race schedule for the current year.
-
-    Example: hhttps://ergast.com/api/f1/2024/5/results
-
-    """
-    logging.debug('Retrieving the race results for %s ' % meeting_info['meeting_name'])
-    results_url = urljoin(Config.ERGAST_API_URL, str(meeting_info['year']) + '/' + str(meeting_info['meeting_round']) + '/results')
-    logging.debug('URL: %s' % results_url)
-
-    response = requests.get(results_url)
-    results_dict = xmltodict.parse(response.text)
-    logging.debug(results_dict)
-    
-    return results_dict['MRData']['RaceTable']['Race']['ResultsList']
-
-def get_meeting(meeting_year=None, meeting_name=None):
-    """ 
-    Call the OpenF1 API Meetings Endpoint to get a specific meeting.
-    If a meeting name & year are not specified, then the most recent meeting is retrieved.
-
-    https://api.openf1.org/v1/meetings?year=2024&meeting_name=Bahrain%20Grand%20Prix
-
-    """
-
-    meeting_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_MEETINGS_ENDPOINT)
-
-    if meeting_year is None or meeting_name is None:
-        logging.debug('Retrieving latest meeting from OpenF1 ...')
-        meeting_url = meeting_url + '?meeting_key=latest'
-    else:
-        logging.debug('Retrieving the %s %s meeting from OpenF1 ...' % (str(meeting_year), meeting_name))
-        meeting_url = meeting_url + '?year=%s&meeting_name=%s' % (str(meeting_year), meeting_name)
-
-    logging.debug('URL: %s' % meeting_url)
-
-    return request_json_data(meeting_url)
-
-def get_meetings_historical(query_year=None, query_start_dt=None):
-    """ 
-    Call the OpenF1 API Meetings Endpoint to get the list of meetings for a select year
-
-    /meetings?year=YYYY
-
-    """
-    logging.debug('Retrieving list of meetings from OpenF1 for %s ...' % (query_year))
-    meetings_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_MEETINGS_ENDPOINT)
-    
-    if query_start_dt is not None:
-        meetings_url = meetings_url + '?date_start>' + str(query_start_dt)
-    elif query_year is not None:
-        meetings_url = meetings_url + '?year=' + str(query_year)
-
-    logging.debug('URL: %s' % meetings_url)
-
-    meetings_list = []
-    try:
-        
-        response = requests.get(meetings_url)
-
-        if response.status_code == 200:
-            meetings_list = json.loads(response.text)
-            logging.debug(meetings_list)
-
-    except Exception as e:
-        logging.error(meetings_url)
-        raise e
-
-    return meetings_list
-
-def get_sessions_historical(query_year=None, query_start_dt=None):
-    """ 
-    Call the OpenF1 API Sessions Endpoint to get the list of sessions for a select year
-
-    /sessions?year=YYYY
-
-    """
-    logging.debug('Retrieving list of sessions from OpenF1 for %s ...' % (query_year))
-    sessions_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_SESSIONS_ENDPOINT)
-    
-    if query_start_dt is not None:
-        sessions_url = sessions_url + '?date_start>' + str(query_start_dt)
-    elif query_year is not None:
-        sessions_url = sessions_url + '?year=' + str(query_year)
-
-    logging.info('URL: %s' % sessions_url)
-
-    sessions_list = []
-    try:
-        
-        response = requests.get(sessions_url)
-
-        if response.status_code == 200:
-            sessions_list = json.loads(response.text)
-            logging.debug(sessions_list)
-
-    except Exception as e:
-        logging.error(sessions_url)
-        raise e
-
-    return sessions_list
-
-def get_sessions_by_meeting(meeting_key):
-    """ 
-    Call the OpenF1 API Sessions Endpoint to get the list of sessions for a select meeting
-
-    /sessions?meeting_key=
-
-    """
-    logging.debug('Retrieving list of sessions from OpenF1 for Meeting key %s ...' % (meeting_key))
-    sessions_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_SESSIONS_ENDPOINT)
-    sessions_url = sessions_url + '?meeting_key=' + str(meeting_key)
-    logging.debug('URL: %s' % sessions_url)
-    sessions_list = []
-    try:
-        
-        response = requests.get(sessions_url)
-
-        if response.status_code == 200:
-            sessions_list = json.loads(response.text)
-            logging.debug(sessions_list)
-
-    except Exception as e:
-        logging.error(sessions_url)
-        raise e
-
-    return sessions_list
-
-def get_drivers_by_session(session_key):
-    """ 
-    Call the OpenF1 API Drivers Endpoint to get the list of drivers for a select session
-
-    /drivers?session_key=
-
-    """
-    logging.debug('Retrieving list of drivers from OpenF1 for session key %s ...' % (session_key))
-    drivers_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_DRIVERS_ENDPOINT)
-    drivers_url = drivers_url + '?session_key=' + str(session_key)
-    logging.debug('URL: %s' % drivers_url)
-    drivers_list = []
-    try:
-        
-        response = requests.get(drivers_url)
-
-        if response.status_code == 200:
-            drivers_list = json.loads(response.text)
-            logging.debug(drivers_list)
-
-    except Exception as e:
-        logging.error(drivers_url)
-        raise e
-
-    return drivers_list
+from apis import ergast, openf1
 
 def load_meeting(meeting):
 
@@ -426,7 +234,7 @@ def main(filter_year=None, start_date=None,download_only=False):
     if filter_year is not None:
         query_year = filter_year
 
-    meeting_info = get_meeting()
+    meeting_info = openf1.get_meeting()
 
     if not download_only:
         meeting_info, load_result = load_meeting(meeting_info[0])
@@ -437,7 +245,7 @@ def main(filter_year=None, start_date=None,download_only=False):
     if load_result == 'success':
 
         logging.info('Getting session data for %s ...' % (meeting_info['meeting_name']))
-        sessions = get_sessions_by_meeting(meeting_info['meeting_key'])
+        sessions = openf1.get_sessions_by_meeting(meeting_info['meeting_key'])
         logging.info('Retrieved %d sessions ...' % (len(sessions)))
 
         race_session_key, qualifying_session_key = identify_key_sessions(sessions)
@@ -449,19 +257,19 @@ def main(filter_year=None, start_date=None,download_only=False):
 
         for session in sessions:
             logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
-            drivers = get_drivers_by_session(session['session_key'])
+            drivers = openf1.get_drivers_by_session(session['session_key'])
             logging.info('Retrieved %d drivers ...' % len(drivers))
 
             if not download_only:
                 logging.info('Updating driver information in DB ...')
                 update_drivers(drivers)
 
-                logging.info('Complete. Loading session driver data ...')
+                logging.info('Complete. Loading session driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
                 load_session_drivers(drivers, session['session_key'])
 
         # Getting Race and Qualifying Results from Ergast
         logging.info('Getting race session results ...')
-        meeting_results = get_race_results_from_ergast(meeting_info)
+        meeting_results = ergast.get_race_results_from_ergast(meeting_info)
         logging.debug(meeting_results)
 
         if not download_only:
