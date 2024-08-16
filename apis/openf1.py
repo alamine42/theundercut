@@ -24,13 +24,31 @@ def request_json_data(url):
 
     return response_data
 
-def get_meeting(meeting_year=None, meeting_name=None):
+def get_meeting(meeting_key):
     """ 
     Call the OpenF1 API Meetings Endpoint to get a specific meeting.
-    If a meeting name & year are not specified, then the most recent meeting is retrieved.
 
-    https://api.openf1.org/v1/meetings?year=2024&meeting_name=Bahrain%20Grand%20Prix
+    https://api.openf1.org/v1/meetings?meeting_key=1229
 
+    """
+
+    meeting_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_MEETINGS_ENDPOINT)
+
+    if meeting_key is None:
+        logging.debug('Retrieving latest meeting from OpenF1 ...')
+        meeting_url = meeting_url + '?meeting_key=latest'
+    else:
+        logging.debug('Retrieving meeting %d from OpenF1 ...' % meeting_key)
+        meeting_url = meeting_url + '?meeting_key=%d' % meeting_key
+
+    logging.debug('URL: %s' % meeting_url)
+
+    return request_json_data(meeting_url)
+
+
+def search_meetings(meeting_year=None, meeting_name=None):
+    """ 
+    UPDATE THE CODE LOGIC FOR THIS ONE
     """
 
     meeting_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_MEETINGS_ENDPOINT)

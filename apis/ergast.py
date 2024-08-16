@@ -8,6 +8,22 @@ import xmltodict
 from urllib.parse import urljoin
 from config import Config
 
+def request_ergast_data(url):
+    response_data = None
+    try:
+        
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            response_data = xmltodict.parse(response.text)
+            logging.debug(response_data)
+
+    except Exception as e:
+        logging.error(url)
+        raise e
+
+    return response_data
+
 def get_race_schedule_from_ergast(query_year=None):
     """
     Call the Ergast API race schedule endpoint to get the list of events for a select year.
@@ -24,10 +40,8 @@ def get_race_schedule_from_ergast(query_year=None):
 
     logging.debug('URL: %s' % schedule_url)
 
-    response = requests.get(schedule_url)
-    schedule_dict = xmltodict.parse(response.text)
+    return request_ergast_data(schedule_url)
     
-    return schedule_dict
 
 def get_race_results_from_ergast(meeting_info):
     """
@@ -41,8 +55,8 @@ def get_race_results_from_ergast(meeting_info):
     results_url = urljoin(Config.ERGAST_API_URL, str(meeting_info['year']) + '/' + str(meeting_info['meeting_round']) + '/results')
     logging.debug('URL: %s' % results_url)
 
-    response = requests.get(results_url)
-    results_dict = xmltodict.parse(response.text)
+    results_dict = request_ergast_data(results_url)
+
     logging.debug(results_dict)
     
     return results_dict['MRData']['RaceTable']['Race']['ResultsList']

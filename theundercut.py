@@ -221,7 +221,7 @@ def add_session_results(meeting_key, session_key, results_list):
             run_query(result_add_sql)
 
 
-def main(filter_year=None, start_date=None,download_only=False):
+def main(filter_year=None, start_date=None, download_only=False, meeting_key=False):
 
     logging.info('------------------')
     logging.info('The UnderCut - ETL')
@@ -234,7 +234,7 @@ def main(filter_year=None, start_date=None,download_only=False):
     if filter_year is not None:
         query_year = filter_year
 
-    meeting_info = openf1.get_meeting()
+    meeting_info = openf1.get_meeting(meeting_key)
 
     if not download_only:
         meeting_info, load_result = load_meeting(meeting_info[0])
@@ -306,4 +306,4 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(format=log_format, level=log_level, filename=Config.LOG_FILE)
 
-    main(filter_year=args.year, start_date=args.start_date, download_only=args.download_only)
+    main(filter_year=args.year, start_date=args.start_date, download_only=args.download_only, meeting_key=args.meeting_key)
