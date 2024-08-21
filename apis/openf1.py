@@ -179,3 +179,19 @@ def get_drivers_by_session(session_key):
         raise e
 
     return drivers_list
+
+def get_session_lap_data(session_key):
+
+    """ 
+    Call the OpenF1 API Laps Endpoint to get the lap data for a select session
+
+    /drivers?session_key=
+
+    """
+    logging.debug('Retrieving lap data from OpenF1 for session key %s ...' % (session_key))
+    laps_url = urljoin(Config.OPENF1_API_URL, Config.OPENF1_API_LAPS_ENDPOINT)
+    laps_url = laps_url + '?session_key=' + str(session_key)
+    logging.debug('URL: %s' % laps_url)
+    laps_data = request_json_data(laps_url)
+
+    return laps_data

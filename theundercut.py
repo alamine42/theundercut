@@ -19,6 +19,31 @@ from config import Config
 from utils import db_connect, select_query, run_query
 from apis import ergast, openf1
 
+DRIVERS_DICT = {}
+
+RACE_POINTS_DICT = {
+    1: 25,
+    2: 18,
+    3: 15,
+    4: 12,
+    5: 10,
+    6: 8,
+    7: 6,
+    8: 4,
+    9: 2,
+    10: 1,
+    11: 0,
+    12: 0,
+    13: 0,
+    14: 0,
+    15: 0,
+    16: 0,
+    17: 0,
+    18: 0,
+    19: 0,
+    20: 0
+}
+
 def load_meeting(meeting):
 
     current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -220,11 +245,10 @@ def add_session_results(meeting_key, session_key, results_list):
                 )
             run_query(result_add_sql)
 
-
-def main(filter_year=None, start_date=None, download_only=False, meeting_key=False):
+def get_race_data_from_openf1(filter_year=None, start_date=None, download_only=False, meeting_key=False):
 
     logging.info('------------------')
-    logging.info('The UnderCut - ETL')
+    logging.info('The UnderCut - Open F1 based')
 
     # Setting up query date
     query_year = datetime.now().year
@@ -236,11 +260,7 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
 
     meeting_info = openf1.get_meeting(meeting_key)
 
-    if not download_only:
-        meeting_info, load_result = load_meeting(meeting_info[0])
-    else:
-        logging.info('Download only specified -- skipping DB load ...')
-        load_result = 'success'
+    meeting_info, load_result = load_meeting(meeting_info[0])
 
     if load_result == 'success':
 
@@ -256,9 +276,25 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
             load_sessions(sessions)
 
         for session in sessions:
+            
+            if session['session_key'] not in (race_session_key, qualifying_session_key):
+                continue
+
+            # Getting session driver data
             logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
             drivers = openf1.get_drivers_by_session(session['session_key'])
             logging.info('Retrieved %d drivers ...' % len(drivers))
+
+            for driver in drivers:
+                if driver['driver_number'] not in DRIVERS_DICT:
+                    DRIVERS_DICT[driver['driver_number']] = {
+                        'name': driver['first_name'] + ' '  + driver['last_name'],
+                        'laps_completed': 0,
+                        'status': 'DNF',
+                        'fastest_lap_time': 1000,
+                        'fastest_lap_of_race': 0,
+                        'points': 0
+                    }
 
             if not download_only:
                 logging.info('Updating driver information in DB ...')
@@ -267,14 +303,140 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
                 logging.info('Complete. Loading session driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
                 load_session_drivers(drivers, session['session_key'])
 
-        # Getting Race and Qualifying Results from Ergast
-        logging.info('Getting race session results ...')
-        meeting_results = ergast.get_race_results_from_ergast(meeting_info)
-        logging.debug(meeting_results)
+            
+            if session['session_key'] == race_session_key:
+
+                # Getting Race info from Open F1
+                lap_data = openf1.get_session_lap_data(session['session_key'])
+                max_laps = lap_data[-1]['lap_number']
+                logging.info('This race has %d laps ...' % max_laps)
+                
+                driver_finishing_status = {}
+                fastest_lap_time = 1000
+                fastest_lap_driver_num = -1
+
+                print(lap_data[0])
+
+                for lap in lap_data:
+                    if lap['driver_number'] not in driver_finishing_status.keys():
+                        driver_finishing_status[lap['driver_number']] = lap['lap_number']
+                    elif lap['lap_number'] > driver_finishing_status[lap['driver_number']]:
+                        driver_finishing_status[lap['driver_number']] = lap['lap_number']
+
+                    DRIVERS_DICT[lap['driver_number']]['laps_completed'] = lap['lap_number']
+
+                    if lap['lap_duration'] is not None:
+                        if lap['lap_duration'] < DRIVERS_DICT[lap['driver_number']]['fastest_lap_time']:
+                            DRIVERS_DICT[lap['driver_number']]['fastest_lap_time'] = lap['lap_duration']
+
+                    if lap['lap_number'] >= 0.9 * max_laps:
+                        DRIVERS_DICT[lap['driver_number']]['status'] = 'Finished'
+
+                    if lap['lap_duration'] is not None:
+                        if lap['lap_duration'] < fastest_lap_time:
+                            fastest_lap_time = lap['lap_duration']
+                            fastest_lap_driver_num = lap['driver_number']
+
+                logging.info(driver_finishing_status)
+                logging.info('Fastest lap belongs to driver id %d with a lap time of %s.' % (fastest_lap_driver_num, str(fastest_lap_time)))
+                DRIVERS_DICT[fastest_lap_driver_num]['fastest_lap_of_race'] = 1
+                logging.debug(json.dumps(DRIVERS_DICT, sort_keys=True, indent=4))
+
+    else:
+        logging.info('Failed to load meeting info ...')
+
+    logging.info('All done.')
+
+def main(filter_year=None, start_date=None, download_only=False, meeting_key=False):
+
+    logging.info('------------------')
+    logging.info('The UnderCut - ETL')
+
+    # Setting up query date
+    query_year = datetime.now().year
+    query_start_dt = None
+
+    # If year is specified, use the provided selection, otherwise use the current year
+    if filter_year is not None:
+        query_year = filter_year
+
+    meeting_info = openf1.get_meeting(meeting_key)
+    meeting_info, load_result = load_meeting(meeting_info[0])
+    print(meeting_info)
+
+    if load_result == 'success':
+
+        logging.info('Getting session data for %s ...' % (meeting_info['meeting_name']))
+        sessions = openf1.get_sessions_by_meeting(meeting_info['meeting_key'])
+        logging.info('Retrieved %d sessions ...' % (len(sessions)))
+
+        race_session_key, qualifying_session_key = identify_key_sessions(sessions)
+        logging.debug('Race session key: %d -- Qualifying session key: %d' % (race_session_key, qualifying_session_key))
 
         if not download_only:
-            logging.info('Loading race session results into DB ...')
-            add_session_results(meeting_info['meeting_key'], race_session_key, meeting_results)
+            logging.info('Loading sessions in DB ...')
+            load_sessions(sessions)
+
+        for session in sessions:
+            
+            if session['session_key'] not in (race_session_key, qualifying_session_key):
+                continue
+
+            # Getting session driver data
+            logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
+            drivers = openf1.get_drivers_by_session(session['session_key'])
+            logging.info('Retrieved %d drivers ...' % len(drivers))
+
+            for driver in drivers:
+                if driver['driver_number'] not in DRIVERS_DICT:
+                    DRIVERS_DICT[driver['driver_number']] = {
+                        'name': driver['first_name'] + ' '  + driver['last_name'],
+                        'laps_completed': 0,
+                        'status': 'DNF',
+                        'position': 20,
+                        'points': 0,
+                        'starting_grid': -1,
+                        'fastest_lap_rank': 0,
+                        'fastest_lap_time': 1000,
+                        'fastest_lap_number': -1,
+                        'time_to_leader_ms': 1000,
+                        'time_to_leader_text': '',
+                    }
+
+            if not download_only:
+                logging.info('Updating driver information in DB ...')
+                update_drivers(drivers)
+
+                logging.info('Complete. Loading session driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
+                load_session_drivers(drivers, session['session_key'])
+            
+            if session['session_key'] == race_session_key:
+
+                # Getting Race and Qualifying Results from Ergast
+                logging.info('Getting race session results ...')
+                meeting_results = ergast.get_race_results_from_ergast(meeting_info)
+                logging.info(meeting_results['Result'])
+
+                for result in meeting_results['Result']:
+                    DRIVERS_DICT[int(result['@number'])]['position'] = result['@position']
+                    DRIVERS_DICT[int(result['@number'])]['starting_grid'] = result['Grid']
+                    DRIVERS_DICT[int(result['@number'])]['laps_completed'] = result['Laps']
+                    DRIVERS_DICT[int(result['@number'])]['status'] = result['Status']['#text']
+                    DRIVERS_DICT[int(result['@number'])]['points'] = result['@points']
+
+                    DRIVERS_DICT[int(result['@number'])]['fastest_lap_rank'] = result['FastestLap']['@rank']
+                    DRIVERS_DICT[int(result['@number'])]['fastest_lap_time'] = result['FastestLap']['Time']
+                    DRIVERS_DICT[int(result['@number'])]['fastest_lap_number'] = result['FastestLap']['@lap']
+
+                    if 'Time' in result:
+                        DRIVERS_DICT[int(result['@number'])]['time_to_leader_ms'] = result['Time']['@millis']
+                        DRIVERS_DICT[int(result['@number'])]['time_to_leader_text'] = result['Time']['#text']
+
+                # if not download_only:
+                #     logging.info('Loading race session results into DB ...')
+                #     add_session_results(meeting_info['meeting_key'], race_session_key, meeting_results)
+
+                logging.info(json.dumps(DRIVERS_DICT, indent=4))
 
     else:
         logging.info('Failed to load meeting info ...')
