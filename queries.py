@@ -103,7 +103,7 @@ RESULTS_CLEANUP_SQL = """
 
 RESULT_INSERT_SQL = """
     INSERT INTO tuc_results
-    (meeting_key, session_key, driver_key, position, points, grid, laps, status_id, status_text, fastest_lap_rank, last_updated_dt)
+    (meeting_key, session_key, driver_key, position, points, starting_grid, laps_completed, status, fastest_lap_rank, fastest_lap_time, fastest_lap_number, time_to_leader_ms, time_to_leader_text, last_updated_dt)
     VALUES
-    (%d, %d, %d, '%s', %d, '%s', %d, %d, '%s', %d, '%s');
+    (%d, %d, %d, %d, %d, '%s', %d, '%s', %d, '%s', %d, %d, '%s', '%s');
 """

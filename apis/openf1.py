@@ -24,7 +24,7 @@ def request_json_data(url):
 
     return response_data
 
-def get_meeting(meeting_key):
+def get_meeting(meeting_key=None):
     """ 
     Call the OpenF1 API Meetings Endpoint to get a specific meeting.
 

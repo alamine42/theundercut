@@ -21,29 +21,6 @@ from apis import ergast, openf1
 
 DRIVERS_DICT = {}
 
-RACE_POINTS_DICT = {
-    1: 25,
-    2: 18,
-    3: 15,
-    4: 12,
-    5: 10,
-    6: 8,
-    7: 6,
-    8: 4,
-    9: 2,
-    10: 1,
-    11: 0,
-    12: 0,
-    13: 0,
-    14: 0,
-    15: 0,
-    16: 0,
-    17: 0,
-    18: 0,
-    19: 0,
-    20: 0
-}
-
 def load_meeting(meeting):
 
     current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -209,23 +186,27 @@ def load_session_drivers(drivers_list, session_key):
 
 def identify_key_sessions(sessions_list):
     race_session_key = 0
+    sprint_session_key = 0
     qualifying_session_key = 0
     for session in sessions_list:
         if session['session_name'] == 'Qualifying':
             qualifying_session_key = session['session_key']
         elif session['session_name'] == 'Race':
             race_session_key = session['session_key']
-    return (race_session_key, qualifying_session_key)
+        elif session['session_name'] == 'Sprint':
+            sprint_qualifying_session_key = session['session_key']
+    return (race_session_key, qualifying_session_key, sprint_qualifying_session_key)
 
-def add_session_results(meeting_key, session_key, results_list):
+def add_session_results(meeting_key, session_key, results_dict):
     current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     # Step 1 -- clean up any prior existing results for this session
     results_cleanup_sql = queries.RESULTS_CLEANUP_SQL % (meeting_key, session_key)
+    run_query(results_cleanup_sql)
 
-    for result in results_list['Result']:
+    for driver_num, driver_result in results_dict.items():
         # Find the driver
-        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (result['Driver']['GivenName'] + ' ' + result['Driver']['FamilyName'], session_key, meeting_key)
+        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (driver_result['name'], session_key, meeting_key)
         driver_select_result = select_query(driver_select_sql)
         
         if len(driver_select_result) > 0:
@@ -234,13 +215,16 @@ def add_session_results(meeting_key, session_key, results_list):
                     meeting_key,
                     session_key,
                     driver_key,
-                    result['@position'],
-                    int(result['@points']),
-                    result['Grid'],
-                    int(result['Laps']),
-                    int(result['Status']['@statusId']),
-                    result['Status']['#text'],
-                    int(result['FastestLap']['@rank']),
+                    int(driver_result['position']),
+                    int(driver_result['points']),
+                    driver_result['starting_grid'],
+                    int(driver_result['laps_completed']),
+                    driver_result['status'],
+                    int(driver_result['fastest_lap_rank']),
+                    driver_result['fastest_lap_time'],
+                    int(driver_result['fastest_lap_number']),
+                    int(driver_result['time_to_leader_ms']),
+                    driver_result['time_to_leader_text'],
                     current_time_str
                 )
             run_query(result_add_sql)
@@ -357,89 +341,108 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
     query_start_dt = None
 
     # If year is specified, use the provided selection, otherwise use the current year
-    if filter_year is not None:
+
+    if meeting_key is not None:
+        meeting_list = openf1.get_meeting(meeting_key)
+    elif filter_year is not None:
         query_year = filter_year
+        meeting_list = openf1.get_meetings_historical(query_year=filter_year)
+    else:
+        meeting_list = openf1.get_meeting()
 
-    meeting_info = openf1.get_meeting(meeting_key)
-    meeting_info, load_result = load_meeting(meeting_info[0])
-    print(meeting_info)
+    for meeting in meeting_list:
+        meeting_details, load_result = load_meeting(meeting)
+        
+        logging.debug(meeting_details)
 
-    if load_result == 'success':
+        if load_result == 'success':
 
-        logging.info('Getting session data for %s ...' % (meeting_info['meeting_name']))
-        sessions = openf1.get_sessions_by_meeting(meeting_info['meeting_key'])
-        logging.info('Retrieved %d sessions ...' % (len(sessions)))
+            logging.info('Getting session data for %s ...' % (meeting_details['meeting_name']))
+            sessions = openf1.get_sessions_by_meeting(meeting_details['meeting_key'])
+            logging.info('Retrieved %d sessions ...' % (len(sessions)))
 
-        race_session_key, qualifying_session_key = identify_key_sessions(sessions)
-        logging.debug('Race session key: %d -- Qualifying session key: %d' % (race_session_key, qualifying_session_key))
-
-        if not download_only:
-            logging.info('Loading sessions in DB ...')
-            load_sessions(sessions)
-
-        for session in sessions:
-            
-            if session['session_key'] not in (race_session_key, qualifying_session_key):
-                continue
-
-            # Getting session driver data
-            logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
-            drivers = openf1.get_drivers_by_session(session['session_key'])
-            logging.info('Retrieved %d drivers ...' % len(drivers))
-
-            for driver in drivers:
-                if driver['driver_number'] not in DRIVERS_DICT:
-                    DRIVERS_DICT[driver['driver_number']] = {
-                        'name': driver['first_name'] + ' '  + driver['last_name'],
-                        'laps_completed': 0,
-                        'status': 'DNF',
-                        'position': 20,
-                        'points': 0,
-                        'starting_grid': -1,
-                        'fastest_lap_rank': 0,
-                        'fastest_lap_time': 1000,
-                        'fastest_lap_number': -1,
-                        'time_to_leader_ms': 1000,
-                        'time_to_leader_text': '',
-                    }
+            # race_session_key, qualifying_session_key, spring = identify_key_sessions(sessions)
+            # logging.debug('Race session key: %d -- Qualifying session key: %d' % (race_session_key, qualifying_session_key))
 
             if not download_only:
-                logging.info('Updating driver information in DB ...')
-                update_drivers(drivers)
+                logging.info('Loading sessions in DB ...')
+                load_sessions(sessions)
 
-                logging.info('Complete. Loading session driver data for %s at %s ...' % (session['session_name'], meeting_info['meeting_name']))
-                load_session_drivers(drivers, session['session_key'])
-            
-            if session['session_key'] == race_session_key:
+            for session in sessions:
+                
+                if session['session_name'] not in ('Race', 'Sprint'):
+                    continue
 
-                # Getting Race and Qualifying Results from Ergast
-                logging.info('Getting race session results ...')
-                meeting_results = ergast.get_race_results_from_ergast(meeting_info)
-                logging.info(meeting_results['Result'])
+                # Getting session driver data
+                logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_details['meeting_name']))
+                drivers = openf1.get_drivers_by_session(session['session_key'])
+                logging.info('Retrieved %d drivers ...' % len(drivers))
 
-                for result in meeting_results['Result']:
+                for driver in drivers:
+                    if driver['driver_number'] not in DRIVERS_DICT:
+                        DRIVERS_DICT[driver['driver_number']] = {
+                            'name': driver['first_name'] + ' '  + driver['last_name'],
+                            'laps_completed': 0,
+                            'status': 'DNF',
+                            'position': 20,
+                            'points': 0,
+                            'starting_grid': -1,
+                            'fastest_lap_rank': 0,
+                            'fastest_lap_time': 1000,
+                            'fastest_lap_number': -1,
+                            'time_to_leader_ms': 1000000000,
+                            'time_to_leader_text': '',
+                        }
+
+                if not download_only:
+                    logging.info('Updating driver information in DB ...')
+                    update_drivers(drivers)
+
+                    logging.info('Complete. Loading session driver data for %s at %s ...' % (session['session_name'], meeting_details['meeting_name']))
+                    load_session_drivers(drivers, session['session_key'])
+                
+                if session['session_name'] == 'Race':
+
+                    # Getting Race and Qualifying Results from Ergast
+                    logging.info('Getting Race session results ...')
+                    meeting_results = ergast.get_race_results_from_ergast(meeting_details)
+                    logging.debug(meeting_results)
+
+                elif session['session_name'] == 'Sprint':
+                    # Getting Spring results from Ergast
+                    logging.info('Getting Sprint session results ...')
+                    meeting_results = ergast.get_sprint_results_from_ergast(meeting_details)
+                    logging.debug(meeting_results)
+
+                else:
+                    continue
+
+                for result in meeting_results:
+
                     DRIVERS_DICT[int(result['@number'])]['position'] = result['@position']
                     DRIVERS_DICT[int(result['@number'])]['starting_grid'] = result['Grid']
                     DRIVERS_DICT[int(result['@number'])]['laps_completed'] = result['Laps']
                     DRIVERS_DICT[int(result['@number'])]['status'] = result['Status']['#text']
                     DRIVERS_DICT[int(result['@number'])]['points'] = result['@points']
 
-                    DRIVERS_DICT[int(result['@number'])]['fastest_lap_rank'] = result['FastestLap']['@rank']
-                    DRIVERS_DICT[int(result['@number'])]['fastest_lap_time'] = result['FastestLap']['Time']
-                    DRIVERS_DICT[int(result['@number'])]['fastest_lap_number'] = result['FastestLap']['@lap']
+                    if 'FastestLap' in result:
+                        if '@rank' in result['FastestLap']:
+                            DRIVERS_DICT[int(result['@number'])]['fastest_lap_rank'] = result['FastestLap']['@rank']
+                        DRIVERS_DICT[int(result['@number'])]['fastest_lap_time'] = result['FastestLap']['Time']
+                        DRIVERS_DICT[int(result['@number'])]['fastest_lap_number'] = result['FastestLap']['@lap']
 
                     if 'Time' in result:
                         DRIVERS_DICT[int(result['@number'])]['time_to_leader_ms'] = result['Time']['@millis']
                         DRIVERS_DICT[int(result['@number'])]['time_to_leader_text'] = result['Time']['#text']
 
-                # if not download_only:
-                #     logging.info('Loading race session results into DB ...')
-                #     add_session_results(meeting_info['meeting_key'], race_session_key, meeting_results)
+                if not download_only:
+                    logging.info('Loading race session results into DB ...')
+                    add_session_results(meeting_details['meeting_key'], session['session_key'], DRIVERS_DICT)
 
-                logging.info(json.dumps(DRIVERS_DICT, indent=4))
+                logging.debug(json.dumps(DRIVERS_DICT, indent=4))
 
-    else:
-        logging.info('Failed to load meeting info ...')
+        else:
+            logging.info('Failed to load meeting info ...')
 
     logging.info('All done.')
 
