@@ -23,4 +23,6 @@ class Config(object):
     OPENF1_API_DRIVERS_ENDPOINT = 'drivers'
     OPENF1_API_LAPS_ENDPOINT = 'laps'
     ERGAST_API_URL = 'https://ergast.com/api/f1/'
+    STANDARD_PTS_TEMPLATE_ID = 1
+    ALTERNATE_PTS_TEMPLATE_ID = 2
     LOG_FILE = 'etl_theundercut.log'

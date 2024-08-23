@@ -107,3 +107,14 @@ RESULT_INSERT_SQL = """
     VALUES
     (%d, %d, %d, %d, %d, '%s', %d, '%s', %d, '%s', %d, %d, '%s', '%s');
 """
+
+ANALYTICS_CLEANUP_SQL = """
+    DELETE FROM tuc_race_analytics
+    WHERE meeting_key = %d and session_key = %d
+"""
+
+POINTS_MAP_SELECT_SQL = """
+    SELECT position, points::float as points
+    FROM tuc_points_map
+    WHERE mapping_template_id = %d
+"""

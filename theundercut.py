@@ -20,6 +20,7 @@ from utils import db_connect, select_query, run_query
 from apis import ergast, openf1
 
 DRIVERS_DICT = {}
+ANALYTICS_DICT = {}
 
 def load_meeting(meeting):
 
@@ -105,6 +106,13 @@ def update_drivers(drivers_list):
 
     for driver in drivers_list:
 
+        # The Zhou Guanyu hack
+        if driver['full_name'].lower() == 'zhou guanyu':
+            driver['full_name'] = 'Guanyu Zhou'
+            driver['first_name'] = 'Guanyu'
+            driver['last_name'] = 'Zhou'
+
+
         concatenated_driver_info = ''.join([str(val) for (key, val) in driver.items() \
             if key in ('full_name', 'country_code', 'driver_number', 'headshot_url', 'name_acronym', 'team_name')])
         driver_hash = hashlib.md5(concatenated_driver_info.encode("utf-8")).hexdigest()
@@ -184,19 +192,6 @@ def load_session_drivers(drivers_list, session_key):
             )
             run_query(session_driver_add_sql)
 
-def identify_key_sessions(sessions_list):
-    race_session_key = 0
-    sprint_session_key = 0
-    qualifying_session_key = 0
-    for session in sessions_list:
-        if session['session_name'] == 'Qualifying':
-            qualifying_session_key = session['session_key']
-        elif session['session_name'] == 'Race':
-            race_session_key = session['session_key']
-        elif session['session_name'] == 'Sprint':
-            sprint_qualifying_session_key = session['session_key']
-    return (race_session_key, qualifying_session_key, sprint_qualifying_session_key)
-
 def add_session_results(meeting_key, session_key, results_dict):
     current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -215,10 +210,42 @@ def add_session_results(meeting_key, session_key, results_dict):
                     meeting_key,
                     session_key,
                     driver_key,
-                    int(driver_result['position']),
-                    int(driver_result['points']),
+                    driver_result['position'],
+                    driver_result['points'],
                     driver_result['starting_grid'],
-                    int(driver_result['laps_completed']),
+                    driver_result['laps_completed'],
+                    driver_result['status'],
+                    driver_result['fastest_lap_rank'],
+                    driver_result['fastest_lap_time'],
+                    driver_result['fastest_lap_number'],
+                    driver_result['time_to_leader_ms'],
+                    driver_result['time_to_leader_text'],
+                    current_time_str
+                )
+            run_query(result_add_sql)
+
+def add_race_analytics_(meeting_key, session_key, analytics_dict):
+    current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Step 1 -- clean up any prior existing results for this session
+    results_cleanup_sql = queries.RESULTS_CLEANUP_SQL % (meeting_key, session_key)
+    run_query(results_cleanup_sql)
+
+    for driver_num, driver_result in results_dict.items():
+        # Find the driver
+        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (driver_result['name'], session_key, meeting_key)
+        driver_select_result = select_query(driver_select_sql)
+        
+        if len(driver_select_result) > 0:
+            driver_key = driver_select_result[0][0]
+            result_add_sql = queries.RESULT_INSERT_SQL % (
+                    meeting_key,
+                    session_key,
+                    driver_key,
+                    driver_result['position'],
+                    driver_result['points'],
+                    driver_result['starting_grid'],
+                    driver_result['laps_completed'],
                     driver_result['status'],
                     int(driver_result['fastest_lap_rank']),
                     driver_result['fastest_lap_time'],
@@ -228,6 +255,33 @@ def add_session_results(meeting_key, session_key, results_dict):
                     current_time_str
                 )
             run_query(result_add_sql)
+
+def get_points_map(standard_template_id=1, alternate_template_id=2):
+    """
+    Fetches a dictionary mapping of positions to points based on both the standard
+    and the alternate points schemes in the db
+    """
+    pts_map_dict = {}
+
+    standard_pts_map_sql = queries.POINTS_MAP_SELECT_SQL % (standard_template_id)
+    standard_pts_map_results = select_query(standard_pts_map_sql)
+    for result in standard_pts_map_results:
+        if result[0] in pts_map_dict:
+            pts_map_dict[result[0]]['standard'] = result[1]
+        else:
+            pts_map_dict[result[0]] = {}
+            pts_map_dict[result[0]]['standard'] = result[1]
+
+    alternate_pts_map_sql = queries.POINTS_MAP_SELECT_SQL % (alternate_template_id)
+    alternate_pts_map_results = select_query(alternate_pts_map_sql)
+    for result in alternate_pts_map_results:
+        if result[0] in pts_map_dict:
+            pts_map_dict[result[0]]['alternate'] = result[1]
+        else:
+            pts_map_dict[result[0]] = {}
+            pts_map_dict[result[0]]['alternate'] = result[1]
+
+    return pts_map_dict
 
 def get_race_data_from_openf1(filter_year=None, start_date=None, download_only=False, meeting_key=False):
 
@@ -341,6 +395,7 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
     query_start_dt = None
 
     # If year is specified, use the provided selection, otherwise use the current year
+    PTS_MAP_DICT = get_points_map(Config.STANDARD_PTS_TEMPLATE_ID, Config.ALTERNATE_PTS_TEMPLATE_ID)
 
     if meeting_key is not None:
         meeting_list = openf1.get_meeting(meeting_key)
@@ -418,28 +473,41 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
                     continue
 
                 for result in meeting_results:
+                    
+                    driver_number = int(result['@number'])
+                    if driver_number not in DRIVERS_DICT:
+                        DRIVERS_DICT[driver_number] = {}
 
-                    DRIVERS_DICT[int(result['@number'])]['position'] = result['@position']
-                    DRIVERS_DICT[int(result['@number'])]['starting_grid'] = result['Grid']
-                    DRIVERS_DICT[int(result['@number'])]['laps_completed'] = result['Laps']
-                    DRIVERS_DICT[int(result['@number'])]['status'] = result['Status']['#text']
-                    DRIVERS_DICT[int(result['@number'])]['points'] = result['@points']
+                    DRIVERS_DICT[driver_number]['position'] = int(result['@position'])
+                    DRIVERS_DICT[driver_number]['starting_grid'] = int(result['Grid'])
+                    DRIVERS_DICT[driver_number]['laps_completed'] = int(result['Laps'])
+                    DRIVERS_DICT[driver_number]['status'] = result['Status']['#text']
+                    DRIVERS_DICT[driver_number]['points'] = int(result['@points'])
 
                     if 'FastestLap' in result:
                         if '@rank' in result['FastestLap']:
-                            DRIVERS_DICT[int(result['@number'])]['fastest_lap_rank'] = result['FastestLap']['@rank']
-                        DRIVERS_DICT[int(result['@number'])]['fastest_lap_time'] = result['FastestLap']['Time']
-                        DRIVERS_DICT[int(result['@number'])]['fastest_lap_number'] = result['FastestLap']['@lap']
+                            DRIVERS_DICT[driver_number]['fastest_lap_rank'] = int(result['FastestLap']['@rank'])
+                        DRIVERS_DICT[driver_number]['fastest_lap_time'] = result['FastestLap']['Time']
+                        DRIVERS_DICT[driver_number]['fastest_lap_number'] = int(result['FastestLap']['@lap'])
 
                     if 'Time' in result:
-                        DRIVERS_DICT[int(result['@number'])]['time_to_leader_ms'] = result['Time']['@millis']
-                        DRIVERS_DICT[int(result['@number'])]['time_to_leader_text'] = result['Time']['#text']
+                        DRIVERS_DICT[driver_number]['time_to_leader_ms'] = int(result['Time']['@millis'])
+                        DRIVERS_DICT[driver_number]['time_to_leader_text'] = result['Time']['#text']
+
+                    if driver_number not in ANALYTICS_DICT:
+                        ANALYTICS_DICT[driver_number] = {}
+
+                    ANALYTICS_DICT[driver_number]['alternate_points'] = PTS_MAP_DICT[DRIVERS_DICT[driver_number]['position']]['alternate']
+                    ANALYTICS_DICT[driver_number]['positions_won_lost'] = DRIVERS_DICT[driver_number]['position'] - DRIVERS_DICT[driver_number]['starting_grid']
+                    ANALYTICS_DICT[driver_number]['points_won_lost'] = DRIVERS_DICT[driver_number]['points'] - PTS_MAP_DICT[DRIVERS_DICT[driver_number]['starting_grid']]['standard']
+                    ANALYTICS_DICT[driver_number]['alternate_points_won_lost'] = PTS_MAP_DICT[DRIVERS_DICT[driver_number]['position']]['alternate'] - PTS_MAP_DICT[DRIVERS_DICT[driver_number]['starting_grid']]['alternate']
 
                 if not download_only:
                     logging.info('Loading race session results into DB ...')
                     add_session_results(meeting_details['meeting_key'], session['session_key'], DRIVERS_DICT)
 
                 logging.debug(json.dumps(DRIVERS_DICT, indent=4))
+                logging.debug(json.dumps(ANALYTICS_DICT, indent=4))
 
         else:
             logging.info('Failed to load meeting info ...')
