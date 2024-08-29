@@ -23,7 +23,12 @@ def is_valid_year(year):
   # You can adjust the range if you have specific requirements
   return 1 <= year <= 9999
 
-def add_or_update_circuit(circuit_id, circuit_name, locality, country):
+def add_or_update_circuit(circuit_info):
+
+    circuit_id = circuit_info['@circuitId']
+    circuit_name = circuit_info['CircuitName']
+    locality = circuit_info['Location']['Locality']
+    country = circuit_info['Location']['Country']
     
     # First, check to see if the circuit already exists
     logging.debug('Add/Updating Ciruit: %s - %s - %s - %s' % (circuit_id, circuit_name, locality, country))
@@ -33,7 +38,7 @@ def add_or_update_circuit(circuit_id, circuit_name, locality, country):
     logging.debug('Found %d results ...' % len(circuit_select_results))
 
     # creating a unique hash of the ciruit info
-    concatenated_circuit_info = ''.join([circuit_name, locality, country])
+    concatenated_circuit_info = json.dumps(circuit_info)
     circuit_hash = hashlib.md5(concatenated_circuit_info.encode("utf-8")).hexdigest()
 
     if len(circuit_select_results) == 0:
@@ -68,14 +73,41 @@ def add_or_update_circuit(circuit_id, circuit_name, locality, country):
                 )
             run_query(circuit_update_sql)
 
-def add_or_update_meeting(meeting_id, year, round, meeting_name, meeting_official_name, meeting_date, circuit_id):
+def add_or_update_meeting(race_info):
+
+    race_id = race_info['Circuit']['@circuitId'] + race_info['@season']
+    season = race_info['@season']
+    round = int(race_info['@round'])
+    race_name = race_info['RaceName'] 
+    race_official_name = ''
+    race_date = race_info['Date']
+    circuit_id = race_info['Circuit']['@circuitId']
 
     # First, check to see if the meeting already exists
-    logging.debug('Add/Updating meeting: %s - %s' % (meeting_id, meeting_name))
-    meeting_select_sql = queries.MEETING_SELECT_SQL % meeting_id
+    logging.debug('Add/Updating meeting: %s - %s' % (race_id, race_name))
+    race_select_sql = queries.RACE_SELECT_SQL % race_id
     logging.debug('Checking if meeting exists ...')
-    meeting_select_results = select_query(meeting_select_sql)
-    logging.debug('Found %d results ...' % len(meeting_select_results))
+    race_select_results = select_query(race_select_sql)
+    logging.debug('Found %d results ...' % len(race_select_results))
+
+    race_info_str = str(json.dumps(race_info))
+    race_hash = hashlib.md5(race_info_str.encode("utf-8")).hexdigest()
+    
+    if len(race_select_results) == 0:
+
+        logging.debug('Race does not exist. Adding it ...')
+        race_add_sql = queries.RACE_INSERT_SQL % (
+            race_id, 
+            season, 
+            round, 
+            race_name, 
+            race_official_name, 
+            race_date, 
+            circuit_id, 
+            race_hash, 
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+        run_query(race_add_sql)
 
 def main(filter_year=None, download_only=False):
 
@@ -98,14 +130,12 @@ def main(filter_year=None, download_only=False):
     logging.info('Fetching & updating circuits ...')
     circuits_list = ergast.get_circuits(query_year)
     for circuit in circuits_list:
-        add_or_update_circuit(circuit_id=circuit['@circuitId'], 
-            circuit_name=circuit['CircuitName'],
-            locality=circuit['Location']['Locality'],
-            country=circuit['Location']['Country']
-            )
+        add_or_update_circuit(circuit)
 
-    logging.info('Fetching & updating meetings ...')
-    meetings_list = ergast.get_schedule(query_year)
+    logging.info('Fetching & updating races ...')
+    race_list = ergast.get_schedule(query_year)
+    for race in race_list:
+        add_or_update_meeting(race)
 
     logging.info('All done.')
 

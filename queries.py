@@ -35,6 +35,19 @@ CIRCUIT_UPDATE_SQL = """
         circuit_id = '%s'
 """
 
+RACE_SELECT_SQL = """
+    SELECT *
+    FROM tuc_schedule
+    WHERE race_id = '%s'
+"""
+
+RACE_INSERT_SQL = """
+    INSERT INTO tuc_schedule
+    (race_id, season, round, race_name, race_official_name, race_date, circuit_id, race_hash, last_updated_dt)
+    VALUES
+    ('%s', '%s', %d, '%s', '%s', '%s', '%s', '%s', '%s')
+"""
+
 MEETING_SELECT_SQL = """
     SELECT *
     FROM tuc_meetings

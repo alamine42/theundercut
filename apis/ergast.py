@@ -60,7 +60,8 @@ def get_schedule(query_year=None):
 
     logging.debug('URL: %s' % schedule_url)
 
-    return request_ergast_data(schedule_url)
+    schedule_dict = request_ergast_data(schedule_url)
+    return schedule_dict['MRData']['RaceTable']['Race']
     
 
 def get_race_results(meeting_info):
