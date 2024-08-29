@@ -224,37 +224,33 @@ def add_session_results(meeting_key, session_key, results_dict):
                 )
             run_query(result_add_sql)
 
-def add_race_analytics_(meeting_key, session_key, analytics_dict):
+def add_race_analytics(meeting_key, session_key, analytics_dict):
     current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Step 1 -- clean up any prior existing results for this session
-    results_cleanup_sql = queries.RESULTS_CLEANUP_SQL % (meeting_key, session_key)
-    run_query(results_cleanup_sql)
+    # Step 1 -- clean up any prior existing analytics for this session
+    analytics_cleanup_sql = queries.ANALYTICS_CLEANUP_SQL % (meeting_key, session_key)
+    run_query(analytics_cleanup_sql)
 
-    for driver_num, driver_result in results_dict.items():
+    for driver_num, driver_analytics in analytics_dict.items():
         # Find the driver
-        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (driver_result['name'], session_key, meeting_key)
+        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (driver_analytics['name'], session_key, meeting_key)
         driver_select_result = select_query(driver_select_sql)
         
         if len(driver_select_result) > 0:
             driver_key = driver_select_result[0][0]
-            result_add_sql = queries.RESULT_INSERT_SQL % (
+            analytics_add_sql = queries.ANALYTICS_INSERT_SQL % (
+                    int(str(meeting_key) + str(session_key) + str(driver_key)),
                     meeting_key,
                     session_key,
                     driver_key,
-                    driver_result['position'],
-                    driver_result['points'],
-                    driver_result['starting_grid'],
-                    driver_result['laps_completed'],
-                    driver_result['status'],
-                    int(driver_result['fastest_lap_rank']),
-                    driver_result['fastest_lap_time'],
-                    int(driver_result['fastest_lap_number']),
-                    int(driver_result['time_to_leader_ms']),
-                    driver_result['time_to_leader_text'],
+                    driver_analytics['points'],
+                    driver_analytics['alternate_points'],
+                    driver_analytics['positions_won_lost'],
+                    driver_analytics['points_won_lost'],
+                    driver_analytics['alternate_points_won_lost'],
                     current_time_str
                 )
-            run_query(result_add_sql)
+            run_query(analytics_add_sql)
 
 def get_points_map(standard_template_id=1, alternate_template_id=2):
     """
@@ -405,7 +401,13 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
     else:
         meeting_list = openf1.get_meeting()
 
+    # logging.info(meeting_list)
+
     for meeting in meeting_list:
+
+        if meeting['meeting_name'].lower() == 'pre-season testing':
+            continue
+
         meeting_details, load_result = load_meeting(meeting)
         
         logging.debug(meeting_details)
@@ -432,11 +434,12 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
                 logging.info('Getting driver data for %s at %s ...' % (session['session_name'], meeting_details['meeting_name']))
                 drivers = openf1.get_drivers_by_session(session['session_key'])
                 logging.info('Retrieved %d drivers ...' % len(drivers))
+                logging.info(drivers)
 
                 for driver in drivers:
                     if driver['driver_number'] not in DRIVERS_DICT:
                         DRIVERS_DICT[driver['driver_number']] = {
-                            'name': driver['first_name'] + ' '  + driver['last_name'],
+                            'name': driver['full_name'].title(),
                             'laps_completed': 0,
                             'status': 'DNF',
                             'position': 20,
@@ -479,7 +482,7 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
                         DRIVERS_DICT[driver_number] = {}
 
                     DRIVERS_DICT[driver_number]['position'] = int(result['@position'])
-                    DRIVERS_DICT[driver_number]['starting_grid'] = int(result['Grid'])
+                    DRIVERS_DICT[driver_number]['starting_grid'] = 20 if int(result['Grid']) == 0 else int(result['Grid'])
                     DRIVERS_DICT[driver_number]['laps_completed'] = int(result['Laps'])
                     DRIVERS_DICT[driver_number]['status'] = result['Status']['#text']
                     DRIVERS_DICT[driver_number]['points'] = int(result['@points'])
@@ -497,6 +500,8 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
                     if driver_number not in ANALYTICS_DICT:
                         ANALYTICS_DICT[driver_number] = {}
 
+                    ANALYTICS_DICT[driver_number]['name'] = DRIVERS_DICT[driver_number]['name']
+                    ANALYTICS_DICT[driver_number]['points'] = DRIVERS_DICT[driver_number]['points']
                     ANALYTICS_DICT[driver_number]['alternate_points'] = PTS_MAP_DICT[DRIVERS_DICT[driver_number]['position']]['alternate']
                     ANALYTICS_DICT[driver_number]['positions_won_lost'] = DRIVERS_DICT[driver_number]['position'] - DRIVERS_DICT[driver_number]['starting_grid']
                     ANALYTICS_DICT[driver_number]['points_won_lost'] = DRIVERS_DICT[driver_number]['points'] - PTS_MAP_DICT[DRIVERS_DICT[driver_number]['starting_grid']]['standard']
@@ -505,6 +510,8 @@ def main(filter_year=None, start_date=None, download_only=False, meeting_key=Fal
                 if not download_only:
                     logging.info('Loading race session results into DB ...')
                     add_session_results(meeting_details['meeting_key'], session['session_key'], DRIVERS_DICT)
+                    logging.info('Loading race analytics into DB ...')
+                    add_race_analytics(meeting_details['meeting_key'], session['session_key'], ANALYTICS_DICT)
 
                 logging.debug(json.dumps(DRIVERS_DICT, indent=4))
                 logging.debug(json.dumps(ANALYTICS_DICT, indent=4))

@@ -1,21 +1,38 @@
+
 SCHEDULE_SELECT_SQL = """
     SELECT *
     FROM tuc_schedule
     WHERE race_name = '%s'
 """
 
+CIRCUIT_CLEANUP_SQL = """
+    TRUNCATE tuc_circuits;
+"""
 
 CIRCUIT_SELECT_SQL = """
     SELECT *
     FROM tuc_circuits
-    WHERE circuit_key = %d
+    WHERE circuit_id = '%s'
 """
 
 CIRCUIT_INSERT_SQL = """
     INSERT INTO tuc_circuits
-    (circuit_key, circuit_short_name, country_code, country_key, country_name, gmt_offset, location, last_updated_dt)
+    (circuit_id, circuit_short_name, circuit_name, country_name, locality, circuit_hash, last_updated_dt)
     VALUES 
-    (%d, '%s', '%s', %d, '%s', '%s', '%s', '%s');
+    ('%s', '%s', '%s', '%s', '%s', '%s', '%s');
+"""
+
+CIRCUIT_UPDATE_SQL = """
+    UPDATE tuc_circuits
+    SET 
+        circuit_short_name = '%s',
+        circuit_name = '%s',
+        country_name = '%s',
+        locality = '%s',
+        circuit_hash = '%s',
+        last_updated_dt = '%s'
+    WHERE
+        circuit_id = '%s'
 """
 
 MEETING_SELECT_SQL = """
@@ -111,6 +128,13 @@ RESULT_INSERT_SQL = """
 ANALYTICS_CLEANUP_SQL = """
     DELETE FROM tuc_race_analytics
     WHERE meeting_key = %d and session_key = %d
+"""
+
+ANALYTICS_INSERT_SQL = """
+    INSERT INTO tuc_race_analytics
+    (id, meeting_key, session_key, driver_key, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost, last_updated_dt)
+    VALUES
+    (%d, %d, %d, %d, %d, %f, %d, %d, %f, '%s');
 """
 
 POINTS_MAP_SELECT_SQL = """
