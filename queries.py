@@ -48,30 +48,58 @@ RACE_INSERT_SQL = """
     ('%s', '%s', %d, '%s', '%s', '%s', '%s', '%s', '%s')
 """
 
-MEETING_SELECT_SQL = """
-    SELECT *
-    FROM tuc_meetings
-    WHERE meeting_key = %d
+RACE_UPDATE_SQL = """
+    UPDATE tuc_schedule
+    SET 
+        season = '%s',
+        round = %d,
+        race_name = '%s',
+        race_official_name = '%s',
+        race_date = '%s',
+        circuit_id = '%s',
+        race_hash = '%s',
+        last_updated_dt = '%s'
+    WHERE
+        race_id = '%s'
 """
 
-MEETING_INSERT_SQL = """
-    INSERT INTO tuc_meetings
-    (meeting_key, meeting_name, meeting_official_name, meeting_round, circuit_key, date_start, year, last_updated_dt)
-    VALUES 
-    (%d, '%s', '%s', %d, %d, '%s', %d, '%s');
-"""
+# MEETING_SELECT_SQL = """
+#     SELECT *
+#     FROM tuc_meetings
+#     WHERE meeting_key = %d
+# """
+
+# MEETING_INSERT_SQL = """
+#     INSERT INTO tuc_meetings
+#     (meeting_key, meeting_name, meeting_official_name, meeting_round, circuit_key, date_start, year, last_updated_dt)
+#     VALUES 
+#     (%d, '%s', '%s', %d, %d, '%s', %d, '%s');
+# """
 
 SESSION_SELECT_SQL = """
     SELECT *
     FROM tuc_sessions
-    WHERE session_key = %d
+    WHERE session_id = '%s'
 """
 
 SESSION_INSERT_SQL = """
     INSERT INTO tuc_sessions
-    (session_key, meeting_key, circuit_key, session_name, session_type, date_start, date_end, year, last_updated_dt)
+    (session_id, race_id, session_type, session_date, session_time, session_hash, last_updated_dt)
     VALUES 
-    (%d, %d, %d, '%s', '%s', '%s', '%s', %d, '%s');
+    ('%s', '%s', '%s', '%s', '%s', '%s', '%s');
+"""
+
+SESSION_UPDATE_SQL = """
+    UPDATE tuc_session
+    SET 
+        race_id = '%s',
+        session_type = %d,
+        session_date = '%s',
+        session_time = '%s',
+        session_hash = '%s',
+        last_updated_dt = '%s'
+    WHERE
+        session_id = '%s'
 """
 
 DRIVER_SELECT_SQL = """
