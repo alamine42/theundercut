@@ -5,7 +5,6 @@ import shutil
 import csv
 import logging
 import argparse
-import queries
 import uuid
 import json
 import requests
@@ -16,165 +15,13 @@ from datetime import date, datetime, timedelta
 from config import Config
 from utils import db_connect, select_query, run_query
 from apis import ergast
+from db import model, queries
 
 def is_valid_year(year):
   """Checks if the given year is a valid integer year."""
 
   # You can adjust the range if you have specific requirements
   return 1 <= year <= 9999
-
-def add_or_update_circuit(circuit_info):
-
-    circuit_id = circuit_info['@circuitId']
-    circuit_name = circuit_info['CircuitName']
-    locality = circuit_info['Location']['Locality']
-    country = circuit_info['Location']['Country']
-    
-    # First, check to see if the circuit already exists
-    logging.debug('Add/Updating Ciruit: %s - %s - %s - %s' % (circuit_id, circuit_name, locality, country))
-    circuit_select_sql = queries.CIRCUIT_SELECT_SQL % circuit_id
-    logging.debug('Checking if circuit exists ...')
-    circuit_select_results = select_query(circuit_select_sql)
-    logging.debug('Found %d results ...' % len(circuit_select_results))
-
-    # creating a unique hash of the ciruit info
-    concatenated_circuit_info = json.dumps(circuit_info)
-    circuit_hash = hashlib.md5(concatenated_circuit_info.encode("utf-8")).hexdigest()
-
-    if len(circuit_select_results) == 0:
-    
-        # It doesn't exist, adding it
-        logging.debug('Adding the circuit ...')
-
-        circuit_add_sql = queries.CIRCUIT_INSERT_SQL % (
-                circuit_id,
-                '',
-                circuit_name,
-                country,
-                locality,
-                circuit_hash,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            )
-        run_query(circuit_add_sql)
-
-    else:
-
-        if circuit_hash != circuit_select_results[0][5]:
-            logging.info('Info for circuit %s has changed! Updating circuit ...' % circuit_id)
-
-            circuit_update_sql = queries.CIRCUIT_UPDATE_SQL % (
-                    '',
-                    circuit_name,
-                    country,
-                    locality,
-                    circuit_hash,
-                    datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    circuit_id
-                )
-            run_query(circuit_update_sql)
-
-def add_or_update_race(race_info):
-
-    race_id = race_info['Circuit']['@circuitId'] + race_info['@season']
-    season = race_info['@season']
-    round = int(race_info['@round'])
-    race_name = race_info['RaceName'] 
-    race_official_name = ''
-    race_date = race_info['Date']
-    race_time = race_info['Time']
-    circuit_id = race_info['Circuit']['@circuitId']
-
-    # First, check to see if the race already exists
-    logging.debug('Add/Updating race: %s - %s' % (race_id, race_name))
-    race_select_sql = queries.RACE_SELECT_SQL % race_id
-    logging.debug('Checking if race exists ...')
-    race_select_results = select_query(race_select_sql)
-    logging.debug('Found %d results ...' % len(race_select_results))
-
-    race_info_str = str(json.dumps(race_info))
-    race_hash = hashlib.md5(race_info_str.encode("utf-8")).hexdigest()
-    
-    if len(race_select_results) == 0:
-
-        logging.debug('Race does not exist. Adding it ...')
-        race_add_sql = queries.RACE_INSERT_SQL % (
-            race_id, 
-            season, 
-            round, 
-            race_name, 
-            race_official_name, 
-            race_date, 
-            circuit_id, 
-            race_hash, 
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        )
-        run_query(race_add_sql)
-
-    else:
-        if race_hash != race_select_results[0][7]:
-            logging.info('Info for race %s %s has changed! Updating race ...' % (race_name, season))
-
-            race_update_sql = queries.RACE_UPDATE_SQL % (
-                season, 
-                round, 
-                race_name, 
-                race_official_name, 
-                race_date, 
-                circuit_id, 
-                race_hash, 
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                race_id
-            )
-            run_query(race_update_sql)
-
-    add_or_update_session('Race', race_id, race_date, race_time)
-    for session_type in ('FirstPractice', 'SecondPractice', 'ThirdPractice', 'Qualifying', 'Sprint'):
-        if session_type in race_info:
-            add_or_update_session(session_type, race_id, race_info[session_type]['Date'], race_info[session_type]['Time'])
-
-def add_or_update_session(session_type, race_id, session_date, session_time):
-    
-    session_id = race_id + session_type
-
-    # First, check to see if the session already exists
-    logging.debug('Add/Update session: %s - %s' % (race_id, session_type))
-    session_select_sql = queries.SESSION_SELECT_SQL % session_id
-    logging.debug('Checking if session exists ...')
-    session_select_results = select_query(session_select_sql)
-    logging.debug('Found %d results ...' % len(session_select_results))
-
-    session_info_str = ''.join([session_type, race_id, session_date, session_time])
-    session_hash = hashlib.md5(session_info_str.encode("utf-8")).hexdigest()
-
-    if len(session_select_results) == 0:
-
-        logging.debug('Session does not exist. Adding it ...')
-        session_add_sql = queries.SESSION_INSERT_SQL % (
-            session_id,
-            race_id,
-            session_type,
-            session_date,
-            session_time,
-            session_hash,
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        )
-        run_query(session_add_sql)
-
-    else:
-        if session_hash != session_select_results[0][5]:
-            logging.info('Info for session %s of %s %s has changed! Updating session ...' % (session_type, race_name, season))
-
-            session_update_sql = queries.SESSION_UPDATE_SQL % (
-                session_id,
-                race_id,
-                session_type,
-                session_date,
-                session_time,
-                session_hash,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                session_id
-            )
-            run_query(session_update_sql)
 
 def main(filter_year=None, download_only=False):
 
@@ -197,12 +44,46 @@ def main(filter_year=None, download_only=False):
     logging.info('Fetching & updating circuits ...')
     circuits_list = ergast.get_circuits(query_year)
     for circuit in circuits_list:
-        add_or_update_circuit(circuit)
+        try:
+            model.add_or_update_circuit(
+                circuit_id=circuit['@circuitId'],
+                circuit_name=circuit['CircuitName'],
+                locality=circuit['Location']['Locality'],
+                country=circuit['Location']['Country']
+            )
+        except Exception as e:
+            logging.error('Error adding circuit: \n%s' % json.dumps(circuit))
+            raise e
 
     logging.info('Fetching & updating races + sessions ...')
     race_list = ergast.get_schedule(query_year)
     for race in race_list:
-        add_or_update_race(race)
+        race_id = race['Circuit']['@circuitId'] + race['@season']
+        logging.info('Loading round %d - %s ' % (int(race['@round']), race['RaceName']))
+        try:
+            model.add_or_update_race(
+                race_id = race_id,
+                season = race['@season'],
+                round = int(race['@round']),
+                race_name = race['RaceName'],
+                race_official_name = '',
+                race_date = race['Date'],
+                race_time = race['Time'],
+                circuit_id = race['Circuit']['@circuitId']
+            )
+        except Exception as e:
+            logging.error('Error adding race: \n%s' % json.dumps(race))
+            raise e
+
+        session_type = 'Race'
+        try:
+            model.add_or_update_session(session_type, race_id, race['Date'], race['Time'])
+            for session_type in ('FirstPractice', 'SecondPractice', 'ThirdPractice', 'Qualifying', 'Sprint'):
+                if session_type in race:
+                    model.add_or_update_session(session_type, race_id, race[session_type]['Date'], race[session_type]['Time'] if 'Time' in race[session_type] else '')
+        except Exception as e:
+            logging.error('Error adding %s session for race %s' % (session_type, race_id))
+            raise e
 
     logging.info('All done.')
 

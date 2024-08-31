@@ -64,7 +64,7 @@ def get_schedule(query_year=None):
     return schedule_dict['MRData']['RaceTable']['Race']
     
 
-def get_race_results(meeting_info):
+def get_race_results(year=None, round=None):
     """
     Call the Ergast API race results endpoint to get the winners.
     If no year is specified, the default behavior is to get the race schedule for the current year.
@@ -72,18 +72,20 @@ def get_race_results(meeting_info):
     Example: https://ergast.com/api/f1/2024/5/results
 
     """
-    logging.debug('Retrieving the race results for %s ' % meeting_info['meeting_name'])
-    results_url = urljoin(Config.ERGAST_API_URL, str(meeting_info['year']) + '/' + str(meeting_info['meeting_round']) + '/results')
+    if year is not None and round is not None:
+        results_url = urljoin(Config.ERGAST_API_URL, str(year) + '/' + str(round) + '/results')    
+    else:
+        results_url = urljoin(Config.ERGAST_API_URL, 'current/last/results')
     logging.debug('URL: %s' % results_url)
 
     results_dict = request_ergast_data(results_url)
 
     logging.debug(results_dict)
     
-    return results_dict['MRData']['RaceTable']['Race']['ResultsList']['Result']
+    return results_dict['MRData']['RaceTable']
 
 
-def get_sprint_results(meeting_info):
+def get_sprint_results(season, round):
     """
     Call the Ergast API Sprint results endpoint to get the winners.
     If no year is specified, the default behavior is to get the race schedule for the current year.
@@ -91,8 +93,7 @@ def get_sprint_results(meeting_info):
     Example: https://ergast.com/api/f1/2024/5/sprint
 
     """
-    logging.debug('Retrieving the Sprint results for %s ' % meeting_info['meeting_name'])
-    results_url = urljoin(Config.ERGAST_API_URL, str(meeting_info['year']) + '/' + str(meeting_info['meeting_round']) + '/sprint')
+    results_url = urljoin(Config.ERGAST_API_URL, str(season) + '/' + str(round) + '/sprint')
     logging.debug('URL: %s' % results_url)
 
     results_dict = request_ergast_data(results_url)
