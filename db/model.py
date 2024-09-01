@@ -138,9 +138,7 @@ def add_or_update_race(race_id, season, round, race_name, race_official_name, ra
             )
             run_query(race_update_sql)
 
-def add_or_update_session(session_type, race_id, session_date, session_time):
-    
-    session_id = race_id + session_type
+def add_or_update_session(session_id, session_type, race_id, session_date, session_time):
 
     # First, check to see if the session already exists
     logging.debug('Add/Update session: %s - %s' % (race_id, session_type))
@@ -233,34 +231,60 @@ def add_or_update_driver(driver_id, driver_number, first_name, last_name, driver
             )
             run_query(driver_update_sql)
 
-def add_session_results(meeting_id, session_id, driver_id, finish_position, starting_position, points, laps_completed, status, fastest_lap_rank, fastest_lap_time=None, fastest_lap_numer=None, time_to_leader_ms=None, time_to_leader_text=None):
-    current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+def add_or_update_result(race_id, session_id, driver_id, finish_position, starting_position, points, laps_completed, status, fastest_lap_rank, fastest_lap_time=None, fastest_lap_number=None, time_to_leader_ms=None, time_to_leader_text=None):
 
-    # Step 1 -- clean up any prior existing results for this session
-    results_cleanup_sql = queries.RESULTS_CLEANUP_SQL % (meeting_id, session_id)
-    run_query(results_cleanup_sql)
+    # First, check to see if the result already exists
+    logging.debug('Add/Update result: %s - %s' % (session_id, driver_id))
+    result_select_sql = queries.RESULT_SELECT_SQL % (race_id, session_id, driver_id)
+    logging.debug('Checking if result exists ...')
+    result_select_results = select_query(result_select_sql)
+    logging.debug('Found %d results ...' % len(result_select_results))
 
-    for driver_num, driver_result in results_dict.items():
-        # Find the driver
-        driver_select_sql = queries.SESSION_DRIVER_SELECT_SQL % (driver_result['name'], session_key, session_id)
-        driver_select_result = select_query(driver_select_sql)
-        
-        if len(driver_select_result) > 0:
-            driver_key = driver_select_result[0][0]
-            result_add_sql = queries.RESULT_INSERT_SQL % (
-                    meeting_id,
-                    session_key,
-                    driver_key,
-                    driver_result['position'],
-                    driver_result['points'],
-                    driver_result['starting_grid'],
-                    driver_result['laps_completed'],
-                    driver_result['status'],
-                    driver_result['fastest_lap_rank'],
-                    driver_result['fastest_lap_time'],
-                    driver_result['fastest_lap_number'],
-                    driver_result['time_to_leader_ms'],
-                    driver_result['time_to_leader_text'],
-                    current_time_str
-                )
-            run_query(result_add_sql)
+    result_info_str = ''.join([race_id, session_id, driver_id, str(finish_position), str(starting_position), str(points), str(laps_completed), status, str(fastest_lap_rank), fastest_lap_time, str(fastest_lap_number), str(time_to_leader_ms), time_to_leader_text])
+    result_hash = hashlib.md5(result_info_str.encode("utf-8")).hexdigest()
+
+    if len(result_select_results) == 0:
+
+        logging.debug('Result does not exist. Adding it ...')
+        result_add_sql = queries.RESULT_INSERT_SQL % (
+            race_id, 
+            session_id, 
+            driver_id, 
+            finish_position, 
+            points, 
+            starting_position, 
+            laps_completed, 
+            status, 
+            fastest_lap_rank, 
+            fastest_lap_time, 
+            fastest_lap_number, 
+            time_to_leader_ms, 
+            time_to_leader_text, 
+            result_hash,
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+        run_query(result_add_sql)
+
+    else:
+        if result_hash != result_select_results[0][14]:
+            logging.info('Info for %s result for %s has changed! Updating result ...' % (session_id, driver_id))
+
+            result_update_sql = queries.RESULT_UPDATE_SQL % (
+                race_id, 
+                session_id, 
+                driver_id, 
+                finish_position, 
+                points, 
+                starting_position, 
+                laps_completed, 
+                status, 
+                fastest_lap_rank, 
+                fastest_lap_time, 
+                fastest_lap_number, 
+                time_to_leader_ms, 
+                time_to_leader_text, 
+                result_hash,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                result_select_results[0][0] # <-- this is the result id
+            )
+            run_query(result_update_sql)

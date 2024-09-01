@@ -18,7 +18,6 @@ from utils import db_connect, select_query, run_query
 from apis import ergast, openf1
 from db import model, queries
 
-DRIVERS_DICT = {}
 ANALYTICS_DICT = {}
 
 def main(season=None, round=None, download_only=False, update_cache=False):
@@ -63,7 +62,6 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         with open(cache_file_path, 'r') as f:
             meeting_results = json.load(f)
 
-    # print(meeting_results)    
     # Resetting the values for season & round just in case they weren't originally provided
     season = meeting_results['@season']
     round = meeting_results['@round']
@@ -72,6 +70,8 @@ def main(season=None, round=None, download_only=False, update_cache=False):
     circuit_name = meeting_results['Race']['Circuit']['CircuitName']
     locality = meeting_results['Race']['Circuit']['Location']['Locality']
     country = meeting_results['Race']['Circuit']['Location']['Country']
+    race_id = circuit_id + season
+    session_id = race_id + 'Race'
 
     logging.info('Updating circuit, meeting and session details ...')
     model.add_or_update_circuit(
@@ -82,7 +82,7 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         )
 
     model.add_or_update_race(
-            race_id=circuit_id+season,
+            race_id=race_id,
             season=season,
             round=round,
             race_name=meeting_results['Race']['RaceName'],
@@ -93,15 +93,12 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         )
 
     model.add_or_update_session(
+            session_id=session_id,
             session_type='Race',
-            race_id=circuit_id+season,
+            race_id=race_id,
             session_date=meeting_results['Race']['Date'],
             session_time=meeting_results['Race']['Time']
         )
-
-    # TODO 
-    # 2. Load results + figure out fastest lap
-    # 3. Figure out sprint races
 
     for result in meeting_results['Race']['ResultsList']['Result']:
 
@@ -135,24 +132,43 @@ def main(season=None, round=None, download_only=False, update_cache=False):
             constructor_url=constructor_url
         )
 
-        # DRIVERS_DICT[driver_id]['position'] = int(result['@position'])
-        # DRIVERS_DICT[driver_id]['starting_grid'] = 20 if int(result['Grid']) == 0 else int(result['Grid'])
-        # DRIVERS_DICT[driver_id]['laps_completed'] = int(result['Laps'])
-        # DRIVERS_DICT[driver_id]['status'] = result['Status']['#text']
-        # DRIVERS_DICT[driver_id]['points'] = int(result['@points'])
+        logging.info('Updating results info for %s %s ...' % (first_name, last_name))
+        finish_position = int(result['@position'])
+        starting_position = 20 if int(result['Grid']) == 0 else int(result['Grid'])
+        laps_completed = int(result['Laps'])
+        status = result['Status']['#text']
+        points = int(result['@points'])
+        fastest_lap_time = ''
+        fastest_lap_rank = -1
+        fastest_lap_number = -1
+        time_to_leader_ms = -1
+        time_to_leader_text = '' 
 
-        # if 'FastestLap' in result:
-        #     if '@rank' in result['FastestLap']:
-        #         DRIVERS_DICT[driver_id]['fastest_lap_rank'] = int(result['FastestLap']['@rank'])
-        #     DRIVERS_DICT[driver_id]['fastest_lap_time'] = result['FastestLap']['Time']
-        #     DRIVERS_DICT[driver_id]['fastest_lap_number'] = int(result['FastestLap']['@lap'])
+        if 'FastestLap' in result:
+            if '@rank' in result['FastestLap']:
+                fastest_lap_rank = int(result['FastestLap']['@rank'])
+            fastest_lap_time = result['FastestLap']['Time']
+            fastest_lap_number = int(result['FastestLap']['@lap'])
 
-        # if 'Time' in result:
-        #     DRIVERS_DICT[driver_id]['time_to_leader_ms'] = int(result['Time']['@millis'])
-        #     DRIVERS_DICT[driver_id]['time_to_leader_text'] = result['Time']['#text']
+        if 'Time' in result:
+            time_to_leader_ms = int(result['Time']['@millis'])
+            time_to_leader_text = result['Time']['#text']
 
-        # if driver_id not in ANALYTICS_DICT:
-        #     ANALYTICS_DICT[driver_id] = {}
+        model.add_or_update_result(
+            race_id=race_id, 
+            session_id=session_id, 
+            driver_id=driver_id, 
+            finish_position=finish_position, 
+            starting_position=starting_position, 
+            points=points, 
+            laps_completed=laps_completed, 
+            status=status, 
+            fastest_lap_rank=fastest_lap_rank, 
+            fastest_lap_time=fastest_lap_time, 
+            fastest_lap_number=fastest_lap_number, 
+            time_to_leader_ms=time_to_leader_ms, 
+            time_to_leader_text=time_to_leader_text
+        )
 
         # ANALYTICS_DICT[driver_id]['name'] = DRIVERS_DICT[driver_id]['name']
         # ANALYTICS_DICT[driver_id]['points'] = DRIVERS_DICT[driver_id]['points']
@@ -167,8 +183,12 @@ def main(season=None, round=None, download_only=False, update_cache=False):
     #     logging.info('Loading race analytics into DB ...')
     #     add_race_analytics(meeting_details['meeting_id'], session['session_key'], ANALYTICS_DICT)
 
-    # logging.info(json.dumps(DRIVERS_DICT, indent=4))
-    # logging.info(json.dumps(ANALYTICS_DICT, indent=4))
+    # TODO 
+    # 1. Figure out sprint races
+    # 2. Add analytics
+    # 3. Support getting results for all races in a season + collect historical data starting from 2020
+    # 4. Build UI
+    # 5. Deploy
 
     logging.info('All done.')
 

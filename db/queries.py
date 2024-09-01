@@ -146,11 +146,38 @@ RESULTS_CLEANUP_SQL = """
     WHERE meeting_key = %d and session_key = %d
 """
 
+RESULT_SELECT_SQL = """
+    SELECT *
+    FROM tuc_results
+    WHERE race_id = '%s' and session_id = '%s' and driver_id = '%s'
+"""
+
 RESULT_INSERT_SQL = """
     INSERT INTO tuc_results
-    (meeting_key, session_key, driver_key, position, points, starting_grid, laps_completed, status, fastest_lap_rank, fastest_lap_time, fastest_lap_number, time_to_leader_ms, time_to_leader_text, last_updated_dt)
+    (race_id, session_id, driver_id, position, points, starting_grid, laps_completed, status, fastest_lap_rank, fastest_lap_time, fastest_lap_number, time_to_leader_ms, time_to_leader_text, result_hash, last_updated_dt)
     VALUES
-    (%d, %d, %d, %d, %d, '%s', %d, '%s', %d, '%s', %d, %d, '%s', '%s');
+    ('%s', '%s', '%s', %d, %d, %d, %d, '%s', %d, '%s', %d, %d, '%s', '%s', '%s');
+"""
+
+RESULT_UPDATE_SQL = """
+    UPDATE tuc_results
+    SET 
+        race_id='%s', 
+        session_id='%s', 
+        driver_id='%s', 
+        position=%d, 
+        points=%d, 
+        starting_grid=%d, 
+        laps_completed=%d, 
+        status='%s', 
+        fastest_lap_rank=%d, 
+        fastest_lap_time='%s',
+        fastest_lap_number=%d,
+        time_to_leader_ms=%d,
+        result_hash='%s',
+        last_updated_dt='%s'
+    WHERE
+        result_id = %d
 """
 
 ANALYTICS_CLEANUP_SQL = """
