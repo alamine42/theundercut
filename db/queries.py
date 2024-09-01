@@ -63,19 +63,6 @@ RACE_UPDATE_SQL = """
         race_id = '%s'
 """
 
-# MEETING_SELECT_SQL = """
-#     SELECT *
-#     FROM tuc_meetings
-#     WHERE meeting_key = %d
-# """
-
-# MEETING_INSERT_SQL = """
-#     INSERT INTO tuc_meetings
-#     (meeting_key, meeting_name, meeting_official_name, meeting_round, circuit_key, date_start, year, last_updated_dt)
-#     VALUES 
-#     (%d, '%s', '%s', %d, %d, '%s', %d, '%s');
-# """
-
 SESSION_SELECT_SQL = """
     SELECT *
     FROM tuc_sessions
@@ -105,33 +92,33 @@ SESSION_UPDATE_SQL = """
 DRIVER_SELECT_SQL = """
     SELECT *
     FROM tuc_drivers
-    WHERE lower(full_name) = lower('%s')
+    WHERE driver_id = '%s'
 """
 
 DRIVER_INSERT_SQL = """
     INSERT INTO tuc_drivers
-    (driver_number, first_name, last_name, full_name, headshot_url, name_acronym, country_code, broadcast_name, team_color, team_name, driver_hash, last_updated_dt)
+    (driver_id, driver_number, first_name, last_name, driver_code, constructor_id, constructor_name, date_of_birth, nationality, driver_url, constructor_url, driver_hash, last_updated_dt)
     VALUES 
-    (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
+    ('%s', %d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
 """
 
 DRIVER_UPDATE_SQL = """
     UPDATE tuc_drivers
     SET 
-        driver_number = %d,
-        first_name = '%s',
-        last_name = '%s',
-        full_name = '%s',
-        headshot_url = '%s',
-        name_acronym = '%s',
-        country_code = '%s',
-        broadcast_name = '%s',
-        team_color = '%s',
-        team_name = '%s',
-        driver_hash = '%s',
-        last_updated_dt = '%s'
+        driver_number=%d, 
+        first_name='%s', 
+        last_name='%s', 
+        driver_code='%s', 
+        constructor_id='%s', 
+        constructor_name='%s', 
+        date_of_birth='%s', 
+        nationality='%s', 
+        driver_url='%s', 
+        constructor_url='%s',
+        driver_hash='%s',
+        last_updated_dt='%s'
     WHERE
-        driver_key = %d
+        driver_id = '%s'
 """
 
 SESSION_DRIVER_SELECT_SQL = """

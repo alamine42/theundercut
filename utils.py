@@ -1,4 +1,5 @@
 import logging
+import inspect
 from config import Config
 
 def load_config(config_file='config.ini'):
@@ -8,6 +9,10 @@ def load_config(config_file='config.ini'):
             cfg_key, cfg_val = cfg_entry.split('=')
             CONFIG[cfg_key] = cfg_val.strip()
     return CONFIG
+
+def get_function_parameters(func):
+    """Retrieves the parameter names of a function."""
+    return inspect.signature(func).parameters.keys()
 
 def db_connect():
     import psycopg2
