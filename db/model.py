@@ -288,3 +288,37 @@ def add_or_update_result(race_id, session_id, driver_id, finish_position, starti
                 result_select_results[0][0] # <-- this is the result id
             )
             run_query(result_update_sql)
+
+def update_race_analytics(race_id, session_id, driver_id, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost):
+
+    # First, cleanup any existing analytics for this race/session/driver combo
+    analytics_cleanup_sql = queries.ANALYTICS_CLEANUP_SQL % (race_id, session_id, driver_id)
+    run_query(analytics_cleanup_sql)
+
+    # Second, load new analytics
+    analytics_add_sql = queries.ANALYTICS_INSERT_SQL % (
+        race_id, 
+        session_id, 
+        driver_id, 
+        points, 
+        alternate_points, 
+        positions_won_lost, 
+        points_won_lost, 
+        alternate_points_won_lost, 
+        datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    )
+    run_query(analytics_add_sql)
+
+
+def is_sprint_weekend(season, round):
+
+    sprint_select_query = queries.SPRINT_SELECT_SQL % (season, round)
+    sprint_select_results = select_query(sprint_select_query)
+
+    if len(sprint_select_results) == 0:
+        return False
+    
+    if sprint_select_results[0][9] is not None:
+        return True
+    else:
+        return False

@@ -62,7 +62,20 @@ def get_schedule(query_year=None):
 
     schedule_dict = request_ergast_data(schedule_url)
     return schedule_dict['MRData']['RaceTable']['Race']
-    
+
+def get_race_schedule(season, round):
+    """
+    Call the Ergast API race schedule endpoint for a particular season + round.
+    Figure out if there's a sprint race during that weekend.
+
+    Example: https://ergast.com/api/f1/2024/5
+
+    """
+    logging.debug('Checking if round %d of season %s is a sprint weekend ...' % (round, season))
+    race_schedule_url = urljoin(Config.ERGAST_API_URL, season + '/' + str(round))
+    logging.debug('URL: %s' % race_schedule_url)
+    race_schedule_results = request_ergast_data(race_schedule_url)
+    return race_schedule_results['MRData']['RaceTable']['Race']
 
 def get_race_results(year=None, round=None):
     """
@@ -100,4 +113,4 @@ def get_sprint_results(season, round):
 
     logging.debug(results_dict)
     
-    return results_dict['MRData']['RaceTable']['Race']['SprintList']['SprintResult']
+    return results_dict['MRData']['RaceTable']

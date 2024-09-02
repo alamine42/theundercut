@@ -174,6 +174,7 @@ RESULT_UPDATE_SQL = """
         fastest_lap_time='%s',
         fastest_lap_number=%d,
         time_to_leader_ms=%d,
+        time_to_leader_text='%s',
         result_hash='%s',
         last_updated_dt='%s'
     WHERE
@@ -182,18 +183,24 @@ RESULT_UPDATE_SQL = """
 
 ANALYTICS_CLEANUP_SQL = """
     DELETE FROM tuc_race_analytics
-    WHERE meeting_key = %d and session_key = %d
+    WHERE race_id = '%s' and session_id = '%s' and driver_id = '%s'
 """
 
 ANALYTICS_INSERT_SQL = """
     INSERT INTO tuc_race_analytics
-    (id, meeting_key, session_key, driver_key, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost, last_updated_dt)
+    (race_id, session_id, driver_id, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost, last_updated_dt)
     VALUES
-    (%d, %d, %d, %d, %d, %f, %d, %d, %f, '%s');
+    ('%s', '%s', '%s', %d, %f, %d, %d, %f, '%s');
 """
 
 POINTS_MAP_SELECT_SQL = """
     SELECT position, points::float as points
     FROM tuc_points_map
     WHERE mapping_template_id = %d
+"""
+
+SPRINT_SELECT_SQL = """
+    SELECT sprint_date
+    FROM tuc_schedule
+    WHERE season = '%s' and round = '%s'
 """
