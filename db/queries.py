@@ -188,9 +188,9 @@ ANALYTICS_CLEANUP_SQL = """
 
 ANALYTICS_INSERT_SQL = """
     INSERT INTO tuc_race_analytics
-    (race_id, session_id, driver_id, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost, last_updated_dt)
+    (season, round, race_id, race_name, session_id, session_type, driver_id, driver_name, constructor_name, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost, last_updated_dt)
     VALUES
-    ('%s', '%s', '%s', %d, %f, %d, %d, %f, '%s');
+    ('%s', %d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %f, %d, %d, %f, '%s');
 """
 
 POINTS_MAP_SELECT_SQL = """

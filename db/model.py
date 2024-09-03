@@ -289,7 +289,7 @@ def add_or_update_result(race_id, session_id, driver_id, finish_position, starti
             )
             run_query(result_update_sql)
 
-def update_race_analytics(race_id, session_id, driver_id, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost):
+def update_race_analytics(season, round, race_id, race_name, session_id, session_type, driver_id, driver_name, constructor_name, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost):
 
     # First, cleanup any existing analytics for this race/session/driver combo
     analytics_cleanup_sql = queries.ANALYTICS_CLEANUP_SQL % (race_id, session_id, driver_id)
@@ -297,14 +297,20 @@ def update_race_analytics(race_id, session_id, driver_id, points, alternate_poin
 
     # Second, load new analytics
     analytics_add_sql = queries.ANALYTICS_INSERT_SQL % (
+        season, 
+        round, 
         race_id, 
+        race_name, 
         session_id, 
+        session_type, 
         driver_id, 
+        driver_name, 
+        constructor_name, 
         points, 
         alternate_points, 
         positions_won_lost, 
         points_won_lost, 
-        alternate_points_won_lost, 
+        alternate_points_won_lost,
         datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     )
     run_query(analytics_add_sql)

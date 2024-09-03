@@ -18,7 +18,7 @@ from utils import db_connect, select_query, run_query
 from apis import ergast, openf1
 from db import model, queries
 
-def add_results(race_id, session_id, results_list, points_map_dict, download_only):
+def add_results(season, round, race_id, race_name, session_id, session_type, results_list, points_map_dict, download_only):
 
     for result in results_list:
 
@@ -100,7 +100,7 @@ def add_results(race_id, session_id, results_list, points_map_dict, download_onl
         if not download_only:
             
             logging.debug('Loading race analytics into DB ...')
-            model.update_race_analytics(race_id, session_id, driver_id, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost)
+            model.update_race_analytics(season, round, race_id, race_name, session_id, session_type, driver_id, first_name + ' ' + last_name, constructor_name, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost)
 
 def main(season=None, round=None, download_only=False, update_cache=False):
 
@@ -134,8 +134,12 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         logging.info('Fetching web results for %s ...' % meeting_description)
         meeting_results = ergast.get_race_results(season, round)
 
-        with open(cache_file_path, 'w+') as f:
-            f.write(json.dumps(meeting_results, indent=4))
+        if 'Race' in meeting_results:
+            with open(cache_file_path, 'w+') as f:
+                f.write(json.dumps(meeting_results, indent=4))
+        else:
+            logging.info('No race data!')
+            exit(0)
 
     else:
         logging.info('Fetching cached results for %s ...' % meeting_description)
@@ -184,88 +188,9 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         )
 
     logging.info('Updating race results ...')
-    for result in meeting_results['Race']['ResultsList']['Result']:
+    add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Race', 'Race', meeting_results['Race']['ResultsList']['Result'], points_map_dict, download_only)
 
-        logging.debug(result)
-        
-        driver_id = str(result['Driver']['GivenName']).lower() + '_' + result['Driver']['FamilyName'].lower()
-        driver_number = int(result['Driver']['PermanentNumber'])
-        first_name = result['Driver']['GivenName']
-        last_name = result['Driver']['FamilyName']
-        driver_code = result['Driver']['@code']
-        driver_url = result['Driver']['@url']
-        nationality = result['Driver']['Nationality']
-        date_of_birth = result['Driver']['DateOfBirth']
-
-        constructor_id = result['Constructor']['@constructorId']
-        constructor_url = result['Constructor']['@url']
-        constructor_name = result['Constructor']['Name']
-
-        if not download_only:
-            logging.debug('Updating driver information for %s %s ...' % (first_name, last_name))
-            model.add_or_update_driver(
-                driver_id=driver_id, 
-                driver_number=driver_number, 
-                first_name=first_name, 
-                last_name=last_name, 
-                driver_code=driver_code, 
-                constructor_id=constructor_id, 
-                constructor_name=constructor_name, 
-                date_of_birth=date_of_birth, 
-                nationality=nationality, 
-                driver_url=driver_url, 
-                constructor_url=constructor_url
-            )
-
-        logging.debug('Updating results for %s %s ...' % (first_name, last_name))
-        finish_position = int(result['@position'])
-        starting_position = 20 if int(result['Grid']) == 0 else int(result['Grid'])
-        laps_completed = int(result['Laps'])
-        status = result['Status']['#text']
-        points = int(result['@points'])
-        fastest_lap_time = ''
-        fastest_lap_rank = -1
-        fastest_lap_number = -1
-        time_to_leader_ms = -1
-        time_to_leader_text = '' 
-
-        if 'FastestLap' in result:
-            if '@rank' in result['FastestLap']:
-                fastest_lap_rank = int(result['FastestLap']['@rank'])
-            fastest_lap_time = result['FastestLap']['Time']
-            fastest_lap_number = int(result['FastestLap']['@lap'])
-
-        if 'Time' in result:
-            time_to_leader_ms = int(result['Time']['@millis'])
-            time_to_leader_text = result['Time']['#text']
-
-        if not download_only:
-            model.add_or_update_result(
-                race_id=race_id, 
-                session_id=session_id, 
-                driver_id=driver_id, 
-                finish_position=finish_position, 
-                starting_position=starting_position, 
-                points=points, 
-                laps_completed=laps_completed, 
-                status=status, 
-                fastest_lap_rank=fastest_lap_rank, 
-                fastest_lap_time=fastest_lap_time, 
-                fastest_lap_number=fastest_lap_number, 
-                time_to_leader_ms=time_to_leader_ms, 
-                time_to_leader_text=time_to_leader_text
-            )
-
-        alternate_points = float(points_map_dict[finish_position]['alternate'])
-        positions_won_lost = int(finish_position) - int(starting_position)
-        points_won_lost = int(points) - int(points_map_dict[starting_position]['standard'])
-        alternate_points_won_lost = float(points_map_dict[finish_position]['alternate']) - float(points_map_dict[starting_position]['alternate'])
-
-        if not download_only:
-            
-            logging.debug('Loading race analytics into DB ...')
-            model.update_race_analytics(race_id, session_id, driver_id, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost)
-
+    logging.info('Looking at race schedule to identify Sprint weekends ...')
     race_schedule = ergast.get_race_schedule(season, round)
     if 'Sprint' in race_schedule:    
 
@@ -301,11 +226,10 @@ def main(season=None, round=None, download_only=False, update_cache=False):
                 session_time=race_schedule['Sprint']['Time']
             )
 
-        add_results(race_id, race_id + 'Sprint', sprint_results['Race']['SprintList']['SprintResult'], points_map_dict, download_only)
+        add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Sprint', 'Sprint', sprint_results['Race']['SprintList']['SprintResult'], points_map_dict, download_only)
 
 
     # TODO 
-    # 1. Handle future events
     # 3. Support getting results for all races in a season + collect historical data starting from 2020
     # 4. Build UI
     # 5. Deploy
@@ -321,7 +245,6 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--log_level', type=str, action='store', help='Log level (INFO, DEBUG, ERROR)', default='INFO')
     parser.add_argument('-y', '--year', type=str, action='store', help='Specify the year for which to retrieve the meetings. Default is current year.')
     parser.add_argument('-r', '--round', type=str, action='store', help='Specify the meeting round. Year has to be specified.')
-    # parser.add_argument('-m', '--meeting_id', type=str, action='store', help='Specifies the id for the meeting event desired.')
 
     args = parser.parse_args()
     log_format = '%(levelname)s:%(asctime)s:%(message)s'
