@@ -93,7 +93,7 @@ def add_results(season, round, race_id, race_name, session_id, session_type, res
             )
 
         alternate_points = float(points_map_dict[finish_position]['alternate'])
-        positions_won_lost = int(finish_position) - int(starting_position)
+        positions_won_lost = int(starting_position) - int(finish_position)
         points_won_lost = int(points) - int(points_map_dict[starting_position]['standard'])
         alternate_points_won_lost = float(points_map_dict[finish_position]['alternate']) - float(points_map_dict[starting_position]['alternate'])
 
@@ -240,7 +240,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='The Undercut - ETL')
     parser.add_argument('-d', '--download_only', help='Download the file but do not load it into the DB.', action='store_true')
-    parser.add_argument('-u', '--update_cache', help='Reload cached data from source, if exists', action='store_true')
+    parser.add_argument('-u', '--update_cache', help='Reload cached data from source, if exists', action='store_true', default=True)
     parser.add_argument('-p', '--print', action='store_true', help='Specifies logging to command line instead of file')
     parser.add_argument('-l', '--log_level', type=str, action='store', help='Log level (INFO, DEBUG, ERROR)', default='INFO')
     parser.add_argument('-y', '--year', type=str, action='store', help='Specify the year for which to retrieve the meetings. Default is current year.')
