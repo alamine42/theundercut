@@ -1,3 +1,14 @@
+LATEST_RACE_CLEAR_SQL = """
+    UPDATE tuc_schedule
+    SET latest = False
+"""
+
+LATEST_RACE_SET_SQL = """
+    UPDATE tuc_schedule
+    SET latest = True 
+    WHERE race_id = '%s'
+"""
+
 
 SCHEDULE_SELECT_SQL = """
     SELECT *

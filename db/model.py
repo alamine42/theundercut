@@ -14,6 +14,17 @@ from config import Config
 from db import queries
 from utils import db_connect, select_query, run_query, get_function_parameters
 
+def update_latest_race(season, circuit_id):
+
+    race_id = circuit_id + season
+    logging.debug('Setting %s as latest race ...' % race_id)
+
+    clear_latest_meeting_flag_sql = queries.LATEST_RACE_CLEAR_SQL
+    run_query(clear_latest_meeting_flag_sql)
+
+    set_latest_meeting_flag_sql = queries.LATEST_RACE_SET_SQL % race_id
+    run_query(set_latest_meeting_flag_sql)
+
 def get_meeting(meeting_id):
 
     meeting_select_sql = queries.RACE_SELECT_SQL % meeting_id

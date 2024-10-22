@@ -135,6 +135,9 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         meeting_results = ergast.get_race_results(season, round)
 
         if 'Race' in meeting_results:
+
+            model.update_latest_race(season=meeting_results['@season'], circuit_id=meeting_results['Race']['Circuit']['@circuitId'])
+
             with open(cache_file_path, 'w+') as f:
                 f.write(json.dumps(meeting_results, indent=4))
         else:
