@@ -5,3 +5,4 @@ psycopg2-binary==2.9.9
 requests==2.32.3
 urllib3==2.2.2
 xmltodict==0.13.0
+fastf1==3.4.0
