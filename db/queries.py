@@ -26,6 +26,12 @@ CIRCUIT_SELECT_SQL = """
     WHERE circuit_id = '%s'
 """
 
+CIRCUIT_SELECT_USING_SHORTNAME_SQL = """
+    SELECT *
+    FROM tuc_circuits
+    WHERE circuit_short_name = '%s'
+"""
+
 CIRCUIT_INSERT_SQL = """
     INSERT INTO tuc_circuits
     (circuit_id, circuit_short_name, circuit_name, country_name, locality, circuit_hash, last_updated_dt)
@@ -82,9 +88,9 @@ SESSION_SELECT_SQL = """
 
 SESSION_INSERT_SQL = """
     INSERT INTO tuc_sessions
-    (session_id, race_id, session_type, session_date, session_time, session_hash, last_updated_dt)
+    (session_id, race_id, session_type, session_date, session_time, session_hash, season, last_updated_dt)
     VALUES 
-    ('%s', '%s', '%s', '%s', '%s', '%s', '%s');
+    ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
 """
 
 SESSION_UPDATE_SQL = """
@@ -95,6 +101,7 @@ SESSION_UPDATE_SQL = """
         session_date = '%s',
         session_time = '%s',
         session_hash = '%s',
+        season = '%s',
         last_updated_dt = '%s'
     WHERE
         session_id = '%s'

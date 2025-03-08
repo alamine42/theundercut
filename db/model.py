@@ -103,29 +103,29 @@ def add_or_update_circuit(circuit_id, circuit_name, locality, country, circuit_s
                 )
             run_query(circuit_update_sql)
 
-def add_or_update_race(race_id, season, round, race_name, race_official_name, race_date, race_time, circuit_id):
+def add_or_update_race(race_id_str, season_str, round_num, race_name_str, race_official_name_str, race_date_str, race_time_str, circuit_id_str):
 
     # First, check to see if the race already exists
-    logging.debug('Add/Updating race: %s - %s' % (race_id, race_name))
-    race_select_sql = queries.RACE_SELECT_SQL % race_id
+    logging.debug('Add/Updating race: %s - %s' % (race_id_str, race_name_str))
+    race_select_sql = queries.RACE_SELECT_SQL % race_id_str
     logging.debug('Checking if race exists ...')
     race_select_results = select_query(race_select_sql)
     logging.debug('Found %d results ...' % len(race_select_results))
 
-    race_info_str = ''.join([race_id, season, str(round), race_name, race_official_name, race_date, race_time, circuit_id])
+    race_info_str = ''.join([race_id_str, season_str, str(round_num), race_name_str, race_official_name_str, race_date_str, race_time_str, circuit_id_str])
     race_hash = hashlib.md5(race_info_str.encode("utf-8")).hexdigest()
     
     if len(race_select_results) == 0:
 
         logging.debug('Race does not exist. Adding it ...')
         race_add_sql = queries.RACE_INSERT_SQL % (
-            race_id, 
-            season, 
-            round, 
-            race_name, 
-            race_official_name, 
-            race_date, 
-            circuit_id, 
+            race_id_str, 
+            season_str, 
+            round_num, 
+            race_name_str, 
+            race_official_name_str.replace("'", ""), 
+            race_date_str, 
+            circuit_id_str, 
             race_hash, 
             datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
@@ -134,22 +134,22 @@ def add_or_update_race(race_id, season, round, race_name, race_official_name, ra
     else:
         logging.debug('Race already exists. Checking if any info has changed ...')
         if race_hash != race_select_results[0][7]:
-            logging.info('Info for race %s %s has changed! Updating race ...' % (race_name, season))
+            logging.info('Info for race %s %s has changed! Updating race ...' % (race_name_str, season_str))
 
             race_update_sql = queries.RACE_UPDATE_SQL % (
-                season, 
-                round, 
-                race_name, 
-                race_official_name, 
-                race_date, 
-                circuit_id, 
+                season_str, 
+                round_num, 
+                race_name_str, 
+                race_official_name_str.replace("'", ""), 
+                race_date_str, 
+                circuit_id_str, 
                 race_hash, 
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                race_id
+                race_id_str
             )
             run_query(race_update_sql)
 
-def add_or_update_session(session_id, session_type, race_id, session_date, session_time):
+def add_or_update_session(session_id, session_type, race_id, session_date, session_time, season_str):
 
     # First, check to see if the session already exists
     logging.debug('Add/Update session: %s - %s' % (race_id, session_type))
@@ -171,6 +171,7 @@ def add_or_update_session(session_id, session_type, race_id, session_date, sessi
             session_date,
             session_time,
             session_hash,
+            season_str,
             datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
         run_query(session_add_sql)
@@ -185,6 +186,7 @@ def add_or_update_session(session_id, session_type, race_id, session_date, sessi
                 session_date,
                 session_time,
                 session_hash,
+                season_str,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 session_id
             )
