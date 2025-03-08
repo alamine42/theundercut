@@ -10,8 +10,6 @@ import json
 import requests
 import hashlib
 import xmltodict
-import fastf1
-import pandas as pd
 
 from urllib.parse import urljoin
 from datetime import date, datetime, timedelta
@@ -126,7 +124,7 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         meeting_description = 'round %d of the %s season' % (int(round), season)
     else:
         cache_file_rel_path = 'data/latest.json'
-        meeting_description = 'most recent meeting of the %s season' % query_year
+        meeting_description = 'most recent meeting'
     cache_file_path = os.path.join(current_dir, cache_file_rel_path)
 
     if not os.path.exists(cache_file_path):
@@ -134,18 +132,17 @@ def main(season=None, round=None, download_only=False, update_cache=False):
 
     if reload_from_web:
         logging.info('Fetching web results for %s ...' % meeting_description)
-        meeting_info = fastf1.get_event(int(season), round)
-        logging.info(meeting_info)
+        meeting_results = ergast.get_race_results(season, round)
 
-        # if 'Race' in meeting_results:
+        if 'Race' in meeting_results:
 
-        #     model.update_latest_race(season=meeting_results['@season'], circuit_id=meeting_results['Race']['Circuit']['@circuitId'])
+            model.update_latest_race(season=meeting_results['@season'], circuit_id=meeting_results['Race']['Circuit']['@circuitId'])
 
-        #     with open(cache_file_path, 'w+') as f:
-        #         f.write(json.dumps(meeting_results, indent=4))
-        # else:
-        #     logging.info('No race data!')
-        #     exit(0)
+            with open(cache_file_path, 'w+') as f:
+                f.write(json.dumps(meeting_results, indent=4))
+        else:
+            logging.info('No race data!')
+            exit(0)
 
     else:
         logging.info('Fetching cached results for %s ...' % meeting_description)
@@ -153,86 +150,86 @@ def main(season=None, round=None, download_only=False, update_cache=False):
         with open(cache_file_path, 'r') as f:
             meeting_results = json.load(f)
 
-    # logging.debug(json.dumps(meeting_results, indent=4))
+    logging.debug(json.dumps(meeting_results, indent=4))
 
-    # # Resetting the values for season & round just in case they weren't originally provided
-    # season = meeting_results['@season']
-    # round = int(meeting_results['@round'])
+    # Resetting the values for season & round just in case they weren't originally provided
+    season = meeting_results['@season']
+    round = int(meeting_results['@round'])
 
-    # circuit_id = meeting_results['Race']['Circuit']['@circuitId']
-    # circuit_name = meeting_results['Race']['Circuit']['CircuitName']
-    # locality = meeting_results['Race']['Circuit']['Location']['Locality']
-    # country = meeting_results['Race']['Circuit']['Location']['Country']
-    # race_id = circuit_id + season
-    # session_id = race_id + 'Race'
+    circuit_id = meeting_results['Race']['Circuit']['@circuitId']
+    circuit_name = meeting_results['Race']['Circuit']['CircuitName']
+    locality = meeting_results['Race']['Circuit']['Location']['Locality']
+    country = meeting_results['Race']['Circuit']['Location']['Country']
+    race_id = circuit_id + season
+    session_id = race_id + 'Race'
 
-    # logging.info('Updating circuit, meeting and session details for %s ...' % circuit_name)
-    # model.add_or_update_circuit(
-    #         circuit_id=circuit_id,
-    #         circuit_name=circuit_name,
-    #         locality=locality,
-    #         country=country
-    #     )
+    logging.info('Updating circuit, meeting and session details for %s ...' % circuit_name)
+    model.add_or_update_circuit(
+            circuit_id=circuit_id,
+            circuit_name=circuit_name,
+            locality=locality,
+            country=country
+        )
 
-    # model.add_or_update_race(
-    #         race_id=race_id,
-    #         season=season,
-    #         round=round,
-    #         race_name=meeting_results['Race']['RaceName'],
-    #         race_official_name='',
-    #         race_date=meeting_results['Race']['Date'],
-    #         race_time=meeting_results['Race']['Time'],
-    #         circuit_id=circuit_id
-    #     )
+    model.add_or_update_race(
+            race_id=race_id,
+            season=season,
+            round=round,
+            race_name=meeting_results['Race']['RaceName'],
+            race_official_name='',
+            race_date=meeting_results['Race']['Date'],
+            race_time=meeting_results['Race']['Time'],
+            circuit_id=circuit_id
+        )
 
-    # model.add_or_update_session(
-    #         session_id=session_id,
-    #         session_type='Race',
-    #         race_id=race_id,
-    #         session_date=meeting_results['Race']['Date'],
-    #         session_time=meeting_results['Race']['Time']
-    #     )
+    model.add_or_update_session(
+            session_id=session_id,
+            session_type='Race',
+            race_id=race_id,
+            session_date=meeting_results['Race']['Date'],
+            session_time=meeting_results['Race']['Time']
+        )
 
-    # logging.info('Updating race results ...')
-    # add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Race', 'Race', meeting_results['Race']['ResultsList']['Result'], points_map_dict, download_only)
+    logging.info('Updating race results ...')
+    add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Race', 'Race', meeting_results['Race']['ResultsList']['Result'], points_map_dict, download_only)
 
-    # logging.info('Looking at race schedule to identify Sprint weekends ...')
-    # race_schedule = ergast.get_race_schedule(season, round)
-    # if 'Sprint' in race_schedule:    
+    logging.info('Looking at race schedule to identify Sprint weekends ...')
+    race_schedule = ergast.get_race_schedule(season, round)
+    if 'Sprint' in race_schedule:    
 
-    #     logging.info('Sprint Weekend! Getting sprint session data & results ...')
+        logging.info('Sprint Weekend! Getting sprint session data & results ...')
 
-    #     cache_file_rel_path = 'data/' + season + '_' + str(round) + '_sprint.json'
-    #     cache_file_path = os.path.join(current_dir, cache_file_rel_path)
+        cache_file_rel_path = 'data/' + season + '_' + str(round) + '_sprint.json'
+        cache_file_path = os.path.join(current_dir, cache_file_rel_path)
 
-    #     if not os.path.exists(cache_file_path):
-    #         reload_from_web = True
+        if not os.path.exists(cache_file_path):
+            reload_from_web = True
 
-    #     if reload_from_web:
-    #         logging.info('Fetching web data for the Sprint session ...' )
-    #         sprint_results = ergast.get_sprint_results(season, round)
+        if reload_from_web:
+            logging.info('Fetching web data for the Sprint session ...' )
+            sprint_results = ergast.get_sprint_results(season, round)
 
-    #         with open(cache_file_path, 'w+') as f:
-    #             f.write(json.dumps(sprint_results, indent=4))
+            with open(cache_file_path, 'w+') as f:
+                f.write(json.dumps(sprint_results, indent=4))
 
-    #     else:
-    #         logging.info('Fetching cached results for the Sprint session ...')
+        else:
+            logging.info('Fetching cached results for the Sprint session ...')
 
-    #         with open(cache_file_path, 'r') as f:
-    #             sprint_results = json.load(f)
+            with open(cache_file_path, 'r') as f:
+                sprint_results = json.load(f)
         
 
-    #     # logging.info(json.dumps(sprint_results))
-    #     if not download_only:
-    #         model.add_or_update_session(
-    #             session_id=race_id + 'Sprint',
-    #             session_type='Sprint',
-    #             race_id=race_id,
-    #             session_date=race_schedule['Sprint']['Date'],
-    #             session_time=race_schedule['Sprint']['Time']
-    #         )
+        # logging.info(json.dumps(sprint_results))
+        if not download_only:
+            model.add_or_update_session(
+                session_id=race_id + 'Sprint',
+                session_type='Sprint',
+                race_id=race_id,
+                session_date=race_schedule['Sprint']['Date'],
+                session_time=race_schedule['Sprint']['Time']
+            )
 
-    #     add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Sprint', 'Sprint', sprint_results['Race']['SprintList']['SprintResult'], points_map_dict, download_only)
+        add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Sprint', 'Sprint', sprint_results['Race']['SprintList']['SprintResult'], points_map_dict, download_only)
 
 
     # TODO 
