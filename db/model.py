@@ -14,22 +14,41 @@ from config import Config
 from db import queries
 from utils import db_connect, select_query, run_query, get_function_parameters
 
-def update_latest_race(season, circuit_id):
+def update_latest_race(season_str, round_num):
 
-    race_id = circuit_id + season
-    logging.debug('Setting %s as latest race ...' % race_id)
+    update_latest_race_flag = False
+    logging.debug('Checking to see if season %s round %d is the latest race ...' % (season_str, round_num))
+    latest_race_cursor = select_query(queries.LATEST_RACE_GET_SQL)
 
-    clear_latest_meeting_flag_sql = queries.LATEST_RACE_CLEAR_SQL
-    run_query(clear_latest_meeting_flag_sql)
+    if len(latest_race_cursor) == 0:
+        logging.info('No existing latest race set. Setting %s round %d as the latest ...' % (season_str, round_num))
+        update_latest_race_flag = True
+    else:
+        latest_race_season_str = latest_race_cursor[0][1]
+        latest_race_round_num = int(latest_race_cursor[0][2])
 
-    set_latest_meeting_flag_sql = queries.LATEST_RACE_SET_SQL % race_id
-    run_query(set_latest_meeting_flag_sql)
+        if season_str > latest_race_season_str:
+            logging.info('Season %s round %d is the current latest race. Setting season %s round %d as the latest ...' % (latest_race_season_str, latest_race_round_num, season_str, round_num))
+            update_latest_race_flag = True
+        elif season_str == latest_race_season_str and round_num > latest_race_round_num:
+            logging.info('Season %s round %d is the current latest race. Setting season %s round %d as the latest ...' % (latest_race_season_str, latest_race_round_num, season_str, round_num))
+            update_latest_race_flag = True
+        else:
+            logging.info('Season %s round %d is the current latest race. Keeping it as is ...' % (latest_race_season_str, latest_race_round_num))
 
-def get_meeting(meeting_id):
+    if update_latest_race:
+        logging.debug('Clearning existing latest race flags ...')
+        run_query(queries.LATEST_RACE_CLEAR_SQL)
 
-    meeting_select_sql = queries.RACE_SELECT_SQL % meeting_id
-    meeting_select_results = select_query(meeting_select_sql)
-    return None if len(meeting_select_results) == 0 else meeting_select_results[0]
+        logging.debug('Setting new latest race flag ...')
+        set_latest_meeting_flag_sql = queries.LATEST_RACE_SET_SQL % (season_str, round_num)
+        run_query(set_latest_meeting_flag_sql)
+
+def get_race_id(season_str, round_num):
+
+    get_race_id_sql = queries.GET_RACE_ID_SQL % (season_str, round_num)
+    race_id_results = select_query(get_race_id_sql)
+    return None if len(race_id_results) == 0 else race_id_results[0][0]
 
 def get_points_map(standard_template_id=1, alternate_template_id=2):
     """
@@ -192,7 +211,7 @@ def add_or_update_session(session_id, session_type, race_id, session_date, sessi
             )
             run_query(session_update_sql)
 
-def add_or_update_driver(driver_id, driver_number, first_name, last_name, driver_code, constructor_id, constructor_name, date_of_birth=None, nationality=None, driver_url=None, constructor_url=None):
+def add_or_update_driver(driver_id, driver_number, first_name, last_name, driver_code, constructor_id, constructor_name, date_of_birth='', nationality='', driver_url='', constructor_url=''):
 
      # First, check to see if the driver already exists
     logging.debug('Add/Update driver: %s %s' % (first_name, last_name))
@@ -244,7 +263,7 @@ def add_or_update_driver(driver_id, driver_number, first_name, last_name, driver
             )
             run_query(driver_update_sql)
 
-def add_or_update_result(race_id, session_id, driver_id, finish_position, starting_position, points, laps_completed, status, fastest_lap_rank, fastest_lap_time=None, fastest_lap_number=None, time_to_leader_ms=None, time_to_leader_text=None):
+def add_or_update_result(race_id, session_id, driver_id, finish_position, starting_position, points, laps_completed, status, status_detailed, fastest_lap_rank, fastest_lap_time=None, fastest_lap_number=None, time_to_leader_ms=None, time_to_leader_text=None):
 
     # First, check to see if the result already exists
     logging.debug('Add/Update result: %s - %s' % (session_id, driver_id))
@@ -253,7 +272,7 @@ def add_or_update_result(race_id, session_id, driver_id, finish_position, starti
     result_select_results = select_query(result_select_sql)
     logging.debug('Found %d results ...' % len(result_select_results))
 
-    result_info_str = ''.join([race_id, session_id, driver_id, str(finish_position), str(starting_position), str(points), str(laps_completed), status, str(fastest_lap_rank), fastest_lap_time, str(fastest_lap_number), str(time_to_leader_ms), time_to_leader_text])
+    result_info_str = ''.join([race_id, session_id, driver_id, str(finish_position), str(starting_position), str(points), str(laps_completed), status, status_detailed, str(fastest_lap_rank), fastest_lap_time, str(fastest_lap_number), str(time_to_leader_ms), time_to_leader_text])
     result_hash = hashlib.md5(result_info_str.encode("utf-8")).hexdigest()
 
     if len(result_select_results) == 0:
@@ -267,7 +286,8 @@ def add_or_update_result(race_id, session_id, driver_id, finish_position, starti
             points, 
             starting_position, 
             laps_completed, 
-            status, 
+            status,
+            status_detailed, 
             fastest_lap_rank, 
             fastest_lap_time, 
             fastest_lap_number, 
@@ -291,6 +311,7 @@ def add_or_update_result(race_id, session_id, driver_id, finish_position, starti
                 starting_position, 
                 laps_completed, 
                 status, 
+                status_detailed,
                 fastest_lap_rank, 
                 fastest_lap_time, 
                 fastest_lap_number, 

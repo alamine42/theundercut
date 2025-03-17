@@ -104,141 +104,128 @@ def add_results(season, round, race_id, race_name, session_id, session_type, res
             logging.debug('Loading race analytics into DB ...')
             model.update_race_analytics(season, round, race_id, race_name, session_id, session_type, driver_id, first_name + ' ' + last_name, constructor_name, points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost)
 
-def main(season=None, round=None, download_only=False, update_cache=False):
+def main(season_str=None, round_num_range='1-24', session='Race', download_only=False):
 
     logging.info('------------------')
     logging.info('The UnderCut - ETL')
 
+    fastf1.set_log_level('ERROR')
+
     # Setting up query date
     query_year = datetime.now().year
+    season_str = str(query_year) if season_str is None else season_str
 
     # If year is specified, use the provided selection, otherwise use the current year
     points_map_dict = model.get_points_map(Config.STANDARD_PTS_TEMPLATE_ID, Config.ALTERNATE_PTS_TEMPLATE_ID)
 
-    reload_from_web = False
-    if update_cache:
-        logging.info('Forced cache update selected. Reloading data from web.')
-        reload_from_web = True
+    round_num_start = 1
+    round_num_end = 1
 
-    current_dir = os.path.dirname(__file__)
-    if season is not None and round is not None:
-        cache_file_rel_path = 'data/' + season + '_' + round + '.json'
-        meeting_description = 'round %d of the %s season' % (int(round), season)
+    if '-' in round_num_range:
+        round_num_start = int(round_num_range.split('-')[0])
+        round_num_end = int(round_num_range.split('-')[1])
     else:
-        cache_file_rel_path = 'data/latest.json'
-        meeting_description = 'most recent meeting of the %s season' % query_year
-    cache_file_path = os.path.join(current_dir, cache_file_rel_path)
+        round_num_start = int(round_num_range)
+        round_num_end = int(round_num_range)
 
-    if not os.path.exists(cache_file_path):
-        reload_from_web = True
+    for round_num in range(round_num_start, round_num_end + 1):
+    
+        logging.info('-------')
+        logging.info('Fetching web results for round %d %s ...' % (round_num, season_str))
+        logging.info('-------')
 
-    if reload_from_web:
-        logging.info('Fetching web results for %s ...' % meeting_description)
-        meeting_info = fastf1.get_event(int(season), round)
-        logging.info(meeting_info)
+        race_id = model.get_race_id(season_str, round_num)
+        session_id = race_id + session
 
-        # if 'Race' in meeting_results:
+        if race_id is None:
+            continue
 
-        #     model.update_latest_race(season=meeting_results['@season'], circuit_id=meeting_results['Race']['Circuit']['@circuitId'])
+        try:
+            session_info = fastf1.get_session(int(season_str), round_num, session)
+            session_info.load()
+            # logging.info(session_info.laps)
+        except Exception as e:
+            logging.error('Error fetching session data!')
+            logging.error(e)
 
-        #     with open(cache_file_path, 'w+') as f:
-        #         f.write(json.dumps(meeting_results, indent=4))
-        # else:
-        #     logging.info('No race data!')
-        #     exit(0)
+        # model.update_latest_race(season_str=season_str, round_num=round_num)
 
-    else:
-        logging.info('Fetching cached results for %s ...' % meeting_description)
+            ## TODO ##
+            ## 3. Validate the driver update
+        race_name = session_info.event['OfficialEventName'].replace("'", "")
 
-        with open(cache_file_path, 'r') as f:
-            meeting_results = json.load(f)
+        for idx, result in session_info.results.iterrows():
 
-    # logging.debug(json.dumps(meeting_results, indent=4))
+            try:
+                 finish_position = int(result['Position']) 
+            except Exception as e:
+                logging.error('NO DATA AVAILABLE')
+                break
 
-    # # Resetting the values for season & round just in case they weren't originally provided
-    # season = meeting_results['@season']
-    # round = int(meeting_results['@round'])
+            driver_id = result['DriverId']
 
-    # circuit_id = meeting_results['Race']['Circuit']['@circuitId']
-    # circuit_name = meeting_results['Race']['Circuit']['CircuitName']
-    # locality = meeting_results['Race']['Circuit']['Location']['Locality']
-    # country = meeting_results['Race']['Circuit']['Location']['Country']
-    # race_id = circuit_id + season
-    # session_id = race_id + 'Race'
+            model.add_or_update_driver(
+                driver_id = driver_id,
+                driver_number = int(result['DriverNumber']),
+                first_name = result['FirstName'],
+                last_name = result['LastName'],
+                driver_code = result['Abbreviation'],
+                constructor_id = result['TeamId'],
+                constructor_name = result['TeamName'],
+                nationality = result['CountryCode'],
+                driver_url = result['HeadshotUrl']
+                )
 
-    # logging.info('Updating circuit, meeting and session details for %s ...' % circuit_name)
-    # model.add_or_update_circuit(
-    #         circuit_id=circuit_id,
-    #         circuit_name=circuit_name,
-    #         locality=locality,
-    #         country=country
-    #     )
+            logging.debug('Updating results for %s %s ...' % (result['FirstName'], result['LastName']))
+            starting_position = 20 if int(result['GridPosition']) == 0 else int(result['GridPosition'])
+            laps_completed = len(session_info.laps.pick_drivers(result['Abbreviation']))
+            status = result['Status']
+            points = int(result['Points'])
+            fastest_lap_time = ''
+            fastest_lap_rank = -1
+            fastest_lap_number = -1
+            time_to_leader_ms = -1
+            time_to_leader_text = '' 
 
-    # model.add_or_update_race(
-    #         race_id=race_id,
-    #         season=season,
-    #         round=round,
-    #         race_name=meeting_results['Race']['RaceName'],
-    #         race_official_name='',
-    #         race_date=meeting_results['Race']['Date'],
-    #         race_time=meeting_results['Race']['Time'],
-    #         circuit_id=circuit_id
-    #     )
+            if result['ClassifiedPosition'] == 'R':
+                status = 'Retired'
+                status_detailed = result['Status']
+            else:
+                status = result['Status']
+                status_detailed = ''
 
-    # model.add_or_update_session(
-    #         session_id=session_id,
-    #         session_type='Race',
-    #         race_id=race_id,
-    #         session_date=meeting_results['Race']['Date'],
-    #         session_time=meeting_results['Race']['Time']
-    #     )
+            if not download_only:
+                model.add_or_update_result(
+                    race_id=race_id, 
+                    session_id=session_id, 
+                    driver_id=driver_id, 
+                    finish_position=finish_position, 
+                    starting_position=starting_position, 
+                    points=points, 
+                    laps_completed=laps_completed, 
+                    status=status,
+                    status_detailed=status_detailed, 
+                    fastest_lap_rank=fastest_lap_rank, 
+                    fastest_lap_time=fastest_lap_time, 
+                    fastest_lap_number=fastest_lap_number, 
+                    time_to_leader_ms=time_to_leader_ms, 
+                    time_to_leader_text=time_to_leader_text
+                )
 
-    # logging.info('Updating race results ...')
-    # add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Race', 'Race', meeting_results['Race']['ResultsList']['Result'], points_map_dict, download_only)
+            alternate_points = float(points_map_dict[finish_position]['alternate'])
+            positions_won_lost = int(starting_position) - int(finish_position)
+            points_won_lost = int(points) - int(points_map_dict[starting_position]['standard'])
+            alternate_points_won_lost = float(points_map_dict[finish_position]['alternate']) - float(points_map_dict[starting_position]['alternate'])
 
-    # logging.info('Looking at race schedule to identify Sprint weekends ...')
-    # race_schedule = ergast.get_race_schedule(season, round)
-    # if 'Sprint' in race_schedule:    
-
-    #     logging.info('Sprint Weekend! Getting sprint session data & results ...')
-
-    #     cache_file_rel_path = 'data/' + season + '_' + str(round) + '_sprint.json'
-    #     cache_file_path = os.path.join(current_dir, cache_file_rel_path)
-
-    #     if not os.path.exists(cache_file_path):
-    #         reload_from_web = True
-
-    #     if reload_from_web:
-    #         logging.info('Fetching web data for the Sprint session ...' )
-    #         sprint_results = ergast.get_sprint_results(season, round)
-
-    #         with open(cache_file_path, 'w+') as f:
-    #             f.write(json.dumps(sprint_results, indent=4))
-
-    #     else:
-    #         logging.info('Fetching cached results for the Sprint session ...')
-
-    #         with open(cache_file_path, 'r') as f:
-    #             sprint_results = json.load(f)
+            if not download_only:
+                
+                logging.debug('Loading race analytics into DB ...')
+                model.update_race_analytics(season_str, round_num, race_id, race_name, session_id, session, 
+                    driver_id, result['FirstName'] + ' ' + result['LastName'], result['TeamName'], 
+                    points, alternate_points, positions_won_lost, points_won_lost, alternate_points_won_lost)
         
 
-    #     # logging.info(json.dumps(sprint_results))
-    #     if not download_only:
-    #         model.add_or_update_session(
-    #             session_id=race_id + 'Sprint',
-    #             session_type='Sprint',
-    #             race_id=race_id,
-    #             session_date=race_schedule['Sprint']['Date'],
-    #             session_time=race_schedule['Sprint']['Time']
-    #         )
 
-    #     add_results(season, round, race_id, meeting_results['Race']['RaceName'], race_id + 'Sprint', 'Sprint', sprint_results['Race']['SprintList']['SprintResult'], points_map_dict, download_only)
-
-
-    # TODO 
-    # 3. Support getting results for all races in a season + collect historical data starting from 2020
-    # 4. Build UI
-    # 5. Deploy
 
     logging.info('All done.')
 
@@ -246,11 +233,11 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='The Undercut - ETL')
     parser.add_argument('-d', '--download_only', help='Download the file but do not load it into the DB.', action='store_true')
-    parser.add_argument('-u', '--update_cache', help='Reload cached data from source, if exists', action='store_true', default=True)
     parser.add_argument('-p', '--print', action='store_true', help='Specifies logging to command line instead of file')
     parser.add_argument('-l', '--log_level', type=str, action='store', help='Log level (INFO, DEBUG, ERROR)', default='INFO')
     parser.add_argument('-y', '--year', type=str, action='store', help='Specify the year for which to retrieve the meetings. Default is current year.')
-    parser.add_argument('-r', '--round', type=str, action='store', help='Specify the meeting round. Year has to be specified.')
+    parser.add_argument('-r', '--round', type=str, action='store', help='Specify the meeting rounds. Year has to be specified. Example: 8-14 (Default: 1-24)', default='1-24')
+    parser.add_argument('-s', '--session', type=str, action='store', help='Choose session type. Options are: Race, Qualifying, Sprint, Sprint Qualifying. Default is Race.', default='Race')
 
     args = parser.parse_args()
     log_format = '%(levelname)s:%(asctime)s:%(message)s'
@@ -267,4 +254,6 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(format=log_format, level=log_level, filename=Config.LOG_FILE)
 
-    main(season=args.year, round=args.round, download_only=args.download_only, update_cache=args.update_cache)
+    fastf1.set_log_level('ERROR')
+
+    main(season_str=args.year, round_num_range=args.round, session=args.session, download_only=args.download_only)

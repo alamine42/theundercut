@@ -6,7 +6,13 @@ LATEST_RACE_CLEAR_SQL = """
 LATEST_RACE_SET_SQL = """
     UPDATE tuc_schedule
     SET latest = True 
-    WHERE race_id = '%s'
+    WHERE season = '%s' and round = %d
+"""
+
+LATEST_RACE_GET_SQL = """
+    SELECT race_id, season, round, race_date
+    FROM tuc_schedule
+    WHERE latest = True;
 """
 
 
@@ -56,6 +62,13 @@ RACE_SELECT_SQL = """
     SELECT *
     FROM tuc_schedule
     WHERE race_id = '%s'
+"""
+
+GET_RACE_ID_SQL = """
+    SELECT race_id
+    FROM tuc_schedule
+    WHERE season = '%s'
+    AND round = %d
 """
 
 RACE_INSERT_SQL = """
@@ -172,9 +185,9 @@ RESULT_SELECT_SQL = """
 
 RESULT_INSERT_SQL = """
     INSERT INTO tuc_results
-    (race_id, session_id, driver_id, position, points, starting_grid, laps_completed, status, fastest_lap_rank, fastest_lap_time, fastest_lap_number, time_to_leader_ms, time_to_leader_text, result_hash, last_updated_dt)
+    (race_id, session_id, driver_id, position, points, starting_grid, laps_completed, status, status_detailed, fastest_lap_rank, fastest_lap_time, fastest_lap_number, time_to_leader_ms, time_to_leader_text, result_hash, last_updated_dt)
     VALUES
-    ('%s', '%s', '%s', %d, %d, %d, %d, '%s', %d, '%s', %d, %d, '%s', '%s', '%s');
+    ('%s', '%s', '%s', %d, %d, %d, %d, '%s', '%s', %d, '%s', %d, %d, '%s', '%s', '%s');
 """
 
 RESULT_UPDATE_SQL = """
@@ -187,7 +200,8 @@ RESULT_UPDATE_SQL = """
         points=%d, 
         starting_grid=%d, 
         laps_completed=%d, 
-        status='%s', 
+        status='%s',
+        status_detailed='%s', 
         fastest_lap_rank=%d, 
         fastest_lap_time='%s',
         fastest_lap_number=%d,
