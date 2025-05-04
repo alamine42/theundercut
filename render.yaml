@@ -39,7 +39,8 @@ services:
   - type: keyvalue
     name: theundercut-cache
     plan: free
-    ipAllowList: ["0.0.0.0/0"]         # allow internal traffic; tighten later
+    ipAllowList:          # allow internal traffic; tighten later
+      - source: 0.0.0.0/0
 
 databases:
   - name: theundercut-db
