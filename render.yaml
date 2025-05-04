@@ -1,7 +1,42 @@
+# render.yaml
 services:
+  # 1️⃣ Web (FastAPI)
   - type: web
     name: theundercut-web
     env: docker
     repo: https://github.com/alamine42/theundercut
-    plan: free
+    plan: free            # can stay “free” while we test
     dockerCommand: uvicorn theundercut.api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL      # will be auto‑injected by the DB add‑on
+        fromDatabase:
+          name: theundercut-db
+          property: connectionString
+      - key: REDIS_URL         # auto‑injected by Redis add‑on
+        fromService:
+          name: theundercut-cache
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+    disks:
+      - name: data             # for FastF1 disk cache later
+        mountPath: /data
+        sizeGB: 1
+
+# 2️⃣ Background worker (kept idle for now)
+  - type: worker
+    name: theundercut-worker
+    env: docker
+    dockerCommand: python -c "print('worker placeholder')"   # we’ll change soon
+    envVars: *theundercut-web.envVars
+    disks: *theundercut-web.disks
+
+databases:
+  - name: theundercut-db
+    plan: free
+    databaseName: theundercut
+    user: theundercut
+
+redis:
+  - name: theundercut-cache
+    plan: free
