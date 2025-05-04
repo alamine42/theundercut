@@ -5,31 +5,38 @@ services:
     name: theundercut-web
     env: docker
     repo: https://github.com/alamine42/theundercut
-    plan: free            # can stay “free” while we test
+    plan: free
     dockerCommand: uvicorn theundercut.api.main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: DATABASE_URL      # will be auto‑injected by the DB add‑on
+
+    # --- declare common blocks &default_envvars / &default_disks ------------
+    envVars: &default_envvars
+      - key: DATABASE_URL
         fromDatabase:
           name: theundercut-db
           property: connectionString
-      - key: REDIS_URL         # auto‑injected by Redis add‑on
+      - key: REDIS_URL
         fromService:
           name: theundercut-cache
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
-    disks:
-      - name: data             # for FastF1 disk cache later
+
+    disks: &default_disks
+      - name: data
         mountPath: /data
         sizeGB: 1
+    # ------------------------------------------------------------------------
 
-# 2️⃣ Background worker (kept idle for now)
+  # 2️⃣ Background worker (placeholder until we add RQ code)
   - type: worker
     name: theundercut-worker
     env: docker
-    dockerCommand: python -c "print('worker placeholder')"   # we’ll change soon
-    envVars: *theundercut-web.envVars
-    disks: *theundercut-web.disks
+    repo: https://github.com/alamine42/theundercut
+    plan: free
+    dockerCommand: python -c "print('worker placeholder')"
+
+    envVars: *default_envvars   # ← reference the anchor
+    disks:   *default_disks     # ← reference the anchor
 
 databases:
   - name: theundercut-db
