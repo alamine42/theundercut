@@ -2,6 +2,6 @@ services:
   - type: web
     name: theundercut-web
     env: docker
-    repo: https://github.com/<your‑user>/theundercut-next
+    repo: https://github.com/<your‑user>/theundercut
     plan: free
     dockerCommand: uvicorn theundercut.api.main:app --host 0.0.0.0 --port $PORT
