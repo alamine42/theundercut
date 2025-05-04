@@ -4,10 +4,9 @@ services:
     name: theundercut-web
     env: docker
     repo: https://github.com/alamine42/theundercut
-    plan: free
+    plan: pro
     dockerCommand: uvicorn theundercut.api.main:app --host 0.0.0.0 --port $PORT
 
-    # ─── shared env vars ──────────────────────────────
     envVars: &default_envvars
       - key: DATABASE_URL
         fromDatabase:
@@ -21,26 +20,26 @@ services:
       - key: SECRET_KEY
         generateValue: true
 
-    # ─── persistent disk for FastF1 cache ────────────
     disk: &default_disk
       name: data
       mountPath: /data
-      sizeGB: 1            # you can grow this later
+      sizeGB: 2                        # grow as needed
 
-  # 2️⃣ Background worker (placeholder until we add RQ code)
+  # 2️⃣ Background worker (RQ placeholder for now)
   - type: worker
     name: theundercut-worker
     env: docker
     repo: https://github.com/alamine42/theundercut
-    plan: free
-    dockerCommand: python -c "print('worker placeholder')"
+    plan: pro
+    dockerCommand: python -c "print('worker placeholder')"   # will change next step
     envVars: *default_envvars
-    disk:   *default_disk
+    disk:    *default_disk
 
-  # 3️⃣ Redis‐compatible Key Value instance
-  - type: keyvalue          # <- this defines Redis
+  # 3️⃣ Redis‑compatible Key Value instance
+  - type: keyvalue
     name: theundercut-cache
     plan: free
+    ipAllowList: ["0.0.0.0/0"]         # allow internal traffic; tighten later
 
 databases:
   - name: theundercut-db
