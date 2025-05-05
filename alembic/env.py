@@ -11,6 +11,14 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
+import os
+
+real_url = os.getenv("DATABASE_URL")
+if not real_url:
+    raise RuntimeError("DATABASE_URL env‑var is empty")
+
+config.set_main_option("sqlalchemy.url", real_url)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
