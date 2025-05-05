@@ -1,5 +1,5 @@
 # ---------- deps layer (cached) ----------
-FROM python:3.11-slim-bookworm AS deps          # 👈  switch 3.12 → 3.11
+FROM python:3.11-slim-bookworm AS deps
 WORKDIR /app
 
 COPY pyproject.toml ./
