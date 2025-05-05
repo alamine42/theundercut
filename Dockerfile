@@ -1,6 +1,7 @@
 # ---------- deps layer (cached) ----------
 FROM python:3.11-slim-bookworm AS deps
 WORKDIR /app
+ENV PYTHONPATH="/app/src"
 
 COPY pyproject.toml ./
 
