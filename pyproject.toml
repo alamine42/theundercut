@@ -31,4 +31,6 @@ theundercut = "theundercut.cli:app"
 package-dir = {"" = "src"}         # root package directory = src
 packages = ["theundercut"]         # explicitly include our package
 
+[tool.setuptools.packages.find]         # ← NEW
+where = ["src"]                         # auto‑discover all packages in src/
 
