@@ -26,3 +26,9 @@ dependencies = [
 # expose CLI entry‑point (add to bottom of the file)
 [project.scripts]
 theundercut = "theundercut.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}         # root package directory = src
+packages = ["theundercut"]         # explicitly include our package
+
+
