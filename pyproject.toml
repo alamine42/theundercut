@@ -20,6 +20,9 @@ dependencies = [
   "numpy>=1.26",
   "backoff>=2.2",                # for retry decorators
   "pydantic>=2.7",
+  "typer[all]>=0.12
 ]
 
-# dev extras (tests/lint) will come later
+# expose CLI entry‑point (add to bottom of the file)
+[project.scripts]
+theundercut = "theundercut.cli:app"
