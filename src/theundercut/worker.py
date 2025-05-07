@@ -1,15 +1,12 @@
 """
-RQ worker entry‑point.
-
-It listens to the default queue (same Redis used by the scheduler) and
-runs any jobs enqueued by `theundercut.scheduler`.
+RQ worker entry‑point – compatible with RQ 2.x.
 """
 
-from rq import Worker, Queue, Connection
+from rq import Queue, Worker
 from theundercut.adapters.redis_cache import redis_client
 
 if __name__ == "__main__":
-    with Connection(redis_client):
-        worker = Worker(queues=[Queue("default")])
-        print("RQ worker ready ⛑️")
-        worker.work()
+    queue = Queue("default", connection=redis_client)
+    worker = Worker([queue], connection=redis_client)
+    print("RQ worker ready ⛑️  (RQ", worker.version, ")")
+    worker.work()
