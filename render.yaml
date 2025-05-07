@@ -31,11 +31,21 @@ services:
     env: docker
     repo: https://github.com/alamine42/theundercut
     plan: pro
-    dockerCommand: python -c "print('worker placeholder')"   # will change next step
+    dockerCommand: python -m theundercut.worker
     envVars: *default_envvars
     disk:    *default_disk
 
-  # 3️⃣ Redis‑compatible Key Value instance
+  # 3 Scheduler  (queues jobs + daily calendar sync)
+  - type: worker
+    name: theundercut-scheduler
+    env: docker
+    repo: https://github.com/alamine42/theundercut
+    plan: pro
+    dockerCommand: python -m theundercut.scheduler    # ← NEW
+    envVars: *default_envvars
+    disk:    *default_disk
+
+  # 4 Redis‑compatible Key Value instance
   - type: keyvalue
     name: theundercut-cache
     plan: free
