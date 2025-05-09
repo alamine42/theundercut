@@ -22,17 +22,21 @@ def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
             }
         )
         .assign(
-            race_id=race_id,
-            lap_ms=lambda d: d.LapTime.dt.total_seconds() * 1000,
+            lap_ms=lambda d: (d.LapTime.dt.total_seconds() * 1000).round().astype("Int64"),
+            lap=lambda d: d.lap.astype("Int64"),
+            stint_no=lambda d: d.stint_no.astype("Int64"),
             pit=lambda d: d.PitInTime.notna(),
+            race_id=race_id,
         )
+        .fillna({"lap_ms": -1, "lap": -1, "stint_no": -1})
     )
+
     db.bulk_insert_mappings(
         LapTime,
-        df[["race_id", "driver", "lap", "lap_ms", "compound", "stint_no", "pit"]].to_dict(
-            "records"
-        ),
+        df[["race_id", "driver", "lap", "lap_ms", "compound", "stint_no", "pit"]]
+        .to_dict("records"),
     )
+
 
 
 def _store_stints(db: Session, race_id: str, df: pd.DataFrame) -> None:
