@@ -46,8 +46,11 @@ def enqueue_upcoming():
 
 
 # ─── start recurring jobs ─────────────────────────────────────────────
+# Daily calendar refresh at 04:00 UTC
 scheduler.cron("0 4 * * *", func=daily_calendar_sync, repeat=None)
-scheduler.every(600, enqueue_upcoming)  # every 10 min
+
+# Queue upcoming sessions every 10 minutes
+scheduler.cron("*/10 * * * *", func=enqueue_upcoming, repeat=None)
 
 print("RQ Scheduler running ⏰")
 while True:
