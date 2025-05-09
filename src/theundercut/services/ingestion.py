@@ -68,6 +68,8 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race") -> None:
         print(f"[ingestion] No laps for {season}-{rnd} {session_type}")
         return
 
+    race_id = f"{season}-{rnd}"
+
     with SessionLocal() as db:
         _store_laps(db, race_id, laps)
         _store_stints(db, race_id, laps)
