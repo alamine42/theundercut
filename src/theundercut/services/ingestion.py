@@ -63,9 +63,10 @@ def _store_stints(db: Session, race_id: str, df: pd.DataFrame) -> None:
 def ingest_session(season: int, rnd: int, session_type: str = "Race") -> None:
     """Main RQ job entry‑point."""
     provider = get_provider(season, rnd)
-    sess = provider.session if session_type == "Race" else None  # FastF1 only
-    laps = provider.load_laps() if session_type == "Race" else provider.load_laps(session_type)
-    race_id = f"{season}-{rnd}"
+    laps = provider.load_laps(session_type=session_type)
+    if laps.empty:
+        print(f"[ingestion] No laps for {season}-{rnd} {session_type}")
+        return
 
     with SessionLocal() as db:
         _store_laps(db, race_id, laps)

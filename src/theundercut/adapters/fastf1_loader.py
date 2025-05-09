@@ -1,9 +1,13 @@
 """
 Very thin wrapper around fastf1 for now.
 """
-
+from pathlib import Path
 import fastf1
 import pandas as pd
+
+CACHE_DIR = Path("/data/cache")
+CACHE_DIR.mkdir(parents=True, exist_ok=True)   # ensure directory
+fastf1.Cache.enable_cache(str(CACHE_DIR))
 
 class FastF1Provider:
     def __init__(self, season: int, rnd: int):
