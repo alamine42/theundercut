@@ -5,6 +5,7 @@ RQ job: ingest an F1 session into Postgres.
 from __future__ import annotations
 import pandas as pd
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from theundercut.adapters.resolver import get_provider
 from theundercut.adapters.db import SessionLocal
@@ -12,7 +13,12 @@ from theundercut.models import LapTime, Stint, CalendarEvent
 
 
 def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
-    df = (
+    """
+    Clean, normalise and bulk-insert lap records.
+    If the unique index (race_id, driver, lap) already has a row,
+    ON CONFLICT DO NOTHING prevents duplicates.
+    """
+    cleaned = (
         df.rename(
             columns={
                 "Driver": "driver",
@@ -22,7 +28,9 @@ def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
             }
         )
         .assign(
-            lap_ms=lambda d: (d.LapTime.dt.total_seconds() * 1000).round().astype("Int64"),
+            lap_ms=lambda d: (
+                d.LapTime.dt.total_seconds() * 1000
+            ).round().astype("Int64"),
             lap=lambda d: d.lap.astype("Int64"),
             stint_no=lambda d: d.stint_no.astype("Int64"),
             pit=lambda d: d.PitInTime.notna(),
@@ -31,11 +39,18 @@ def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
         .fillna({"lap_ms": -1, "lap": -1, "stint_no": -1})
     )
 
-    db.bulk_insert_mappings(
-        LapTime,
-        df[["race_id", "driver", "lap", "lap_ms", "compound", "stint_no", "pit"]]
-        .to_dict("records"),
+    stmt = pg_insert(LapTime).values(
+        cleaned[
+            ["race_id", "driver", "lap", "lap_ms", "compound", "stint_no", "pit"]
+        ].to_dict("records")
     )
+
+    # If a row with same (race_id, driver, lap) exists, skip it.
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=["race_id", "driver", "lap"]
+    )
+
+    db.execute(stmt)
 
 
 
@@ -73,6 +88,15 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race") -> None:
         return
 
     race_id = f"{season}-{rnd}"
+
+    with SessionLocal() as db:
+    already = db.scalar(
+        sa.text("SELECT 1 FROM lap_times WHERE race_id = :rid LIMIT 1"),
+        {"rid": f"{season}-{rnd}"},
+    )
+    if already:
+        print(f"[ingestion] {season}-{rnd} already ingested, skipping.")
+        return
 
     with SessionLocal() as db:
         _store_laps(db, race_id, laps)

@@ -1,3 +1,6 @@
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
