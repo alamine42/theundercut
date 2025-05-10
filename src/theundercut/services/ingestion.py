@@ -90,10 +90,10 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race") -> None:
     race_id = f"{season}-{rnd}"
 
     with SessionLocal() as db:
-    already = db.scalar(
-        sa.text("SELECT 1 FROM lap_times WHERE race_id = :rid LIMIT 1"),
-        {"rid": f"{season}-{rnd}"},
-    )
+        already = db.scalar(
+            sa.text("SELECT 1 FROM lap_times WHERE race_id = :rid LIMIT 1"),
+            {"rid": f"{season}-{rnd}"},
+        )
     if already:
         print(f"[ingestion] {season}-{rnd} already ingested, skipping.")
         return
