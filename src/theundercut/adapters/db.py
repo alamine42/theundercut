@@ -19,11 +19,10 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, future=True))
 
 
-# Optional FastAPI dependency helper
-@contextmanager
+# --- FastAPI-friendly dependency --------------------------------------------
 def get_db():
-    sess = SessionLocal()
+    db = SessionLocal()
     try:
-        yield sess
+        yield db          # FastAPI receives the actual Session here
     finally:
-        sess.close()
+        db.close()
