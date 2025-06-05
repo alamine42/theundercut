@@ -11,3 +11,14 @@ services:
   redis:
     image: redis:7
     ports: ["6379:6379"]
+
+  # App service configuration example
+  # Uncomment and customize as needed
+  # web:
+  #   build: .
+  #   environment:
+  #     DATABASE_URL: postgresql+psycopg2://theundercut:secret@db:5432/theundercut
+  #     REDIS_URL: redis://redis:6379/0
+  #   depends_on:
+  #     - db
+  #     - redis
