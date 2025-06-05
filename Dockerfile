@@ -27,4 +27,9 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY . .
 RUN pip install --no-cache-dir -e .
 
+# Create a non-root user and set appropriate permissions
+RUN useradd -m appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 CMD ["uvicorn", "theundercut.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
