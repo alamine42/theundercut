@@ -1,0 +1,2 @@
+[console_scripts]
+theundercut = theundercut.cli:app

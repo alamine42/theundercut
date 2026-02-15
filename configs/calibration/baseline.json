@@ -1,0 +1,11 @@
+{
+  "name": "baseline",
+  "consistency_tolerance": 4.1,
+  "pace_advantage_scale": 3.0,
+  "pace_boost_cap": 0.25,
+  "pace_min_advantage": 0.2,
+  "stint_target_laps": 15.0,
+  "stint_boost_cap": 0.35,
+  "strategy_lap_tolerance": 6.0,
+  "penalty_normalizer": 12.0
+}

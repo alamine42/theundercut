@@ -12,3 +12,7 @@ pandas<2.1.0,>=1.2.4
 numpy>=1.26
 backoff>=2.2
 pydantic>=2.7
+typer[all]>=0.12
+
+[dev]
+pytest>=8.1

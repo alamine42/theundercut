@@ -4,18 +4,13 @@ Other modules should *only* import SessionLocal (for ORM sessions) or
 engine (for low‑level SQL).
 """
 
-import os
-from contextlib import contextmanager
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://theundercut:secret@localhost:5432/theundercut",
-)
+from theundercut.config import get_settings
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+settings = get_settings()
+engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, future=True))
 
 
