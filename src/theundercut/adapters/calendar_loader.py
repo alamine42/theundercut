@@ -39,6 +39,8 @@ def _openf1_year(year: int) -> List[Dict]:
 
 def _normalize_openf1(rows: List[Dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
+    # Exclude pre-season testing sessions (named "Day 1", "Day 2", etc.)
+    df = df[~df["session_name"].str.match(r"^Day \d+$", na=False)]
     df = (
         df.rename(
             columns={

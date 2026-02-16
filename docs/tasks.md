@@ -19,7 +19,7 @@ Legend: ☐ = not started, ◐ = in progress, ☑ = done
 | T13| ☑ | Rename analytics output to "driver pace grade" (API/tests/docs) | Backend | Ensures `/api/v1/analytics` matches terminology agreed with product |
 | T14| ☑ | Refresh architecture + MVP implementation plan | Product | Updated `docs/architecture.md` with stack overview, MVP scope, testing strategy |
 | T15| ☑ | Document Drive Grade merge approach | Backend | See `docs/drive_grade_merge_plan.md` for phased migration |
-| T16| ☐ | Fix calendar loader to exclude pre-season testing | Data | Round 1 currently maps to testing; actual races start at round 2 |
+| T16| ☑ | Fix calendar loader to exclude pre-season testing | Data | Filter "Day N" sessions before ranking meeting_keys |
 | T17| ☐ | Investigate FastF1 hanging issue | Data | FastF1 hangs on session.load(); using OpenF1 as workaround |
 | T18| ☐ | Add stint data to OpenF1 ingestion | Data | OpenF1 laps endpoint doesn't include stint/compound info |
 
