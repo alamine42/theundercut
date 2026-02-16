@@ -2,22 +2,47 @@
 {% block title %}Analytics {{ season }} – Round {{ round }}{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto">
-  <header class="mb-6">
-    <h1 class="text-3xl font-bold text-gray-800">Race Analytics</h1>
-    <p class="text-gray-600 mt-1">Season {{ season }} – Round {{ round }}</p>
-  </header>
-
-  <!-- Driver Filter -->
-  <div class="bg-white rounded-lg shadow p-4 mb-6">
-    <h2 class="text-lg font-semibold mb-3">Filter Drivers</h2>
-    <div id="driver-filter" class="flex flex-wrap gap-2">
-      <span class="text-gray-500 text-sm">Loading drivers...</span>
+<div>
+  <section class="telemetry-hero">
+    <header>
+      <div>
+        <p class="text-sm tracking-[0.4em] uppercase text-[var(--text-muted)]">Race telemetry</p>
+        <h1 class="text-4xl font-semibold tracking-[0.18em]">Season {{ season }} · Round {{ round }}</h1>
+      </div>
+      <div class="text-right">
+        <p class="text-xs uppercase tracking-[0.35em] text-[var(--text-muted)]">Live delta</p>
+        <p class="text-3xl font-semibold text-[var(--accent-amber)]" id="metric-delta">+0.000s</p>
+        <small class="text-[var(--text-muted)]">Fastest benchmark</small>
+      </div>
+    </header>
+    <div class="hero-meta">
+      <div>
+        <span>Active Drivers</span>
+        <strong id="metric-drivers">--</strong>
+      </div>
+      <div>
+        <span>Fastest Lap</span>
+        <strong id="metric-fastest">--.--s</strong>
+      </div>
+      <div>
+        <span>Lap Window</span>
+        <strong id="metric-laps">—</strong>
+      </div>
+      <div>
+        <span>Total Stints</span>
+        <strong id="metric-stints">--</strong>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <!-- Charts Container -->
-  <div id="charts-container">
+  <section class="control-panel">
+    <h2>Driver matrix</h2>
+    <div id="driver-filter" data-populated="false">
+      <span class="text-[var(--text-muted)] text-xs tracking-[0.3em] uppercase">Loading driver roster…</span>
+    </div>
+  </section>
+
+  <div id="charts-container" class="charts-grid">
     {% include "analytics/_charts.html" %}
   </div>
 </div>
@@ -67,6 +92,7 @@
       .then(data => {
         // Populate driver filter
         populateDriverFilter(data.laps);
+        updateHeroMetrics(data);
 
         // Render all charts
         renderLapTimeChart(data);
@@ -94,23 +120,21 @@
     if (container.dataset.populated === 'true') return;
     container.dataset.populated = 'true';
 
-    container.innerHTML = drivers.map(driver => `
-      <label class="inline-flex items-center px-3 py-1 bg-gray-100 rounded-full cursor-pointer hover:bg-gray-200 transition-colors">
-        <input type="checkbox" name="drivers" value="${driver}" checked
-               class="mr-2 accent-red-600"
-               onchange="onDriverFilterChange()">
-        <span class="text-sm font-medium">${driver}</span>
+    const chipMarkup = drivers.map(driver => `
+      <label class="driver-chip">
+        <input type="checkbox" name="drivers" value="${driver}" checked onchange="onDriverFilterChange()">
+        <span>${driver}</span>
       </label>
     `).join('');
 
-    // Add select all / none buttons
-    container.innerHTML += `
-      <div class="flex gap-2 ml-4">
-        <button onclick="selectAllDrivers()" class="text-xs text-blue-600 hover:underline">Select All</button>
-        <span class="text-gray-300">|</span>
-        <button onclick="selectNoDrivers()" class="text-xs text-blue-600 hover:underline">Clear</button>
+    const actions = `
+      <div class="chip-actions">
+        <button type="button" onclick="selectAllDrivers()">All</button>
+        <button type="button" onclick="selectNoDrivers()">Clear</button>
       </div>
     `;
+
+    container.innerHTML = chipMarkup + actions;
   }
 
   function selectAllDrivers() {
@@ -129,6 +153,38 @@
     filterDebounce = setTimeout(() => {
       loadAnalyticsData();
     }, 300);
+  }
+
+  function setMetric(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function updateHeroMetrics(data) {
+    const laps = data.laps || [];
+    const grades = data.driver_pace_grades || [];
+    const stints = data.stints || [];
+
+    const driverCount = new Set(laps.map(l => l.driver)).size || grades.length || 0;
+    setMetric('metric-drivers', driverCount ? driverCount.toString().padStart(2, '0') : '--');
+
+    const fastestLap = laps.reduce((min, lap) => {
+      if (!lap.lap_ms || lap.lap_ms <= 0) return min;
+      return Math.min(min, lap.lap_ms);
+    }, Infinity);
+    setMetric('metric-fastest', fastestLap !== Infinity ? `${(fastestLap / 1000).toFixed(3)}s` : '--.--s');
+
+    const maxLap = laps.reduce((max, lap) => Math.max(max, lap.lap || 0), 0);
+    setMetric('metric-laps', maxLap ? `1-${maxLap}` : '—');
+
+    setMetric('metric-stints', stints.length ? stints.length.toString().padStart(2, '0') : '00');
+
+    if (grades.length) {
+      const avgDelta = grades.reduce((sum, g) => sum + (g.pace_delta_ms || 0), 0) / grades.length;
+      setMetric('metric-delta', `+${(avgDelta / 1000).toFixed(3)}s`);
+    } else {
+      setMetric('metric-delta', '+0.000s');
+    }
   }
 </script>
 

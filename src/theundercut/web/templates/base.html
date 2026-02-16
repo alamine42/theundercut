@@ -5,35 +5,277 @@
   <title>The Undercut – {% block title %}{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@1.9.9"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
   <style>
+    :root {
+      --bg-deep: #03060d;
+      --bg-panel: rgba(7, 11, 23, 0.92);
+      --bg-panel-soft: rgba(5, 9, 20, 0.75);
+      --accent-cyan: #7df9ff;
+      --accent-amber: #ffb347;
+      --accent-pink: #ff5f9e;
+      --text-primary: #f0f4ff;
+      --text-muted: #7f8bad;
+      --grid-line: rgba(255, 255, 255, 0.05);
+      --chip-border: rgba(125, 249, 255, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(6, 158, 255, 0.14), transparent 40%),
+                  radial-gradient(circle at 80% 0%, rgba(255, 94, 162, 0.22), transparent 45%),
+                  linear-gradient(135deg, #020409 0%, #050915 60%, #010206 100%);
+      color: var(--text-primary);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(transparent 95%, rgba(255, 255, 255, 0.03) 96%),
+                        linear-gradient(90deg, transparent 95%, rgba(255, 255, 255, 0.03) 96%);
+      background-size: 140px 140px;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    main.telemetry-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Chakra Petch', 'IBM Plex Sans', sans-serif;
+      letter-spacing: 0.04em;
+    }
+
+    .telemetry-hero {
+      background: var(--bg-panel);
+      border: 1px solid rgba(125, 249, 255, 0.2);
+      border-radius: 28px;
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(2, 8, 20, 0.7);
+    }
+
+    .telemetry-hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 75% 15%, rgba(125, 249, 255, 0.25), transparent 40%);
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    .telemetry-hero header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    .hero-meta span {
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.18em;
+      margin-bottom: 0.35rem;
+    }
+
+    .hero-meta strong {
+      font-size: 1.5rem;
+      color: var(--accent-cyan);
+    }
+
+    .control-panel {
+      margin-top: 2rem;
+      padding: 1.75rem;
+      border-radius: 24px;
+      background: var(--bg-panel-soft);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(22px);
+      box-shadow: 0 18px 40px rgba(1, 3, 10, 0.8);
+    }
+
+    .control-panel h2 {
+      margin: 0 0 1rem;
+      font-size: 1rem;
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+    }
+
+    #driver-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .driver-chip {
+      position: relative;
+      padding: 0.55rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid var(--chip-border);
+      background: rgba(3, 8, 18, 0.6);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .driver-chip:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-1px);
+    }
+
+    .driver-chip input {
+      accent-color: var(--accent-cyan);
+    }
+
+    .chip-actions {
+      display: inline-flex;
+      gap: 0.8rem;
+      margin-left: 1rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+    }
+
+    .chip-actions button {
+      background: none;
+      border: none;
+      color: var(--accent-amber);
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .charts-grid {
+      margin-top: 2.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .chart-panel {
+      padding: 1.5rem;
+      border-radius: 24px;
+      background: linear-gradient(155deg, rgba(7, 11, 23, 0.96), rgba(6, 12, 26, 0.82));
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 50px rgba(1, 2, 7, 0.9);
+    }
+
+    .chart-panel::after {
+      content: '';
+      position: absolute;
+      inset: 20% -20% -40% -20%;
+      background: radial-gradient(circle, rgba(125, 249, 255, 0.15), transparent 70%);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .chart-panel h3 {
+      margin: 0 0 0.2rem;
+      font-size: 1.1rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .chart-panel--wide {
+      grid-column: span 2;
+    }
+
+    .chart-panel p {
+      margin: 0 0 1rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
     .chart-container {
       position: relative;
       width: 100%;
-      min-height: 300px;
+      min-height: 280px;
     }
+
     .chart-container-lg {
-      min-height: 400px;
+      min-height: 360px;
     }
-    .chart-loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 300px;
-      color: #6b7280;
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
     }
+
+    .chart-loading,
     .chart-error {
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 300px;
-      color: #dc2626;
+      min-height: 260px;
+      font-size: 0.85rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .chart-error {
+      color: #ff7b7b;
+    }
+
+    @media (max-width: 720px) {
+      .telemetry-hero {
+        padding: 1.75rem;
+      }
+
+      .hero-meta strong {
+        font-size: 1.25rem;
+      }
+
+      .chart-container,
+      .chart-container-lg {
+        min-height: 260px;
+      }
+
+      .chart-panel--wide {
+        grid-column: span 1;
+      }
     }
   </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <main class="container mx-auto p-6">
+<body>
+  <main class="telemetry-shell">
     {% block content %}{% endblock %}
   </main>
 </body>
