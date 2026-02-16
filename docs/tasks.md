@@ -10,7 +10,7 @@ Legend: ☐ = not started, ◐ = in progress, ☑ = done
 | T4 | ☑ | Implement centralized config module (env parsing, secrets) | Backend | Unlocks consistent settings usage |
 | T5 | ☑ | Build public analytics API (laps, stints, driver grades) with caching | Backend | Live at /api/v1/analytics/{season}/{round} |
 | T6 | ☑ | Enhance ingestion to compute driver grades/derived metrics | Data | OpenF1 adapter fixed; 2024+2025 seasons ingested (52K laps) |
-| T7 | ☐ | Build React interactive charts (lap/stint/grades) | Web | Depends on T5 |
+| T7 | ☑ | Build interactive charts (lap/stint/grades) | Web | HTMX + Chart.js at /analytics/{season}/{round} |
 | T8 | ☐ | Implement CSV export & admin ready toggle | Backend/Web | Depends on T5/T6 |
 | T9 | ☑ | Schema alignment for Drive Grade tables (core.driver_metrics, strategy, penalties, overtakes) | Data/Infra | Migration applied; schema in production |
 | T10| ☑ | Extract shared `undercut_core` package and import Drive Grade engine | Backend | Core package + engine source + CLI + tests merged |
@@ -23,4 +23,4 @@ Legend: ☐ = not started, ◐ = in progress, ☑ = done
 | T17| ☐ | Investigate FastF1 hanging issue | Data | FastF1 hangs on session.load(); using OpenF1 as workaround |
 | T18| ☐ | Add stint data to OpenF1 ingestion | Data | OpenF1 laps endpoint doesn't include stint/compound info |
 
-Active sprint picks: **T7** (interactive charts), **T11** (calibration), **T12** (monitoring).
+Active sprint picks: **T11** (calibration), **T12** (monitoring), **T8** (CSV export).
