@@ -1,0 +1,12 @@
+{% for driver in drivers %}
+<label class="inline-flex items-center px-3 py-1 bg-gray-100 rounded-full cursor-pointer hover:bg-gray-200 transition-colors">
+  <input type="checkbox" name="drivers" value="{{ driver }}"
+         {% if driver in selected_drivers or not selected_drivers %}checked{% endif %}
+         class="mr-2 accent-red-600"
+         hx-get="/analytics/{{ season }}/{{ round }}/charts"
+         hx-target="#charts-container"
+         hx-include="[name='drivers']"
+         hx-trigger="change delay:300ms">
+  <span class="text-sm font-medium">{{ driver }}</span>
+</label>
+{% endfor %}

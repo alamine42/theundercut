@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Analytics {{ season }} – Round {{ round }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <header class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">Race Analytics</h1>
+    <p class="text-gray-600 mt-1">Season {{ season }} – Round {{ round }}</p>
+  </header>
+
+  <!-- Driver Filter -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h2 class="text-lg font-semibold mb-3">Filter Drivers</h2>
+    <div id="driver-filter" class="flex flex-wrap gap-2">
+      <span class="text-gray-500 text-sm">Loading drivers...</span>
+    </div>
+  </div>
+
+  <!-- Charts Container -->
+  <div id="charts-container">
+    {% include "analytics/_charts.html" %}
+  </div>
+</div>
+
+<script>
+  // Store chart instances for cleanup
+  window.chartInstances = {};
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    loadAnalyticsData();
+  });
+
+  // Re-initialize charts after HTMX swap
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'charts-container') {
+      loadAnalyticsData();
+    }
+  });
+
+  function getSelectedDrivers() {
+    const checkboxes = document.querySelectorAll('input[name="drivers"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+  }
+
+  function buildApiUrl() {
+    const base = '/api/v1/analytics/{{ season }}/{{ round }}';
+    const drivers = getSelectedDrivers();
+    if (drivers.length === 0) return base;
+    const params = drivers.map(d => `drivers=${encodeURIComponent(d)}`).join('&');
+    return `${base}?${params}`;
+  }
+
+  function loadAnalyticsData() {
+    const url = buildApiUrl();
+
+    // Show loading states
+    document.querySelectorAll('.chart-container').forEach(el => {
+      const canvas = el.querySelector('canvas');
+      if (canvas) canvas.style.display = 'none';
+      const loader = el.querySelector('.chart-loading');
+      if (loader) loader.style.display = 'flex';
+    });
+
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        // Populate driver filter
+        populateDriverFilter(data.laps);
+
+        // Render all charts
+        renderLapTimeChart(data);
+        renderPaceComparisonChart(data);
+        renderStintTimelineChart(data);
+        renderDriverGradesRadar(data);
+      })
+      .catch(err => {
+        console.error('Failed to load analytics:', err);
+        document.querySelectorAll('.chart-container').forEach(el => {
+          const loader = el.querySelector('.chart-loading');
+          if (loader) {
+            loader.style.display = 'flex';
+            loader.textContent = 'Failed to load data';
+            loader.classList.add('chart-error');
+          }
+        });
+      });
+  }
+
+  function populateDriverFilter(laps) {
+    const drivers = [...new Set(laps.map(l => l.driver))].sort();
+    const container = document.getElementById('driver-filter');
+
+    if (container.dataset.populated === 'true') return;
+    container.dataset.populated = 'true';
+
+    container.innerHTML = drivers.map(driver => `
+      <label class="inline-flex items-center px-3 py-1 bg-gray-100 rounded-full cursor-pointer hover:bg-gray-200 transition-colors">
+        <input type="checkbox" name="drivers" value="${driver}" checked
+               class="mr-2 accent-red-600"
+               onchange="onDriverFilterChange()">
+        <span class="text-sm font-medium">${driver}</span>
+      </label>
+    `).join('');
+
+    // Add select all / none buttons
+    container.innerHTML += `
+      <div class="flex gap-2 ml-4">
+        <button onclick="selectAllDrivers()" class="text-xs text-blue-600 hover:underline">Select All</button>
+        <span class="text-gray-300">|</span>
+        <button onclick="selectNoDrivers()" class="text-xs text-blue-600 hover:underline">Clear</button>
+      </div>
+    `;
+  }
+
+  function selectAllDrivers() {
+    document.querySelectorAll('input[name="drivers"]').forEach(cb => cb.checked = true);
+    onDriverFilterChange();
+  }
+
+  function selectNoDrivers() {
+    document.querySelectorAll('input[name="drivers"]').forEach(cb => cb.checked = false);
+    onDriverFilterChange();
+  }
+
+  let filterDebounce = null;
+  function onDriverFilterChange() {
+    clearTimeout(filterDebounce);
+    filterDebounce = setTimeout(() => {
+      loadAnalyticsData();
+    }, 300);
+  }
+</script>
+
+{% include "components/_chart_scripts.html" %}
+{% endblock %}

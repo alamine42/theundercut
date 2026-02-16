@@ -24,12 +24,49 @@ def _race_id(season: int, rnd: int) -> str:
     return f"{season}-{rnd}"
 
 
-def _normalise_laps(rows: Iterable) -> List[Dict[str, Any]]:
+# Static F1 car number -> driver code mapping (2024 season)
+F1_CAR_NUMBER_MAP: Dict[str, str] = {
+    "1": "VER", "11": "PER",  # Red Bull
+    "44": "HAM", "63": "RUS",  # Mercedes
+    "16": "LEC", "55": "SAI",  # Ferrari
+    "4": "NOR", "81": "PIA",   # McLaren
+    "14": "ALO", "18": "STR",  # Aston Martin
+    "10": "GAS", "31": "OCO",  # Alpine
+    "77": "BOT", "24": "ZHO",  # Kick Sauber
+    "22": "TSU", "3": "RIC", "30": "LAW",  # RB (VCARB)
+    "20": "MAG", "27": "HUL",  # Haas
+    "23": "ALB", "2": "SAR", "43": "COL",  # Williams
+}
+
+
+def _build_car_number_to_code_map(db: Session, season: int, rnd: int) -> Dict[str, str]:
+    """Build a mapping from car number (as string) to driver code (e.g., '1' -> 'VER')."""
+    # Try to get mapping from database first
+    rows = (
+        db.query(Entry.car_number, Driver.code)
+        .join(Driver, Entry.driver_id == Driver.id)
+        .join(Race, Entry.race_id == Race.id)
+        .join(Season, Race.season_id == Season.id)
+        .filter(Season.year == season, Race.round_number == rnd)
+        .all()
+    )
+    db_map = {str(car_num): code for car_num, code in rows if car_num is not None}
+
+    # Fall back to static mapping if database is empty
+    if db_map:
+        return db_map
+    return F1_CAR_NUMBER_MAP.copy()
+
+
+def _normalise_laps(
+    rows: Iterable, car_to_code: Dict[str, str]
+) -> List[Dict[str, Any]]:
     laps: List[Dict[str, Any]] = []
     for driver, lap, lap_ms, compound, stint_no, pit in rows:
+        driver_code = car_to_code.get(str(driver), str(driver))
         laps.append(
             {
-                "driver": driver,
+                "driver": driver_code,
                 "lap": int(lap) if lap is not None else None,
                 "lap_ms": int(lap_ms) if lap_ms is not None else None,
                 "compound": compound,
@@ -40,12 +77,15 @@ def _normalise_laps(rows: Iterable) -> List[Dict[str, Any]]:
     return laps
 
 
-def _normalise_stints(rows: Iterable) -> List[Dict[str, Any]]:
+def _normalise_stints(
+    rows: Iterable, car_to_code: Dict[str, str]
+) -> List[Dict[str, Any]]:
     stints: List[Dict[str, Any]] = []
     for driver, stint_no, compound, laps, avg_lap_ms in rows:
+        driver_code = car_to_code.get(str(driver), str(driver))
         stints.append(
             {
-                "driver": driver,
+                "driver": driver_code,
                 "stint_no": int(stint_no) if stint_no is not None else None,
                 "compound": compound,
                 "laps": int(laps) if laps is not None else None,
@@ -139,6 +179,18 @@ def fetch_race_analytics(
 ) -> Dict[str, Any]:
     race_id = _race_id(season, rnd)
 
+    # Build car number -> driver code mapping
+    car_to_code = _build_car_number_to_code_map(db, season, rnd)
+    # Also build reverse mapping for filtering by driver code
+    code_to_car = {code: car for car, code in car_to_code.items()}
+
+    # Convert driver codes to car numbers for filtering
+    driver_car_numbers: Optional[List[str]] = None
+    if drivers:
+        driver_car_numbers = [
+            code_to_car.get(d, d) for d in drivers
+        ]
+
     lap_stmt = (
         select(
             LapTime.driver,
@@ -151,11 +203,11 @@ def fetch_race_analytics(
         .where(LapTime.race_id == race_id)
         .order_by(LapTime.driver, LapTime.lap)
     )
-    if drivers:
-        lap_stmt = lap_stmt.where(LapTime.driver.in_(list(drivers)))
+    if driver_car_numbers:
+        lap_stmt = lap_stmt.where(LapTime.driver.in_(driver_car_numbers))
 
     lap_rows = db.execute(lap_stmt).all()
-    laps = _normalise_laps(lap_rows)
+    laps = _normalise_laps(lap_rows, car_to_code)
 
     stint_stmt = (
         select(
@@ -168,11 +220,11 @@ def fetch_race_analytics(
         .where(Stint.race_id == race_id)
         .order_by(Stint.driver, Stint.stint_no)
     )
-    if drivers:
-        stint_stmt = stint_stmt.where(Stint.driver.in_(list(drivers)))
+    if driver_car_numbers:
+        stint_stmt = stint_stmt.where(Stint.driver.in_(driver_car_numbers))
 
     stint_rows = db.execute(stint_stmt).all()
-    stints = _normalise_stints(stint_rows)
+    stints = _normalise_stints(stint_rows, car_to_code)
 
     driver_metric_grades = _fetch_driver_metric_grades(db, season, rnd)
     if driver_metric_grades:
