@@ -40,17 +40,17 @@ function getDriverColor(driver, alpha = 1) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Chart.js defaults for vintage theme
+// Chart.js defaults for gallery dark theme
 if (typeof Chart !== 'undefined') {
-  Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
-  Chart.defaults.color = '#4A4A4A';
-  Chart.defaults.plugins.legend.labels.color = '#1A1A1A';
-  Chart.defaults.plugins.tooltip.backgroundColor = '#1A1A1A';
-  Chart.defaults.plugins.tooltip.titleColor = '#FFFFFF';
+  Chart.defaults.font.family = "'Rubik', -apple-system, sans-serif";
+  Chart.defaults.color = 'rgba(255, 255, 255, 0.6)';
+  Chart.defaults.plugins.legend.labels.color = 'rgba(255, 255, 255, 0.85)';
+  Chart.defaults.plugins.tooltip.backgroundColor = '#022A33';
+  Chart.defaults.plugins.tooltip.titleColor = '#FECD8C';
   Chart.defaults.plugins.tooltip.bodyColor = '#FFFFFF';
-  Chart.defaults.plugins.tooltip.borderColor = '#E5E0D5';
+  Chart.defaults.plugins.tooltip.borderColor = 'rgba(255, 255, 255, 0.15)';
   Chart.defaults.plugins.tooltip.borderWidth = 1;
-  Chart.defaults.plugins.tooltip.cornerRadius = 4;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
 }
 
 function destroyChart(id) {
@@ -145,17 +145,17 @@ function renderLapTimeChart(data) {
       scales: {
         x: {
           type: 'linear',
-          title: { display: true, text: 'Lap', color: '#7A7A7A' },
+          title: { display: true, text: 'Lap', color: 'rgba(255, 255, 255, 0.5)' },
           min: 1,
-          grid: { color: '#E5E0D5' },
-          ticks: { color: '#7A7A7A' }
+          grid: { color: 'rgba(255, 255, 255, 0.08)' },
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' }
         },
         y: {
-          title: { display: true, text: 'Lap Time (seconds)', color: '#7A7A7A' },
+          title: { display: true, text: 'Lap Time (seconds)', color: 'rgba(255, 255, 255, 0.5)' },
           suggestedMin: Math.min(...laps.map(l => l.lap_ms)) / 1000 - 2,
           suggestedMax: Math.max(...laps.map(l => l.lap_ms)) / 1000 + 2,
-          grid: { color: '#E5E0D5' },
-          ticks: { color: '#7A7A7A' }
+          grid: { color: 'rgba(255, 255, 255, 0.08)' },
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' }
         }
       }
     }
@@ -189,11 +189,11 @@ function renderPaceComparisonChart(data) {
         label: 'Pace Delta (seconds)',
         data: sorted.map(g => ((g.pace_delta_ms || 0) / 1000)),
         backgroundColor: sorted.map((g, i) => {
-          // Gradient from gulf blue to gulf orange
+          // Gradient from gold to sage for dark theme
           const ratio = i / (sorted.length - 1 || 1);
-          return `rgba(${Math.round(91 + ratio * 141)}, ${Math.round(155 - ratio * 38)}, ${Math.round(213 - ratio * 171)}, 0.8)`;
+          return `rgba(${Math.round(254 - ratio * 69)}, ${Math.round(205 - ratio * 13)}, ${Math.round(140 + ratio * (137 - 140))}, 0.75)`;
         }),
-        borderColor: '#D4CFC4',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
         borderWidth: 1,
         borderRadius: 4,
         barThickness: 20
@@ -218,14 +218,14 @@ function renderPaceComparisonChart(data) {
       },
       scales: {
         x: {
-          title: { display: true, text: 'Delta to Fastest (seconds)', color: '#7A7A7A' },
+          title: { display: true, text: 'Delta to Fastest (seconds)', color: 'rgba(255, 255, 255, 0.5)' },
           beginAtZero: true,
-          grid: { color: '#E5E0D5' },
-          ticks: { color: '#7A7A7A' }
+          grid: { color: 'rgba(255, 255, 255, 0.08)' },
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' }
         },
         y: {
           grid: { display: false },
-          ticks: { color: '#1A1A1A', font: { weight: '500' } }
+          ticks: { color: 'rgba(255, 255, 255, 0.85)', font: { weight: '500' } }
         }
       }
     }
@@ -314,16 +314,16 @@ function renderStintTimelineChart(data) {
       scales: {
         x: {
           type: 'linear',
-          title: { display: true, text: 'Lap', color: '#7A7A7A' },
+          title: { display: true, text: 'Lap', color: 'rgba(255, 255, 255, 0.5)' },
           min: 0,
           stacked: true,
-          grid: { color: '#E5E0D5' },
-          ticks: { color: '#7A7A7A' }
+          grid: { color: 'rgba(255, 255, 255, 0.08)' },
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' }
         },
         y: {
           stacked: true,
           grid: { display: false },
-          ticks: { color: '#1A1A1A', font: { weight: '500' } }
+          ticks: { color: 'rgba(255, 255, 255, 0.85)', font: { weight: '500' } }
         }
       }
     }
@@ -396,10 +396,10 @@ function renderDriverGradesRadar(data) {
         r: {
           min: 0,
           max: 100,
-          ticks: { stepSize: 20, backdropColor: 'transparent', color: '#7A7A7A' },
-          pointLabels: { font: { size: 12 }, color: '#1A1A1A' },
-          grid: { color: '#E5E0D5' },
-          angleLines: { color: '#E5E0D5' }
+          ticks: { stepSize: 20, backdropColor: 'transparent', color: 'rgba(255, 255, 255, 0.5)' },
+          pointLabels: { font: { size: 12 }, color: 'rgba(255, 255, 255, 0.85)' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' },
+          angleLines: { color: 'rgba(255, 255, 255, 0.1)' }
         }
       }
     }

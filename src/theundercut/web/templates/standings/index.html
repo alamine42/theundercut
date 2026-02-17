@@ -4,39 +4,51 @@
 {% block head_extra %}
 <link rel="stylesheet" href="https://cdn.datatables.net/2.1.6/css/dataTables.dataTables.min.css">
 <style>
-  /* DataTables vintage overrides */
+  /* DataTables dark theme overrides */
   table.dataTable thead th {
-    background: var(--bg-warm) !important;
-    border-bottom: 2px solid var(--border-medium) !important;
+    background: var(--bg-elevated) !important;
+    border-bottom: 1px solid var(--border-medium) !important;
   }
   table.dataTable tbody tr:hover {
-    background: var(--bg-warm) !important;
+    background: var(--bg-elevated) !important;
+  }
+  table.dataTable tbody td {
+    border-bottom: 1px solid var(--border-subtle) !important;
   }
   .dataTables_wrapper .dataTables_filter input {
     border: 1px solid var(--border-medium);
-    border-radius: 4px;
-    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    padding: 0.45rem 0.85rem;
     font-size: 0.9rem;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+  .dataTables_wrapper .dataTables_filter input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
   }
   .dataTables_wrapper .dataTables_info {
     color: var(--text-muted);
     font-size: 0.8rem;
   }
+  .dataTables_wrapper .dataTables_filter label {
+    color: var(--text-secondary);
+  }
   .dataTables_wrapper .dataTables_paginate .paginate_button {
-    border: 1px solid var(--border-light) !important;
-    border-radius: 4px !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 6px !important;
     background: var(--bg-card) !important;
     color: var(--text-secondary) !important;
   }
   .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-    background: var(--bg-warm) !important;
-    border-color: var(--accent-gulf-blue) !important;
-    color: var(--accent-gulf-blue) !important;
+    background: var(--bg-elevated) !important;
+    border-color: var(--accent-gold) !important;
+    color: var(--accent-gold) !important;
   }
   .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-    background: var(--accent-gulf-blue) !important;
-    border-color: var(--accent-gulf-blue) !important;
-    color: white !important;
+    background: var(--accent-gold) !important;
+    border-color: var(--accent-gold) !important;
+    color: var(--bg-surface) !important;
   }
 </style>
 {% endblock %}
@@ -50,7 +62,7 @@
     </div>
     <div style="text-align: right;">
       <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);">Season Progress</span>
-      <p style="font-size: 1.75rem; font-family: 'Libre Baskerville', serif; color: var(--accent-gulf-blue); margin: 0.25rem 0 0;" id="metric-progress">--/--</p>
+      <p style="font-size: 1.75rem; font-family: 'Rubik', sans-serif; font-weight: 600; color: var(--accent-gold); margin: 0.25rem 0 0;" id="metric-progress">--/--</p>
     </div>
   </header>
   <div class="hero-stats">
@@ -81,17 +93,17 @@
     </button>
   </div>
 
-  <div id="metrics-key" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-warm); border-radius: 6px; font-size: 0.85rem;">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
-      <div><strong style="color: var(--accent-gulf-blue);">Pts</strong> Points Total</div>
-      <div><strong style="color: var(--accent-gulf-blue);">L5</strong> Points Last 5 Races</div>
-      <div><strong style="color: var(--accent-gulf-blue);">Proj</strong> Projected Season Total</div>
-      <div><strong style="color: var(--accent-gulf-blue);">Races</strong> Total Races</div>
-      <div><strong style="color: var(--accent-gulf-blue);">Poles</strong> Pole Positions</div>
-      <div><strong style="color: var(--accent-gulf-blue);">ASP</strong> Avg Starting Position</div>
-      <div><strong style="color: var(--accent-gulf-blue);">AFP</strong> Avg Finishing Position</div>
-      <div><strong style="color: var(--accent-gulf-blue);">PPR</strong> Points Per Race</div>
-      <div><strong style="color: var(--accent-gulf-blue);">+/-</strong> Positions Gained/Lost</div>
+  <div id="metrics-key" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-elevated); border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--border-subtle);">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; color: var(--text-secondary);">
+      <div><strong style="color: var(--accent-gold);">Pts</strong> Points Total</div>
+      <div><strong style="color: var(--accent-gold);">L5</strong> Points Last 5 Races</div>
+      <div><strong style="color: var(--accent-gold);">Proj</strong> Projected Season Total</div>
+      <div><strong style="color: var(--accent-gold);">Races</strong> Total Races</div>
+      <div><strong style="color: var(--accent-gold);">Poles</strong> Pole Positions</div>
+      <div><strong style="color: var(--accent-gold);">ASP</strong> Avg Starting Position</div>
+      <div><strong style="color: var(--accent-gold);">AFP</strong> Avg Finishing Position</div>
+      <div><strong style="color: var(--accent-gold);">PPR</strong> Points Per Race</div>
+      <div><strong style="color: var(--accent-gold);">+/-</strong> Positions Gained/Lost</div>
     </div>
   </div>
 
@@ -200,7 +212,7 @@ function renderDriverStandings(drivers) {
         <td>${(d.avg_start_pos || 0).toFixed(1)}</td>
         <td>${(d.avg_finish_pos || 0).toFixed(1)}</td>
         <td>${(d.points_per_race || 0).toFixed(1)}</td>
-        <td style="color: ${d.positions_gained >= 0 ? 'var(--accent-racing-green)' : 'var(--stripe-red)'}">
+        <td style="color: ${d.positions_gained >= 0 ? 'var(--accent-lime)' : 'var(--stripe-red)'}">
           ${d.positions_gained >= 0 ? '+' : ''}${d.positions_gained || 0}
         </td>
       </tr>
