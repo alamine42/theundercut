@@ -1,61 +1,56 @@
 <script>
-// Compound colors for tire strategies
+// Tire compound colors (classic)
 const COMPOUND_COLORS = {
-  'SOFT': '#ff4444',
-  'MEDIUM': '#ffcc00',
-  'HARD': '#ffffff',
-  'INTERMEDIATE': '#00cc00',
-  'WET': '#0066ff',
-  'UNKNOWN': '#888888'
+  'SOFT': '#C41E3A',
+  'MEDIUM': '#F5D547',
+  'HARD': '#EEEEEE',
+  'INTERMEDIATE': '#4CAF50',
+  'WET': '#2196F3',
+  'UNKNOWN': '#9E9E9E'
 };
 
 const COMPOUND_BORDER_COLORS = {
-  'SOFT': '#cc0000',
-  'MEDIUM': '#cc9900',
-  'HARD': '#cccccc',
-  'INTERMEDIATE': '#009900',
-  'WET': '#0044cc',
+  'SOFT': '#8B1528',
+  'MEDIUM': '#C4A83A',
+  'HARD': '#CCCCCC',
+  'INTERMEDIATE': '#388E3C',
+  'WET': '#1976D2',
   'UNKNOWN': '#666666'
 };
 
-// Palette: neon gradient sets per driver for better visual differentiation
+// Vintage team-inspired driver colors
 const DRIVER_COLORS = {
-  'VER': ['#5ce1ff', '#2357ff'], 'PER': ['#5ce1ff', '#ff5ddc'],
-  'HAM': ['#69ffca', '#0aff9d'], 'RUS': ['#69ffca', '#53b3ff'],
-  'LEC': ['#ff5d73', '#ff0000'], 'SAI': ['#ff5d73', '#ffc24f'],
-  'NOR': ['#ffb347', '#ff7300'], 'PIA': ['#ffb347', '#00d2ff'],
-  'ALO': ['#3cf9b1', '#00a878'], 'STR': ['#3cf9b1', '#007f5f'],
-  'GAS': ['#6dc2ff', '#2f7bff'], 'OCO': ['#6dc2ff', '#8a5dff'],
-  'BOT': ['#ff7eb3', '#ff4e50'], 'ZHO': ['#ff7eb3', '#ffd452'],
-  'TSU': ['#8db6ff', '#3066ff'], 'RIC': ['#8db6ff', '#f06292'], 'LAW': ['#8db6ff', '#00ffe0'],
-  'MAG': ['#d0d3d4', '#7e8a9a'], 'HUL': ['#d0d3d4', '#c7ffd8'],
-  'ALB': ['#64c4ff', '#0c88ff'], 'SAR': ['#64c4ff', '#ff00e4'], 'COL': ['#64c4ff', '#fff95b'],
+  'VER': '#1E3A8A', 'PER': '#3B82F6',  // Red Bull blues
+  'HAM': '#059669', 'RUS': '#10B981',  // Mercedes greens
+  'LEC': '#DC2626', 'SAI': '#EF4444',  // Ferrari reds
+  'NOR': '#E8752A', 'PIA': '#F59E0B',  // McLaren orange
+  'ALO': '#166534', 'STR': '#22C55E',  // Aston Martin
+  'GAS': '#5B9BD5', 'OCO': '#3B82F6',  // Alpine blue
+  'BOT': '#991B1B', 'ZHO': '#B91C1C',  // Sauber/Alfa red
+  'TSU': '#1E40AF', 'RIC': '#6366F1', 'LAW': '#8B5CF6',  // RB/AlphaTauri
+  'MAG': '#6B7280', 'HUL': '#9CA3AF',  // Haas grays
+  'ALB': '#0EA5E9', 'SAR': '#38BDF8', 'COL': '#7DD3FC',  // Williams blues
 };
 
-function getDriverColor(driver, alpha = 1, index = 0) {
-  const palette = DRIVER_COLORS[driver] || ['#9aa7b9', '#5f6c80'];
-  const baseColor = palette[index % palette.length];
+function getDriverColor(driver, alpha = 1) {
+  const baseColor = DRIVER_COLORS[driver] || '#7A7A7A';
   const r = parseInt(baseColor.slice(1, 3), 16);
   const g = parseInt(baseColor.slice(3, 5), 16);
   const b = parseInt(baseColor.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function buildGradient(ctx, colorStops, horizontal = true) {
-  const { width, height } = ctx.canvas;
-  const gradient = ctx.createLinearGradient(0, 0, horizontal ? width : 0, horizontal ? 0 : height);
-  colorStops.forEach(([offset, color]) => gradient.addColorStop(offset, color));
-  return gradient;
-}
-
+// Chart.js defaults for vintage theme
 if (typeof Chart !== 'undefined') {
-  Chart.defaults.font.family = "'IBM Plex Sans', 'Chakra Petch', sans-serif";
-  Chart.defaults.color = '#b3bed8';
-  Chart.defaults.plugins.legend.labels = Chart.defaults.plugins.legend.labels || {};
-  Chart.defaults.plugins.legend.labels.color = '#f0f4ff';
-  Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(3, 8, 18, 0.92)';
-  Chart.defaults.plugins.tooltip.borderColor = 'rgba(125, 249, 255, 0.3)';
+  Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+  Chart.defaults.color = '#4A4A4A';
+  Chart.defaults.plugins.legend.labels.color = '#1A1A1A';
+  Chart.defaults.plugins.tooltip.backgroundColor = '#1A1A1A';
+  Chart.defaults.plugins.tooltip.titleColor = '#FFFFFF';
+  Chart.defaults.plugins.tooltip.bodyColor = '#FFFFFF';
+  Chart.defaults.plugins.tooltip.borderColor = '#E5E0D5';
   Chart.defaults.plugins.tooltip.borderWidth = 1;
+  Chart.defaults.plugins.tooltip.cornerRadius = 4;
 }
 
 function destroyChart(id) {
@@ -65,43 +60,35 @@ function destroyChart(id) {
   }
 }
 
-function showChart(containerId) {
-  const container = document.getElementById(containerId).parentElement;
-  const loader = container.querySelector('.chart-loading');
-  const canvas = container.querySelector('canvas');
-  if (loader) loader.style.display = 'none';
-  if (canvas) canvas.style.display = 'block';
+function showChart(id) {
+  const canvas = document.getElementById(id);
+  if (canvas) {
+    canvas.style.display = 'block';
+    const loader = canvas.parentElement.querySelector('.chart-loading');
+    if (loader) loader.style.display = 'none';
+  }
 }
 
-// 1. Lap Time Progression Chart
 function renderLapTimeChart(data) {
   destroyChart('lapTimeChart');
   const ctx = document.getElementById('lapTimeChart');
   if (!ctx) return;
-  const chartCtx = ctx.getContext('2d');
 
   const laps = data.laps.filter(l => l.lap_ms && l.lap_ms > 0);
   if (laps.length === 0) {
     const loader = ctx.parentElement.querySelector('.chart-loading');
     if (loader) {
       loader.style.display = 'flex';
-      loader.textContent = 'Lap telemetry missing';
-      loader.classList.add('chart-error');
+      loader.textContent = 'No lap data available';
     }
     return;
   }
 
   const drivers = [...new Set(laps.map(l => l.driver))].sort();
-
   const datasets = drivers.map(driver => {
     const driverLaps = laps
       .filter(l => l.driver === driver)
       .sort((a, b) => a.lap - b.lap);
-
-    const gradient = buildGradient(chartCtx, [
-      [0, getDriverColor(driver, 0.45, 0)],
-      [1, getDriverColor(driver, 0.05, 1)]
-    ], false);
 
     return {
       label: driver,
@@ -111,9 +98,9 @@ function renderLapTimeChart(data) {
         compound: l.compound,
         pit: l.pit
       })),
-      borderColor: getDriverColor(driver, 0.95, 0),
-      backgroundColor: gradient,
-      borderWidth: 2.5,
+      borderColor: getDriverColor(driver),
+      backgroundColor: getDriverColor(driver, 0.1),
+      borderWidth: 2,
       pointRadius: (ctx) => {
         const point = ctx.raw;
         return point && point.pit ? 6 : 2;
@@ -124,22 +111,10 @@ function renderLapTimeChart(data) {
       },
       pointBackgroundColor: (ctx) => {
         const point = ctx.raw;
-        if (!point) return getDriverColor(driver);
         return COMPOUND_COLORS[point.compound] || getDriverColor(driver);
       },
-      tension: 0.1,
-      borderDash: (ctx) => (ctx.raw && ctx.raw.pit ? [6, 4] : undefined),
-      tension: 0.35,
-      fill: false,
-      segment: {
-        borderColor: (ctx) => {
-          const point = ctx.p1 && ctx.p1.raw;
-          if (point && point.pit) {
-            return getDriverColor(driver, 0.8, 1);
-          }
-          return getDriverColor(driver, 0.9, 0);
-        }
-      }
+      tension: 0.2,
+      fill: false
     };
   });
 
@@ -149,29 +124,20 @@ function renderLapTimeChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: {
-        mode: 'nearest',
-        axis: 'x',
-        intersect: false
-      },
+      interaction: { mode: 'nearest', intersect: false },
       plugins: {
         legend: {
           position: 'bottom',
-          labels: {
-            boxWidth: 12,
-            usePointStyle: true,
-            padding: 16
-          }
+          labels: { boxWidth: 12, usePointStyle: true, padding: 15 }
         },
         tooltip: {
           callbacks: {
-            title: (items) => `Lap ${items[0].raw.x}`,
             label: (item) => {
               const point = item.raw;
-              const time = point.y.toFixed(3);
-              const compound = point.compound || 'Unknown';
-              const pitLabel = point.pit ? ' (PIT)' : '';
-              return `${item.dataset.label}: ${time}s [${compound}]${pitLabel}`;
+              let label = `${item.dataset.label}: ${point.y.toFixed(3)}s`;
+              if (point.compound) label += ` (${point.compound})`;
+              if (point.pit) label += ' [PIT]';
+              return label;
             }
           }
         }
@@ -179,17 +145,17 @@ function renderLapTimeChart(data) {
       scales: {
         x: {
           type: 'linear',
-          title: { display: true, text: 'Lap' },
+          title: { display: true, text: 'Lap', color: '#7A7A7A' },
           min: 1,
-          ticks: { color: '#7c87aa' },
-          grid: { color: 'rgba(255,255,255,0.07)' }
+          grid: { color: '#E5E0D5' },
+          ticks: { color: '#7A7A7A' }
         },
         y: {
-          title: { display: true, text: 'Lap Time (seconds)' },
+          title: { display: true, text: 'Lap Time (seconds)', color: '#7A7A7A' },
           suggestedMin: Math.min(...laps.map(l => l.lap_ms)) / 1000 - 2,
           suggestedMax: Math.max(...laps.map(l => l.lap_ms)) / 1000 + 2,
-          ticks: { color: '#7c87aa' },
-          grid: { color: 'rgba(255,255,255,0.07)' }
+          grid: { color: '#E5E0D5' },
+          ticks: { color: '#7A7A7A' }
         }
       }
     }
@@ -198,37 +164,22 @@ function renderLapTimeChart(data) {
   showChart('lapTimeChart');
 }
 
-// 2. Driver Pace Comparison Chart
 function renderPaceComparisonChart(data) {
   destroyChart('paceComparisonChart');
   const ctx = document.getElementById('paceComparisonChart');
   if (!ctx) return;
-  const chartCtx = ctx.getContext('2d');
 
   const grades = data.driver_pace_grades || [];
   if (grades.length === 0) {
     const loader = ctx.parentElement.querySelector('.chart-loading');
     if (loader) {
       loader.style.display = 'flex';
-      loader.textContent = 'No driver grades yet';
-      loader.classList.add('chart-error');
+      loader.textContent = 'No pace data available';
     }
     return;
   }
 
-  // Sort by pace (fastest first)
-  const sorted = [...grades].sort((a, b) => {
-    const aMs = a.pace_ms || a.total_grade || 0;
-    const bMs = b.pace_ms || b.total_grade || 0;
-    return aMs - bMs;
-  });
-
-  const bestPace = sorted[0].pace_ms || 0;
-
-  const gradient = buildGradient(chartCtx, [
-    [0, 'rgba(125, 249, 255, 0.9)'],
-    [1, 'rgba(255, 95, 158, 0.9)']
-  ]);
+  const sorted = [...grades].sort((a, b) => (a.pace_delta_ms || 0) - (b.pace_delta_ms || 0));
 
   window.chartInstances['paceComparisonChart'] = new Chart(ctx, {
     type: 'bar',
@@ -237,12 +188,15 @@ function renderPaceComparisonChart(data) {
       datasets: [{
         label: 'Pace Delta (seconds)',
         data: sorted.map(g => ((g.pace_delta_ms || 0) / 1000)),
-        backgroundColor: gradient,
-        borderColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: sorted.map((g, i) => {
+          // Gradient from gulf blue to gulf orange
+          const ratio = i / (sorted.length - 1 || 1);
+          return `rgba(${Math.round(91 + ratio * 141)}, ${Math.round(155 - ratio * 38)}, ${Math.round(213 - ratio * 171)}, 0.8)`;
+        }),
+        borderColor: '#D4CFC4',
         borderWidth: 1,
-        borderSkipped: false,
-        borderRadius: 12,
-        barThickness: 18
+        borderRadius: 4,
+        barThickness: 20
       }]
     },
     options: {
@@ -252,31 +206,26 @@ function renderPaceComparisonChart(data) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          padding: 12,
           callbacks: {
             label: (item) => {
               const grade = sorted[item.dataIndex];
               const avgTime = (grade.pace_ms / 1000).toFixed(3);
               const delta = (grade.pace_delta_ms / 1000).toFixed(3);
-              return [`Avg ${avgTime}s`, `Δ +${delta}s`];
+              return [`Avg: ${avgTime}s`, `Delta: +${delta}s`];
             }
           }
         }
       },
       scales: {
         x: {
-          title: { display: true, text: 'Delta to Fastest (seconds)' },
+          title: { display: true, text: 'Delta to Fastest (seconds)', color: '#7A7A7A' },
           beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: { color: '#8894b5' }
+          grid: { color: '#E5E0D5' },
+          ticks: { color: '#7A7A7A' }
         },
         y: {
-          title: { display: false },
           grid: { display: false },
-          ticks: {
-            color: '#f0f4ff',
-            callback: (value, index) => sorted[index].driver
-          }
+          ticks: { color: '#1A1A1A', font: { weight: '500' } }
         }
       }
     }
@@ -285,7 +234,6 @@ function renderPaceComparisonChart(data) {
   showChart('paceComparisonChart');
 }
 
-// 3. Stint Strategy Timeline Chart
 function renderStintTimelineChart(data) {
   destroyChart('stintTimelineChart');
   const ctx = document.getElementById('stintTimelineChart');
@@ -296,53 +244,41 @@ function renderStintTimelineChart(data) {
     const loader = ctx.parentElement.querySelector('.chart-loading');
     if (loader) {
       loader.style.display = 'flex';
-      loader.textContent = 'No tire data ingested';
-      loader.classList.add('chart-error');
+      loader.textContent = 'No stint data available';
     }
     return;
   }
 
-  // Group stints by driver
-  const driverStints = {};
-  stints.forEach(s => {
-    if (!driverStints[s.driver]) driverStints[s.driver] = [];
-    driverStints[s.driver].push(s);
-  });
-
-  const drivers = Object.keys(driverStints).sort();
-
-  // Calculate lap positions for each stint
+  const drivers = [...new Set(stints.map(s => s.driver))].sort();
   const datasets = [];
-  drivers.forEach((driver, driverIndex) => {
+
+  drivers.forEach(driver => {
+    const driverStints = stints.filter(s => s.driver === driver).sort((a, b) => a.stint_no - b.stint_no);
     let currentLap = 1;
-    driverStints[driver]
-      .sort((a, b) => a.stint_no - b.stint_no)
-      .forEach(stint => {
-        const compound = stint.compound || 'UNKNOWN';
-        datasets.push({
-          label: `${driver} - Stint ${stint.stint_no}`,
-          data: [{
-            x: [currentLap, currentLap + (stint.laps || 0)],
-            y: driver
-          }],
-          backgroundColor: COMPOUND_COLORS[compound] || '#888888',
-          borderColor: COMPOUND_BORDER_COLORS[compound] || '#666666',
-          borderWidth: 0,
-          borderSkipped: false,
-          barPercentage: 0.74,
-          categoryPercentage: 0.85,
-          borderRadius: 999
-        });
-        currentLap += stint.laps || 0;
+
+    driverStints.forEach(stint => {
+      const compound = stint.compound || 'UNKNOWN';
+      datasets.push({
+        label: compound,
+        data: [{
+          x: [currentLap, currentLap + (stint.laps || 0)],
+          y: driver
+        }],
+        backgroundColor: COMPOUND_COLORS[compound] || '#9E9E9E',
+        borderColor: COMPOUND_BORDER_COLORS[compound] || '#666666',
+        borderWidth: 1,
+        borderSkipped: false,
+        barPercentage: 0.7,
+        categoryPercentage: 0.85,
+        borderRadius: 3
       });
+      currentLap += stint.laps || 0;
+    });
   });
 
   window.chartInstances['stintTimelineChart'] = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: drivers,
-      datasets: datasets
-    },
+    data: { labels: drivers, datasets },
     options: {
       indexAxis: 'y',
       responsive: true,
@@ -352,26 +288,25 @@ function renderStintTimelineChart(data) {
           display: true,
           position: 'top',
           labels: {
-            padding: 16,
+            padding: 15,
             generateLabels: () => {
               return Object.entries(COMPOUND_COLORS)
                 .filter(([k]) => k !== 'UNKNOWN')
-                .map(([compound, color]) => ({
-                  text: compound,
+                .map(([label, color]) => ({
+                  text: label,
                   fillStyle: color,
-                  strokeStyle: COMPOUND_BORDER_COLORS[compound],
+                  strokeStyle: COMPOUND_BORDER_COLORS[label],
                   lineWidth: 1
                 }));
             }
           }
         },
         tooltip: {
-          padding: 12,
           callbacks: {
             title: (items) => items[0].dataset.label,
             label: (item) => {
               const range = item.raw.x;
-              return `Laps ${range[0]} - ${range[1]} (${range[1] - range[0]} laps)`;
+              return `Laps ${range[0]}-${range[1]} (${range[1] - range[0]} laps)`;
             }
           }
         }
@@ -379,17 +314,16 @@ function renderStintTimelineChart(data) {
       scales: {
         x: {
           type: 'linear',
-          title: { display: true, text: 'Lap' },
+          title: { display: true, text: 'Lap', color: '#7A7A7A' },
           min: 0,
           stacked: true,
-          ticks: { color: '#8a95b9' },
-          grid: { color: 'rgba(255,255,255,0.05)' }
+          grid: { color: '#E5E0D5' },
+          ticks: { color: '#7A7A7A' }
         },
         y: {
           stacked: true,
-          title: { display: false },
-          ticks: { color: '#f0f4ff' },
-          grid: { display: false }
+          grid: { display: false },
+          ticks: { color: '#1A1A1A', font: { weight: '500' } }
         }
       }
     }
@@ -398,7 +332,6 @@ function renderStintTimelineChart(data) {
   showChart('stintTimelineChart');
 }
 
-// 4. Driver Grades Radar Chart
 function renderDriverGradesRadar(data) {
   destroyChart('driverGradesRadar');
   const ctx = document.getElementById('driverGradesRadar');
@@ -410,13 +343,10 @@ function renderDriverGradesRadar(data) {
     .sort((a, b) => (b.total_grade || 0) - (a.total_grade || 0));
 
   if (fullGrades.length === 0) {
-    const container = ctx.parentElement;
-    const loader = container.querySelector('.chart-loading');
+    const loader = ctx.parentElement.querySelector('.chart-loading');
     if (loader) {
       loader.style.display = 'flex';
-      loader.textContent = 'No driver grade data available';
-      loader.classList.add('chart-error');
-      loader.style.letterSpacing = '0.3em';
+      loader.textContent = 'No driver grades available';
     }
     return;
   }
@@ -429,13 +359,13 @@ function renderDriverGradesRadar(data) {
       grade.consistency || 0,
       grade.racecraft || 0,
       grade.team_strategy || 0,
-      100 - (grade.penalties || 0)  // Invert penalties so higher = better
+      100 - (grade.penalties || 0)
     ],
-    borderColor: getDriverColor(grade.driver, 0.95, 0),
-    backgroundColor: getDriverColor(grade.driver, 0.18, 1),
-    borderWidth: 3,
-    pointBackgroundColor: getDriverColor(grade.driver, 1, 0),
-    pointRadius: 4.5,
+    borderColor: getDriverColor(grade.driver),
+    backgroundColor: getDriverColor(grade.driver, 0.15),
+    borderWidth: 2,
+    pointBackgroundColor: getDriverColor(grade.driver),
+    pointRadius: 4,
     pointHoverRadius: 6
   }));
 
@@ -443,7 +373,7 @@ function renderDriverGradesRadar(data) {
     type: 'radar',
     data: {
       labels: ['Consistency', 'Racecraft', 'Strategy', 'Clean Driving'],
-      datasets: datasets
+      datasets
     },
     options: {
       responsive: true,
@@ -451,19 +381,13 @@ function renderDriverGradesRadar(data) {
       plugins: {
         legend: {
           position: 'top',
-          labels: {
-            boxWidth: 12,
-            usePointStyle: true,
-            padding: 18
-          }
+          labels: { boxWidth: 12, usePointStyle: true, padding: 15 }
         },
         tooltip: {
-          padding: 12,
           callbacks: {
             label: (item) => {
               const driver = topDrivers[item.datasetIndex];
-              const value = item.raw.toFixed(1);
-              return `${item.dataset.label}: ${value}`;
+              return `${item.dataset.label}: ${item.raw.toFixed(1)}`;
             }
           }
         }
@@ -472,20 +396,10 @@ function renderDriverGradesRadar(data) {
         r: {
           min: 0,
           max: 100,
-          ticks: {
-            stepSize: 20,
-            backdropColor: 'rgba(0,0,0,0)'
-          },
-          pointLabels: {
-            font: { size: 12, family: "'Chakra Petch', sans-serif" },
-            color: '#f0f4ff'
-          },
-          grid: {
-            color: 'rgba(255,255,255,0.08)'
-          },
-          angleLines: {
-            color: 'rgba(255,255,255,0.1)'
-          }
+          ticks: { stepSize: 20, backdropColor: 'transparent', color: '#7A7A7A' },
+          pointLabels: { font: { size: 12 }, color: '#1A1A1A' },
+          grid: { color: '#E5E0D5' },
+          angleLines: { color: '#E5E0D5' }
         }
       }
     }

@@ -2,67 +2,78 @@
 {% block title %}Terms of Service{% endblock %}
 
 {% block content %}
-<div>
-  <section class="telemetry-hero" style="padding: 2rem;">
-    <h1 class="text-3xl font-semibold tracking-[0.12em]">Terms of Service</h1>
-    <p class="text-[var(--text-muted)] mt-2">Last updated: February 2026</p>
-  </section>
+<section class="page-hero" style="padding: 1.5rem 2rem;">
+  <p class="subtitle">Legal</p>
+  <h1>Terms of Service</h1>
+  <p style="color: var(--text-muted); margin-top: 0.5rem;">Last updated: February 2026</p>
+</section>
 
-  <section class="control-panel legal-content">
-    <h2>Acceptance of Terms</h2>
-    <p>By accessing and using The Undercut, you accept and agree to be bound by these Terms of Service.</p>
+<section class="card legal-content">
+  <h2>Acceptance of Terms</h2>
+  <p>By accessing and using The Undercut, you accept and agree to be bound by these Terms of Service.</p>
 
-    <h2>Use of Service</h2>
-    <p>The Undercut provides Formula 1 analytics and statistics for informational and entertainment purposes. You agree to use the service lawfully and not to:</p>
-    <ul>
-      <li>Scrape or harvest data in an automated manner that impacts service performance</li>
-      <li>Attempt to gain unauthorized access to any part of the service</li>
-      <li>Use the service for any illegal purpose</li>
-    </ul>
+  <h2>Use of Service</h2>
+  <p>The Undercut provides Formula 1 analytics and statistics for informational and entertainment purposes. You agree to use the service lawfully and not to:</p>
+  <ul>
+    <li>Scrape or harvest data in an automated manner that impacts service performance</li>
+    <li>Attempt to gain unauthorized access to any part of the service</li>
+    <li>Use the service for any illegal purpose</li>
+  </ul>
 
-    <h2>Intellectual Property</h2>
-    <p>The Undercut name, logo, and original analytics methodologies are our intellectual property. Formula 1, F1, and related marks are trademarks of Formula One Licensing B.V.</p>
+  <h2>Intellectual Property</h2>
+  <p>The Undercut name, logo, and original analytics methodologies are our intellectual property. Formula 1, F1, and related marks are trademarks of Formula One Licensing B.V.</p>
 
-    <h2>Disclaimer</h2>
-    <p>This website is not affiliated with, endorsed by, or associated with Formula 1, the Formula One Group, its subsidiaries, or any of its sponsors or partners. All data is provided "as is" without warranty of any kind.</p>
+  <h2>Disclaimer</h2>
+  <p>This website is not affiliated with, endorsed by, or associated with Formula 1, the Formula One Group, its subsidiaries, or any of its sponsors or partners. All data is provided "as is" without warranty of any kind.</p>
 
-    <h2>Limitation of Liability</h2>
-    <p>The Undercut shall not be liable for any indirect, incidental, or consequential damages arising from use of the service.</p>
+  <h2>Limitation of Liability</h2>
+  <p>The Undercut shall not be liable for any indirect, incidental, or consequential damages arising from use of the service.</p>
 
-    <h2>Changes to Terms</h2>
-    <p>We reserve the right to modify these terms at any time. Continued use of the service constitutes acceptance of updated terms.</p>
+  <h2>Changes to Terms</h2>
+  <p>We reserve the right to modify these terms at any time. Continued use of the service constitutes acceptance of updated terms.</p>
 
-    <h2>Contact</h2>
-    <p>Questions about these terms can be directed to <a href="mailto:theundercutreplies@gmail.com">theundercutreplies@gmail.com</a>.</p>
-  </section>
-</div>
+  <h2>Contact</h2>
+  <p>Questions about these terms can be directed to <a href="mailto:theundercutreplies@gmail.com">theundercutreplies@gmail.com</a>.</p>
+</section>
 
 <style>
-  .legal-content {
-    line-height: 1.7;
-  }
   .legal-content h2 {
-    color: var(--accent-cyan);
-    font-size: 1.2rem;
-    margin: 1.5rem 0 0.75rem;
-    letter-spacing: 0.1em;
+    font-size: 1.1rem;
+    margin: 1.75rem 0 0.75rem;
+    color: var(--text-primary);
   }
   .legal-content h2:first-child {
     margin-top: 0;
   }
+  .legal-content h2::before {
+    content: '';
+    width: 4px;
+    height: 1em;
+    background: var(--accent-gulf-orange);
+    border-radius: 2px;
+    display: inline-block;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
   .legal-content p {
-    color: var(--text-primary);
+    color: var(--text-secondary);
     margin: 0 0 1rem;
+    line-height: 1.7;
   }
   .legal-content ul {
     margin: 0 0 1rem 1.5rem;
-    color: var(--text-primary);
+    color: var(--text-secondary);
+    line-height: 1.7;
   }
   .legal-content li {
     margin-bottom: 0.5rem;
   }
   .legal-content a {
-    color: var(--accent-amber);
+    color: var(--accent-gulf-blue);
+    text-decoration: none;
+  }
+  .legal-content a:hover {
+    text-decoration: underline;
   }
 </style>
 {% endblock %}

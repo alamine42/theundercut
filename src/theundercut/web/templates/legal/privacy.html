@@ -2,65 +2,76 @@
 {% block title %}Privacy Policy{% endblock %}
 
 {% block content %}
-<div>
-  <section class="telemetry-hero" style="padding: 2rem;">
-    <h1 class="text-3xl font-semibold tracking-[0.12em]">Privacy Policy</h1>
-    <p class="text-[var(--text-muted)] mt-2">Last updated: February 2026</p>
-  </section>
+<section class="page-hero" style="padding: 1.5rem 2rem;">
+  <p class="subtitle">Legal</p>
+  <h1>Privacy Policy</h1>
+  <p style="color: var(--text-muted); margin-top: 0.5rem;">Last updated: February 2026</p>
+</section>
 
-  <section class="control-panel legal-content">
-    <h2>Information We Collect</h2>
-    <p>We collect minimal information to provide and improve our service:</p>
-    <ul>
-      <li><strong>Usage Data:</strong> We use Google Analytics to understand how visitors interact with our site. This includes pages visited, time spent, and general geographic location (country/city level).</li>
-      <li><strong>Technical Data:</strong> Browser type, device type, and operating system for compatibility purposes.</li>
-    </ul>
+<section class="card legal-content">
+  <h2>Information We Collect</h2>
+  <p>We collect minimal information to provide and improve our service:</p>
+  <ul>
+    <li><strong>Usage Data:</strong> We use Google Analytics to understand how visitors interact with our site. This includes pages visited, time spent, and general geographic location (country/city level).</li>
+    <li><strong>Technical Data:</strong> Browser type, device type, and operating system for compatibility purposes.</li>
+  </ul>
 
-    <h2>How We Use Information</h2>
-    <p>Information collected is used solely to:</p>
-    <ul>
-      <li>Improve website performance and user experience</li>
-      <li>Understand which features are most valuable to users</li>
-      <li>Identify and fix technical issues</li>
-    </ul>
+  <h2>How We Use Information</h2>
+  <p>Information collected is used solely to:</p>
+  <ul>
+    <li>Improve website performance and user experience</li>
+    <li>Understand which features are most valuable to users</li>
+    <li>Identify and fix technical issues</li>
+  </ul>
 
-    <h2>Data Sharing</h2>
-    <p>We do not sell, trade, or otherwise transfer your information to third parties. Analytics data is processed by Google Analytics under their privacy policy.</p>
+  <h2>Data Sharing</h2>
+  <p>We do not sell, trade, or otherwise transfer your information to third parties. Analytics data is processed by Google Analytics under their privacy policy.</p>
 
-    <h2>Cookies</h2>
-    <p>We use cookies for analytics purposes. You can disable cookies in your browser settings, though this may affect site functionality.</p>
+  <h2>Cookies</h2>
+  <p>We use cookies for analytics purposes. You can disable cookies in your browser settings, though this may affect site functionality.</p>
 
-    <h2>Contact</h2>
-    <p>For privacy-related questions, contact us at <a href="mailto:theundercutreplies@gmail.com">theundercutreplies@gmail.com</a>.</p>
-  </section>
-</div>
+  <h2>Contact</h2>
+  <p>For privacy-related questions, contact us at <a href="mailto:theundercutreplies@gmail.com">theundercutreplies@gmail.com</a>.</p>
+</section>
 
 <style>
-  .legal-content {
-    line-height: 1.7;
-  }
   .legal-content h2 {
-    color: var(--accent-cyan);
-    font-size: 1.2rem;
-    margin: 1.5rem 0 0.75rem;
-    letter-spacing: 0.1em;
+    font-size: 1.1rem;
+    margin: 1.75rem 0 0.75rem;
+    color: var(--text-primary);
   }
   .legal-content h2:first-child {
     margin-top: 0;
   }
+  .legal-content h2::before {
+    content: '';
+    width: 4px;
+    height: 1em;
+    background: var(--accent-gulf-orange);
+    border-radius: 2px;
+    display: inline-block;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
   .legal-content p {
-    color: var(--text-primary);
+    color: var(--text-secondary);
     margin: 0 0 1rem;
+    line-height: 1.7;
   }
   .legal-content ul {
     margin: 0 0 1rem 1.5rem;
-    color: var(--text-primary);
+    color: var(--text-secondary);
+    line-height: 1.7;
   }
   .legal-content li {
     margin-bottom: 0.5rem;
   }
   .legal-content a {
-    color: var(--accent-amber);
+    color: var(--accent-gulf-blue);
+    text-decoration: none;
+  }
+  .legal-content a:hover {
+    text-decoration: underline;
   }
 </style>
 {% endblock %}

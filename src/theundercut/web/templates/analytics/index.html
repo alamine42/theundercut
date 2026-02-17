@@ -1,66 +1,88 @@
 {% extends "base.html" %}
-{% block title %}Analytics {{ season }} – Round {{ round }}{% endblock %}
+{% block title %}Race Analytics – {{ season }} Round {{ round }}{% endblock %}
 
 {% block content %}
-<div>
-  <section class="telemetry-hero">
-    <header>
-      <div>
-        <p class="text-sm tracking-[0.4em] uppercase text-[var(--text-muted)]">Race telemetry</p>
-        <h1 class="text-4xl font-semibold tracking-[0.18em]">Season {{ season }} · Round {{ round }}</h1>
-      </div>
-      <div class="text-right">
-        <p class="text-xs uppercase tracking-[0.35em] text-[var(--text-muted)]">Live delta</p>
-        <p class="text-3xl font-semibold text-[var(--accent-amber)]" id="metric-delta">+0.000s</p>
-        <small class="text-[var(--text-muted)]">Fastest benchmark</small>
-      </div>
-    </header>
-    <div class="hero-meta">
-      <div>
-        <span>Active Drivers</span>
-        <strong id="metric-drivers">--</strong>
-      </div>
-      <div>
-        <span>Fastest Lap</span>
-        <strong id="metric-fastest">--.--s</strong>
-      </div>
-      <div>
-        <span>Lap Window</span>
-        <strong id="metric-laps">—</strong>
-      </div>
-      <div>
-        <span>Total Stints</span>
-        <strong id="metric-stints">--</strong>
-      </div>
+<section class="page-hero">
+  <header>
+    <div>
+      <p class="subtitle">Race Telemetry</p>
+      <h1>Season {{ season }} · Round {{ round }}</h1>
     </div>
-  </section>
-
-  <section class="control-panel">
-    <h2>Driver matrix</h2>
-    <div id="driver-filter" data-populated="false">
-      <span class="text-[var(--text-muted)] text-xs tracking-[0.3em] uppercase">Loading driver roster…</span>
+    <div style="text-align: right;">
+      <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);">Avg. Gap to Leader</span>
+      <p style="font-size: 1.75rem; font-family: 'Libre Baskerville', serif; color: var(--accent-gulf-orange); margin: 0.25rem 0 0;" id="metric-delta">+0.000s</p>
     </div>
-  </section>
-
-  <div id="charts-container" class="charts-grid">
-    {% include "analytics/_charts.html" %}
+  </header>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <span>Drivers</span>
+      <strong id="metric-drivers">--</strong>
+    </div>
+    <div class="hero-stat">
+      <span>Fastest Lap</span>
+      <strong id="metric-fastest">--.--s</strong>
+    </div>
+    <div class="hero-stat">
+      <span>Lap Window</span>
+      <strong id="metric-laps">—</strong>
+    </div>
+    <div class="hero-stat">
+      <span>Total Stints</span>
+      <strong id="metric-stints">--</strong>
+    </div>
   </div>
+</section>
+
+<section class="card">
+  <h2>Driver Filter</h2>
+  <div id="driver-filter" data-populated="false" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+    <span style="color: var(--text-muted); font-size: 0.85rem;">Loading drivers...</span>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card" style="grid-column: span 2;">
+    <h2>Lap Time Progression</h2>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -0.5rem;">Lap times across the race distance</p>
+    <div class="chart-container chart-container-lg">
+      <div class="chart-loading">Loading chart...</div>
+      <canvas id="lapTimeChart"></canvas>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Pace Comparison</h2>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -0.5rem;">Delta to fastest driver</p>
+    <div class="chart-container">
+      <div class="chart-loading">Loading chart...</div>
+      <canvas id="paceComparisonChart"></canvas>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Driver Grades</h2>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -0.5rem;">Performance metrics radar</p>
+    <div class="chart-container">
+      <div class="chart-loading">Loading chart...</div>
+      <canvas id="driverGradesRadar"></canvas>
+    </div>
+  </section>
+
+  <section class="card" style="grid-column: span 2;">
+    <h2>Stint Strategy</h2>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -0.5rem;">Tire compound windows</p>
+    <div class="chart-container chart-container-lg">
+      <div class="chart-loading">Loading chart...</div>
+      <canvas id="stintTimelineChart"></canvas>
+    </div>
+  </section>
 </div>
 
 <script>
-  // Store chart instances for cleanup
   window.chartInstances = {};
 
-  // Initialize on page load
   document.addEventListener('DOMContentLoaded', function() {
     loadAnalyticsData();
-  });
-
-  // Re-initialize charts after HTMX swap
-  document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.id === 'charts-container') {
-      loadAnalyticsData();
-    }
   });
 
   function getSelectedDrivers() {
@@ -79,22 +101,22 @@
   function loadAnalyticsData() {
     const url = buildApiUrl();
 
-    // Show loading states
     document.querySelectorAll('.chart-container').forEach(el => {
       const canvas = el.querySelector('canvas');
       if (canvas) canvas.style.display = 'none';
       const loader = el.querySelector('.chart-loading');
-      if (loader) loader.style.display = 'flex';
+      if (loader) {
+        loader.style.display = 'flex';
+        loader.textContent = 'Loading chart...';
+        loader.classList.remove('chart-error');
+      }
     });
 
     fetch(url)
       .then(r => r.json())
       .then(data => {
-        // Populate driver filter
         populateDriverFilter(data.laps);
         updateHeroMetrics(data);
-
-        // Render all charts
         renderLapTimeChart(data);
         renderPaceComparisonChart(data);
         renderStintTimelineChart(data);
@@ -105,9 +127,8 @@
         document.querySelectorAll('.chart-container').forEach(el => {
           const loader = el.querySelector('.chart-loading');
           if (loader) {
-            loader.style.display = 'flex';
             loader.textContent = 'Failed to load data';
-            loader.classList.add('chart-error');
+            loader.style.color = 'var(--stripe-red)';
           }
         });
       });
@@ -121,16 +142,16 @@
     container.dataset.populated = 'true';
 
     const chipMarkup = drivers.map(driver => `
-      <label class="driver-chip">
-        <input type="checkbox" name="drivers" value="${driver}" checked onchange="onDriverFilterChange()">
+      <label class="chip" style="cursor: pointer;">
+        <input type="checkbox" name="drivers" value="${driver}" checked onchange="onDriverFilterChange()" style="accent-color: var(--accent-gulf-blue);">
         <span>${driver}</span>
       </label>
     `).join('');
 
     const actions = `
-      <div class="chip-actions">
-        <button type="button" onclick="selectAllDrivers()">All</button>
-        <button type="button" onclick="selectNoDrivers()">Clear</button>
+      <div style="margin-left: 0.5rem; display: flex; gap: 0.75rem;">
+        <button type="button" onclick="selectAllDrivers()" class="btn btn-outline" style="padding: 0.35rem 0.75rem;">All</button>
+        <button type="button" onclick="selectNoDrivers()" class="btn btn-outline" style="padding: 0.35rem 0.75rem;">Clear</button>
       </div>
     `;
 
