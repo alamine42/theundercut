@@ -2,7 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Undercut – {% block title %}{% endblock %}</title>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WBK3XGYDMB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-WBK3XGYDMB');
+  </script>
+
+  <link rel="icon" href="/static/logo.png" type="image/png" />
   <script src="https://unpkg.com/htmx.org@1.9.9"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,6 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
+  {% block head_extra %}{% endblock %}
   <style>
     :root {
       --bg-deep: #03060d;
@@ -275,8 +288,152 @@
   </style>
 </head>
 <body>
+  <!-- Navigation -->
+  <nav class="site-nav">
+    <div class="nav-container">
+      <a href="/" class="nav-brand">
+        <img src="/static/logo.png" alt="The Undercut" class="nav-logo">
+        <span>The Undercut</span>
+      </a>
+      <div class="nav-links">
+        <a href="/standings/2024">Standings</a>
+        <a href="/analytics/2024/1">Race Analytics</a>
+      </div>
+    </div>
+  </nav>
+
   <main class="telemetry-shell">
     {% block content %}{% endblock %}
   </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-main">
+        <p>Your destination for advanced Formula 1 analytics.</p>
+        <p class="footer-support">
+          Find this useful? <a href="https://buymeacoffee.com/theundercut" target="_blank">Buy me a coffee</a> or
+          reach out at <a href="mailto:theundercutreplies@gmail.com">theundercutreplies@gmail.com</a>
+        </p>
+      </div>
+      <div class="footer-legal">
+        <p>This website is not affiliated with Formula 1, the Formula One Group, or its sponsors. All trademarks are property of their respective owners.</p>
+        <div class="footer-links">
+          <a href="/privacy">Privacy Policy</a>
+          <span class="separator">|</span>
+          <a href="/terms">Terms of Service</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <style>
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(3, 6, 13, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(125, 249, 255, 0.1);
+      padding: 0.75rem 1.5rem;
+    }
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-primary);
+      font-family: 'Chakra Petch', sans-serif;
+      font-weight: 600;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+    }
+    .nav-logo {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      letter-spacing: 0.05em;
+      transition: color 0.2s ease;
+    }
+    .nav-links a:hover {
+      color: var(--accent-cyan);
+    }
+    .site-footer {
+      background: rgba(2, 4, 9, 0.98);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 2.5rem 1.5rem;
+      margin-top: 3rem;
+    }
+    .footer-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .footer-main {
+      margin-bottom: 1.5rem;
+    }
+    .footer-main p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin: 0 0 0.5rem;
+    }
+    .footer-support a {
+      color: var(--accent-amber);
+      text-decoration: none;
+    }
+    .footer-support a:hover {
+      text-decoration: underline;
+    }
+    .footer-legal {
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .footer-legal p {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      opacity: 0.7;
+      margin: 0 0 0.75rem;
+      line-height: 1.5;
+    }
+    .footer-links {
+      display: flex;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+    }
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .footer-links a:hover {
+      color: var(--accent-cyan);
+    }
+    .footer-links .separator {
+      color: rgba(255, 255, 255, 0.2);
+    }
+    @media (max-width: 600px) {
+      .nav-container {
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .nav-links {
+        gap: 1rem;
+      }
+    }
+  </style>
 </body>
 </html>

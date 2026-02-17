@@ -22,5 +22,9 @@ Legend: ☐ = not started, ◐ = in progress, ☑ = done
 | T16| ☑ | Fix calendar loader to exclude pre-season testing | Data | Filter "Day N" sessions before ranking meeting_keys |
 | T17| ☐ | Investigate FastF1 hanging issue | Data | FastF1 hangs on session.load(); using OpenF1 as workaround |
 | T18| ☐ | Add stint data to OpenF1 ingestion | Data | OpenF1 laps endpoint doesn't include stint/compound info |
+| T19| ☑ | Add season standings page with DataTables | Web | /standings/{season} with driver/constructor tables, metrics key |
+| T20| ☑ | Create standings API with Jolpica integration | Backend | /api/v1/standings/{season} with points, PtsL5, positions gained |
+| T21| ☑ | Add branding, navbar, footer | Web | Logo, navigation, support links, legal page links |
+| T22| ☑ | Add legal pages and Google Analytics | Web | Privacy policy, terms of service, GA4 tracking |
 
 Active sprint picks: **T11** (calibration), **T12** (monitoring), **T8** (CSV export).

@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+{% block title %}Standings {{ season }}{% endblock %}
+
+{% block head_extra %}
+<!-- DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/2.1.6/css/dataTables.dataTables.min.css">
+{% endblock %}
+
+{% block content %}
+<div>
+  <section class="telemetry-hero">
+    <header>
+      <div>
+        <p class="text-sm tracking-[0.4em] uppercase text-[var(--text-muted)]">Championship standings</p>
+        <h1 class="text-4xl font-semibold tracking-[0.18em]">Season {{ season }}</h1>
+      </div>
+      <div class="text-right">
+        <p class="text-xs uppercase tracking-[0.35em] text-[var(--text-muted)]">Races completed</p>
+        <p class="text-3xl font-semibold text-[var(--accent-amber)]" id="metric-races">--</p>
+        <small class="text-[var(--text-muted)]" id="races-remaining">-- remaining</small>
+      </div>
+    </header>
+    <div class="hero-meta">
+      <div>
+        <span>Leader</span>
+        <strong id="metric-leader">---</strong>
+      </div>
+      <div>
+        <span>Leader Points</span>
+        <strong id="metric-leader-pts">--</strong>
+      </div>
+      <div>
+        <span>Closest Gap</span>
+        <strong id="metric-gap">--</strong>
+      </div>
+      <div>
+        <span>Constructor Leader</span>
+        <strong id="metric-constructor">---</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- Metrics Key Modal Trigger -->
+  <section class="control-panel">
+    <div class="flex justify-between items-center">
+      <h2>Driver championship</h2>
+      <button type="button" class="metrics-key-btn" onclick="toggleMetricsKey()">
+        Metrics key
+      </button>
+    </div>
+
+    <!-- Metrics Key Panel (hidden by default) -->
+    <div id="metrics-key" class="metrics-key-panel" style="display: none;">
+      <div class="metrics-grid">
+        <div><strong>Pts</strong> Points Total</div>
+        <div><strong>PtsL5</strong> Points in Last 5 Races</div>
+        <div><strong>ProjPts</strong> Projected Points by Season End</div>
+        <div><strong>TR</strong> Total Races (includes Sprints)</div>
+        <div><strong>P</strong> Poles</div>
+        <div><strong>ASP</strong> Average Starting Position</div>
+        <div><strong>AFP</strong> Average Finishing Position</div>
+        <div><strong>PPR</strong> Points Per Race (Avg)</div>
+        <div><strong>PosG</strong> Positions Gained</div>
+        <div><strong>PosGPR</strong> Positions Gained per Race</div>
+        <div><strong>PWL</strong> Points Won/Lost vs Expected</div>
+        <div><strong>AltPts</strong> Alternate Points (extended scoring)</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table id="driver-standings" class="standings-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Driver</th>
+            <th>Constructor</th>
+            <th>Pts</th>
+            <th>PtsL5</th>
+            <th>ProjPts</th>
+            <th>TR</th>
+            <th>P</th>
+            <th>ASP</th>
+            <th>AFP</th>
+            <th>PPR</th>
+            <th>PosG</th>
+            <th>PosGPR</th>
+            <th>PWL</th>
+            <th>AltPts</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="15" class="text-center text-[var(--text-muted)]">Loading driver standings...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="control-panel">
+    <h2>Constructor championship</h2>
+    <div class="table-container">
+      <table id="constructor-standings" class="standings-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Constructor</th>
+            <th>Pts</th>
+            <th>PtsL5</th>
+            <th>ProjPts</th>
+            <th>PosG</th>
+            <th>PWL</th>
+            <th>AltPts</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="8" class="text-center text-[var(--text-muted)]">Loading constructor standings...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<style>
+  .metrics-key-btn {
+    background: rgba(125, 249, 255, 0.1);
+    border: 1px solid var(--chip-border);
+    color: var(--accent-cyan);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .metrics-key-btn:hover {
+    background: rgba(125, 249, 255, 0.2);
+    border-color: var(--accent-cyan);
+  }
+  .metrics-key-panel {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+  .metrics-grid strong {
+    color: var(--accent-cyan);
+    margin-right: 0.5rem;
+  }
+  .table-container {
+    margin-top: 1rem;
+    overflow-x: auto;
+  }
+  .standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  .standings-table thead th {
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    padding: 0.75rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(125, 249, 255, 0.2);
+    white-space: nowrap;
+  }
+  .standings-table tbody td {
+    padding: 0.65rem 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+  }
+  .standings-table tbody tr:hover {
+    background: rgba(125, 249, 255, 0.05);
+  }
+  .standings-table tbody tr:nth-child(1) td:first-child,
+  .standings-table tbody tr:nth-child(2) td:first-child,
+  .standings-table tbody tr:nth-child(3) td:first-child {
+    color: var(--accent-amber);
+    font-weight: 600;
+  }
+  /* DataTables overrides for dark theme */
+  .dataTables_wrapper {
+    color: var(--text-muted);
+  }
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter,
+  .dataTables_wrapper .dataTables_info,
+  .dataTables_wrapper .dataTables_paginate {
+    color: var(--text-muted);
+    padding: 0.75rem 0;
+  }
+  .dataTables_wrapper .dataTables_filter input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    margin-left: 0.5rem;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button {
+    color: var(--text-muted) !important;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    margin: 0 2px;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: rgba(125, 249, 255, 0.1) !important;
+    border-color: var(--accent-cyan) !important;
+    color: var(--accent-cyan) !important;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: rgba(125, 249, 255, 0.2) !important;
+    border-color: var(--accent-cyan) !important;
+    color: var(--accent-cyan) !important;
+  }
+  table.dataTable thead .sorting:after,
+  table.dataTable thead .sorting_asc:after,
+  table.dataTable thead .sorting_desc:after {
+    opacity: 0.5;
+  }
+</style>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.6/js/dataTables.min.js"></script>
+
+<script>
+const SEASON = {{ season }};
+let racesRemaining = 0;
+
+function toggleMetricsKey() {
+  const panel = document.getElementById('metrics-key');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function setMetric(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+async function loadStandings() {
+  try {
+    const resp = await fetch(`/api/v1/standings/${SEASON}`);
+    if (!resp.ok) throw new Error('Failed to load standings');
+    const data = await resp.json();
+
+    renderDriverStandings(data.drivers || []);
+    renderConstructorStandings(data.constructors || []);
+    updateHeroMetrics(data);
+    racesRemaining = data.races_remaining || 0;
+  } catch (err) {
+    console.error('Error loading standings:', err);
+    document.querySelector('#driver-standings tbody').innerHTML =
+      '<tr><td colspan="15" class="text-center" style="color: #ff7b7b;">Failed to load standings</td></tr>';
+  }
+}
+
+function renderDriverStandings(drivers) {
+  const tbody = document.querySelector('#driver-standings tbody');
+  if (!drivers.length) {
+    tbody.innerHTML = '<tr><td colspan="15" class="text-center text-[var(--text-muted)]">No driver data available</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = drivers.map((d, i) => {
+    const projPts = Math.round(d.points + (racesRemaining * (d.pts_last_5 / 5)));
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${d.driver_name}</td>
+        <td>${d.constructor_name}</td>
+        <td>${d.points}</td>
+        <td>${d.pts_last_5 || 0}</td>
+        <td>${projPts}</td>
+        <td>${d.total_races || 0}</td>
+        <td>${d.poles || 0}</td>
+        <td>${(d.avg_start_pos || 0).toFixed(1)}</td>
+        <td>${(d.avg_finish_pos || 0).toFixed(1)}</td>
+        <td>${(d.points_per_race || 0).toFixed(1)}</td>
+        <td>${d.positions_gained || 0}</td>
+        <td>${(d.positions_gained_per_race || 0).toFixed(2)}</td>
+        <td>${d.points_won_lost || 0}</td>
+        <td>${d.alt_points || 0}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Initialize DataTable
+  if ($.fn.DataTable.isDataTable('#driver-standings')) {
+    $('#driver-standings').DataTable().destroy();
+  }
+  $('#driver-standings').DataTable({
+    order: [[3, 'desc']],
+    paging: false,
+    searching: true,
+    info: false,
+    scrollX: true,
+    fixedColumns: { left: 2 }
+  });
+}
+
+function renderConstructorStandings(constructors) {
+  const tbody = document.querySelector('#constructor-standings tbody');
+  if (!constructors.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-[var(--text-muted)]">No constructor data available</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = constructors.map((c, i) => {
+    const projPts = Math.round(c.points + (racesRemaining * (c.pts_last_5 / 5)));
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${c.constructor_name}</td>
+        <td>${c.points}</td>
+        <td>${c.pts_last_5 || 0}</td>
+        <td>${projPts}</td>
+        <td>${c.positions_gained || 0}</td>
+        <td>${c.points_won_lost || 0}</td>
+        <td>${c.alt_points || 0}</td>
+      </tr>
+    `;
+  }).join('');
+
+  if ($.fn.DataTable.isDataTable('#constructor-standings')) {
+    $('#constructor-standings').DataTable().destroy();
+  }
+  $('#constructor-standings').DataTable({
+    order: [[2, 'desc']],
+    paging: false,
+    searching: false,
+    info: false,
+    scrollX: true
+  });
+}
+
+function updateHeroMetrics(data) {
+  const drivers = data.drivers || [];
+  const constructors = data.constructors || [];
+
+  setMetric('metric-races', data.races_completed || '--');
+  document.getElementById('races-remaining').textContent =
+    `${data.races_remaining || 0} remaining`;
+
+  if (drivers.length >= 2) {
+    setMetric('metric-leader', drivers[0].driver_name);
+    setMetric('metric-leader-pts', drivers[0].points);
+    const gap = drivers[0].points - drivers[1].points;
+    setMetric('metric-gap', `${gap} pts`);
+  }
+
+  if (constructors.length) {
+    setMetric('metric-constructor', constructors[0].constructor_name);
+  }
+}
+
+// Load on page ready
+document.addEventListener('DOMContentLoaded', loadStandings);
+</script>
+{% endblock %}
