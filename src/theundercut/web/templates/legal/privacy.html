@@ -38,40 +38,39 @@
   .legal-content h2 {
     font-size: 1.1rem;
     margin: 1.75rem 0 0.75rem;
-    color: var(--text-primary);
+    color: var(--ink);
   }
   .legal-content h2:first-child {
     margin-top: 0;
   }
   .legal-content h2::before {
     content: '';
-    width: 3px;
+    width: 4px;
     height: 1em;
-    background: var(--accent-gold);
-    border-radius: 2px;
+    background: var(--accent);
     display: inline-block;
     margin-right: 0.5rem;
     vertical-align: middle;
   }
   .legal-content p {
-    color: var(--text-secondary);
+    color: var(--ink);
     margin: 0 0 1rem;
     line-height: 1.7;
   }
   .legal-content ul {
     margin: 0 0 1rem 1.5rem;
-    color: var(--text-secondary);
+    color: var(--ink);
     line-height: 1.7;
   }
   .legal-content li {
     margin-bottom: 0.5rem;
   }
   .legal-content a {
-    color: var(--accent-gold);
-    text-decoration: none;
+    color: var(--ink);
+    text-decoration: underline;
   }
   .legal-content a:hover {
-    color: var(--accent-lime);
+    color: var(--accent);
   }
 </style>
 {% endblock %}

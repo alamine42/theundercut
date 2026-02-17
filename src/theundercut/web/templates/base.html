@@ -19,23 +19,20 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600;700&display=swap" rel="stylesheet">
   {% block head_extra %}{% endblock %}
   <style>
     :root {
-      /* Gallery Dark Theme - Inspired by Frans Hals Museum */
-      --bg-surface: #001317;
-      --bg-card: #011C22;
-      --bg-elevated: #022A33;
-      --accent-gold: #FECD8C;
-      --accent-sage: #B9C089;
-      --accent-lime: #2CFF70;
-      --text-primary: #FFFFFF;
-      --text-secondary: rgba(255, 255, 255, 0.75);
-      --text-muted: rgba(255, 255, 255, 0.5);
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-medium: rgba(255, 255, 255, 0.15);
-      --stripe-red: #E63946;
+      /* VOID-inspired stark contrast theme */
+      --ink: #0f0f0f;
+      --paper: #ffffff;
+      --accent: #d9731a;
+      --accent-hover: #c4650f;
+      --muted: #6b6b6b;
+      --border: #0f0f0f;
+      --border-light: #e0e0e0;
+      --success: #2d8a39;
+      --error: #c41e3a;
     }
 
     * {
@@ -45,10 +42,10 @@
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: 'Rubik', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-surface);
-      color: var(--text-primary);
-      font-size: 15px;
+      font-family: 'IBM Plex Mono', monospace;
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 14px;
       line-height: 1.6;
     }
 
@@ -59,19 +56,17 @@
     }
 
     h1, h2, h3, h4 {
-      font-family: 'Rubik', sans-serif;
+      font-family: 'IBM Plex Serif', Georgia, serif;
       font-weight: 600;
-      letter-spacing: -0.01em;
+      letter-spacing: -0.02em;
     }
 
     /* Hero / Page Header */
     .page-hero {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
+      background: var(--paper);
+      border: 2px solid var(--ink);
       padding: 2rem 2.5rem;
       position: relative;
-      overflow: hidden;
     }
 
     .page-hero::before {
@@ -80,12 +75,8 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 3px;
-      background: linear-gradient(90deg,
-        var(--accent-gold) 0%,
-        var(--accent-gold) 50%,
-        var(--accent-lime) 50%
-      );
+      height: 4px;
+      background: var(--accent);
     }
 
     .page-hero header {
@@ -99,15 +90,16 @@
     .page-hero h1 {
       font-size: 2rem;
       margin: 0;
-      color: var(--text-primary);
+      color: var(--ink);
     }
 
     .page-hero .subtitle {
-      color: var(--accent-gold);
-      font-size: 0.8rem;
+      color: var(--accent);
+      font-size: 0.75rem;
       margin-top: 0.25rem;
       text-transform: uppercase;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.2em;
+      font-family: 'IBM Plex Mono', monospace;
       font-weight: 500;
     }
 
@@ -116,7 +108,7 @@
       gap: 2.5rem;
       margin-top: 1.5rem;
       padding-top: 1.5rem;
-      border-top: 1px solid var(--border-subtle);
+      border-top: 2px solid var(--ink);
     }
 
     .hero-stat {
@@ -127,22 +119,22 @@
       display: block;
       font-size: 0.65rem;
       text-transform: uppercase;
-      color: var(--text-muted);
+      color: var(--muted);
       letter-spacing: 0.15em;
       margin-bottom: 0.35rem;
     }
 
     .hero-stat strong {
       font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--accent-gold);
+      font-family: 'IBM Plex Serif', serif;
+      font-weight: 700;
+      color: var(--ink);
     }
 
     /* Cards / Panels */
     .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
+      background: var(--paper);
+      border: 2px solid var(--ink);
       padding: 1.5rem 2rem;
       margin-top: 1.5rem;
     }
@@ -150,7 +142,7 @@
     .card h2 {
       font-size: 1.1rem;
       margin: 0 0 1rem;
-      color: var(--text-primary);
+      color: var(--ink);
       display: flex;
       align-items: center;
       gap: 0.6rem;
@@ -158,73 +150,88 @@
 
     .card h2::before {
       content: '';
-      width: 3px;
+      width: 4px;
       height: 1.1em;
-      background: var(--accent-gold);
-      border-radius: 2px;
+      background: var(--accent);
     }
 
     /* Tables */
     .data-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
 
     .data-table thead th {
-      background: var(--bg-elevated);
-      color: var(--text-muted);
+      background: var(--ink);
+      color: var(--paper);
       font-weight: 500;
       text-transform: uppercase;
       font-size: 0.7rem;
       letter-spacing: 0.1em;
       padding: 0.85rem 0.6rem;
       text-align: left;
-      border-bottom: 1px solid var(--border-medium);
+      border: 2px solid var(--ink);
       white-space: nowrap;
     }
 
     .data-table tbody td {
       padding: 0.75rem 0.6rem;
-      border-bottom: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
+      border: 1px solid var(--border-light);
+      color: var(--ink);
     }
 
     .data-table tbody tr:hover {
-      background: var(--bg-elevated);
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .data-table tbody tr:hover td {
+      color: var(--paper);
+      border-color: var(--ink);
     }
 
     /* Podium positions */
-    .data-table tbody tr:nth-child(1) td:first-child { color: var(--accent-gold); font-weight: 600; }
-    .data-table tbody tr:nth-child(2) td:first-child { color: #C0C0C0; font-weight: 600; }
-    .data-table tbody tr:nth-child(3) td:first-child { color: #CD7F32; font-weight: 600; }
+    .data-table tbody tr:nth-child(1) td:first-child { color: var(--accent); font-weight: 700; }
+    .data-table tbody tr:nth-child(2) td:first-child { color: var(--muted); font-weight: 600; }
+    .data-table tbody tr:nth-child(3) td:first-child { color: #8B4513; font-weight: 600; }
 
     /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.55rem 1.1rem;
-      border-radius: 6px;
+      padding: 0.6rem 1.2rem;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 0.8rem;
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
       text-decoration: none;
     }
 
     .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border-medium);
-      color: var(--text-secondary);
+      background: var(--paper);
+      border: 2px solid var(--ink);
+      color: var(--ink);
     }
 
     .btn-outline:hover {
-      border-color: var(--accent-lime);
-      color: var(--accent-lime);
-      background: rgba(44, 255, 112, 0.05);
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .btn-primary {
+      background: var(--ink);
+      border: 2px solid var(--ink);
+      color: var(--paper);
+    }
+
+    .btn-primary:hover {
+      background: var(--paper);
+      color: var(--ink);
     }
 
     /* Chips / Tags */
@@ -233,24 +240,24 @@
       align-items: center;
       gap: 0.35rem;
       padding: 0.45rem 0.85rem;
-      border-radius: 6px;
-      border: 1px solid var(--border-subtle);
-      background: var(--bg-elevated);
+      border: 2px solid var(--ink);
+      background: var(--paper);
       font-size: 0.8rem;
-      color: var(--text-secondary);
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--ink);
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
     }
 
     .chip:hover {
-      border-color: var(--accent-gold);
-      color: var(--accent-gold);
+      background: var(--ink);
+      color: var(--paper);
     }
 
     .chip.active {
-      border-color: var(--accent-lime);
-      background: rgba(44, 255, 112, 0.15);
-      color: var(--accent-lime);
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--paper);
     }
 
     /* Charts */
@@ -269,7 +276,7 @@
       align-items: center;
       justify-content: center;
       min-height: 280px;
-      color: var(--text-muted);
+      color: var(--muted);
       font-size: 0.85rem;
     }
 
@@ -283,26 +290,27 @@
 
     /* Racing stripe accent */
     .racing-stripe {
-      height: 2px;
-      background: linear-gradient(90deg,
-        var(--accent-gold) 0%,
-        var(--accent-gold) 40%,
-        transparent 40%,
-        transparent 60%,
-        var(--accent-lime) 60%
-      );
+      height: 4px;
+      background: var(--accent);
       margin: 2rem 0;
     }
 
     /* Links */
     a {
-      color: var(--accent-gold);
-      text-decoration: none;
-      transition: color 0.2s ease;
+      color: var(--ink);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: all 0.15s ease;
     }
 
     a:hover {
-      color: var(--accent-lime);
+      color: var(--accent);
+    }
+
+    /* Selection */
+    ::selection {
+      background: var(--ink);
+      color: var(--paper);
     }
 
     @media (max-width: 720px) {
@@ -370,8 +378,8 @@
 
   <style>
     .site-nav {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border-subtle);
+      background: var(--paper);
+      border-bottom: 2px solid var(--ink);
       padding: 0.875rem 1.5rem;
       position: sticky;
       top: 0;
@@ -389,9 +397,9 @@
       align-items: center;
       gap: 0.65rem;
       text-decoration: none;
-      color: var(--text-primary);
-      font-family: 'Rubik', sans-serif;
-      font-weight: 600;
+      color: var(--ink);
+      font-family: 'IBM Plex Serif', serif;
+      font-weight: 700;
       font-size: 1.1rem;
     }
     .nav-logo {
@@ -404,19 +412,24 @@
       gap: 2rem;
     }
     .nav-links a {
-      color: var(--text-secondary);
+      color: var(--ink);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 500;
-      transition: color 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0.35rem 0;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
     }
     .nav-links a:hover {
-      color: var(--accent-gold);
+      border-bottom-color: var(--accent);
+      color: var(--accent);
     }
 
     .site-footer {
-      background: var(--bg-card);
-      border-top: 1px solid var(--border-subtle);
+      background: var(--ink);
+      color: var(--paper);
       padding: 3rem 1.5rem 2rem;
       margin-top: 4rem;
     }
@@ -430,15 +443,16 @@
       gap: 1rem;
       margin-bottom: 2rem;
       padding-bottom: 2rem;
-      border-bottom: 1px solid var(--border-subtle);
+      border-bottom: 2px solid rgba(255,255,255,0.2);
     }
     .footer-logo {
       width: 36px;
       height: 36px;
+      filter: invert(1);
     }
     .footer-brand p {
       margin: 0;
-      color: var(--text-muted);
+      color: rgba(255,255,255,0.7);
       font-size: 0.9rem;
     }
     .footer-links-grid {
@@ -448,33 +462,33 @@
       margin-bottom: 2rem;
     }
     .footer-links-grid h4 {
-      font-family: 'Rubik', sans-serif;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.15em;
-      color: var(--accent-gold);
+      color: var(--accent);
       margin: 0 0 0.85rem;
       font-weight: 500;
     }
     .footer-links-grid a {
       display: block;
-      color: var(--text-secondary);
+      color: rgba(255,255,255,0.8);
       text-decoration: none;
       font-size: 0.9rem;
       margin-bottom: 0.6rem;
-      transition: color 0.2s ease;
+      transition: all 0.15s ease;
     }
     .footer-links-grid a:hover {
-      color: var(--accent-lime);
+      color: var(--accent);
     }
     .footer-disclaimer {
       padding-top: 1.5rem;
-      border-top: 1px solid var(--border-subtle);
+      border-top: 2px solid rgba(255,255,255,0.2);
     }
     .footer-disclaimer p {
       margin: 0;
       font-size: 0.75rem;
-      color: var(--text-muted);
+      color: rgba(255,255,255,0.5);
       line-height: 1.6;
     }
 
