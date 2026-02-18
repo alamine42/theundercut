@@ -1,6 +1,7 @@
 """FastF1 data provider."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from statistics import median
 from typing import Dict, List
@@ -12,10 +13,14 @@ except Exception:  # pragma: no cover
     fastf1 = None
     get_event_schedule = None
 
+from theundercut.utils.timeout import run_with_timeout, TimeoutError, FASTF1_TIMEOUT
+
 from ..car_pace import anchor_car_pace_to_team
 from ..drive_grade import _clamp
 from .base import RaceDataProvider, RaceDescriptor
 from .fastf1_overtakes import detect_overtake_events
+
+logger = logging.getLogger(__name__)
 
 TRACK_DIFFICULTY_MAP = {
     "monaco_grand_prix": 0.95,
@@ -86,8 +91,26 @@ class FastF1Provider(RaceDataProvider):
         row = schedule.loc[schedule["RoundNumber"] == round_number].iloc[0]
         event_name = row["EventName"]
         slug = slugify(event_name)
-        session = fastf1.get_session(season, event_name, self.config.session)
-        session.load()
+
+        def _load_session():
+            sess = fastf1.get_session(season, event_name, self.config.session)
+            sess.load()
+            return sess
+
+        try:
+            session = run_with_timeout(
+                _load_session,
+                timeout=FASTF1_TIMEOUT,
+                description=f"FastF1 fetch_weekend({season}, {round_number})",
+            )
+        except TimeoutError:
+            logger.warning(
+                "FastF1 timed out fetching weekend for %d round %d",
+                season,
+                round_number,
+            )
+            raise
+
         laps = session.laps
         if not session.results.empty and "LapsCompleted" in session.results.columns:
             total_laps = int(session.results["LapsCompleted"].max())

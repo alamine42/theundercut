@@ -20,7 +20,7 @@ Legend: ☐ = not started, ◐ = in progress, ☑ = done
 | T14| ☑ | Refresh architecture + MVP implementation plan | Product | Updated `docs/architecture.md` with stack overview, MVP scope, testing strategy |
 | T15| ☑ | Document Drive Grade merge approach | Backend | See `docs/drive_grade_merge_plan.md` for phased migration |
 | T16| ☑ | Fix calendar loader to exclude pre-season testing | Data | Filter "Day N" sessions before ranking meeting_keys |
-| T17| ☐ | Investigate FastF1 hanging issue | Data | FastF1 hangs on session.load(); using OpenF1 as workaround |
+| T17| ☑ | Investigate FastF1 hanging issue | Data | Added 45s timeout wrapper; auto-fallback to OpenF1 on timeout |
 | T18| ☐ | Add stint data to OpenF1 ingestion | Data | OpenF1 laps endpoint doesn't include stint/compound info |
 | T19| ☑ | Add season standings page with DataTables | Web | /standings/{season} with driver/constructor tables, metrics key |
 | T20| ☑ | Create standings API with Jolpica integration | Backend | /api/v1/standings/{season} with points, PtsL5, positions gained |

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence, Type
@@ -9,11 +10,14 @@ import httpx
 import pandas as pd
 
 from theundercut.config import get_settings
+from theundercut.utils.timeout import run_with_timeout, TimeoutError, FASTF1_TIMEOUT
 
 try:  # pragma: no cover - optional dependency
     import fastf1  # type: ignore
 except Exception:  # pragma: no cover - e.g., during tests without fastf1
     fastf1 = None  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 
 settings = get_settings()
@@ -61,9 +65,25 @@ class FastF1LapProvider(LapDataProvider):
     def load_laps(self, session_type: str = "Race") -> pd.DataFrame:
         if fastf1 is None:
             raise RuntimeError("fastf1 package is not available")
-        session = fastf1.get_session(self.season, self.round_number, session_type)
-        session.load()
-        return session.laps.copy()
+
+        def _load() -> pd.DataFrame:
+            session = fastf1.get_session(self.season, self.round_number, session_type)
+            session.load()
+            return session.laps.copy()
+
+        try:
+            return run_with_timeout(
+                _load,
+                timeout=FASTF1_TIMEOUT,
+                description=f"FastF1 load_laps({self.season}, {self.round_number}, {session_type})",
+            )
+        except TimeoutError:
+            logger.warning(
+                "FastF1 timed out loading laps for %d round %d",
+                self.season,
+                self.round_number,
+            )
+            raise
 
 
 class OpenF1LapProvider(LapDataProvider):
