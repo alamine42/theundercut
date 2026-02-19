@@ -5,9 +5,14 @@ Exposes homepage, standings, race analytics, and legal pages.
 
 from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from theundercut.adapters.db import get_db
+from theundercut.services.homepage import get_homepage_data
+from theundercut.services.standings import fetch_season_standings
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -15,10 +20,20 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 router = APIRouter()
 
 
-@router.get("/", response_class=RedirectResponse)
-async def homepage():
-    """Redirect homepage to current season standings."""
-    return RedirectResponse(url="/standings/2024", status_code=302)
+@router.get("/", response_class=HTMLResponse)
+async def homepage(request: Request, db: Session = Depends(get_db)):
+    """Homepage dashboard with latest race and standings."""
+    data = get_homepage_data(db)
+
+    return templates.TemplateResponse(
+        "home/index.html",
+        {
+            "request": request,
+            "season": data["season"],
+            "latest_race": data["latest_race"],
+            "podium": data["podium"],
+        },
+    )
 
 
 @router.get("/race/{season}/{round}", response_class=HTMLResponse)

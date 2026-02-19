@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+{% block title %}F1 Analytics Dashboard{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdn.datatables.net/2.1.6/css/dataTables.dataTables.min.css">
+<style>
+  /* DataTables stark theme overrides */
+  table.dataTable thead th {
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    border: 2px solid var(--ink) !important;
+  }
+  table.dataTable tbody tr:hover {
+    background: var(--ink) !important;
+  }
+  table.dataTable tbody tr:hover td {
+    color: var(--paper) !important;
+  }
+  table.dataTable tbody td {
+    border: 1px solid var(--border-light) !important;
+  }
+  .dataTables_wrapper .dataTables_filter input {
+    border: 2px solid var(--ink);
+    padding: 0.45rem 0.85rem;
+    font-size: 0.85rem;
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .dataTables_wrapper .dataTables_filter input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .dataTables_wrapper .dataTables_info {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button {
+    border: 2px solid var(--ink) !important;
+    background: var(--paper) !important;
+    color: var(--ink) !important;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+  }
+  .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--paper) !important;
+  }
+
+  /* Homepage specific styles */
+  .home-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  @media (max-width: 900px) {
+    .home-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .podium-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .podium-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .podium-item:last-child {
+    border-bottom: none;
+  }
+
+  .podium-position {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Serif', serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    border: 2px solid var(--ink);
+  }
+
+  .podium-position.p1 {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--paper);
+  }
+
+  .podium-position.p2 {
+    background: var(--muted);
+    border-color: var(--muted);
+    color: var(--paper);
+  }
+
+  .podium-position.p3 {
+    background: #8B4513;
+    border-color: #8B4513;
+    color: var(--paper);
+  }
+
+  .podium-info {
+    flex: 1;
+  }
+
+  .podium-driver {
+    font-family: 'IBM Plex Serif', serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .podium-team {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 0.2rem 0 0;
+  }
+
+  .standings-section {
+    margin-top: 1rem;
+  }
+
+  .standings-section h3 {
+    font-size: 0.9rem;
+    font-family: 'IBM Plex Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin: 1.5rem 0 0.75rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--ink);
+  }
+
+  .standings-section h3:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+  <header>
+    <div>
+      <p class="subtitle">Formula 1 Analytics</p>
+      <h1>The Undercut</h1>
+    </div>
+    <div style="text-align: right;">
+      <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted);">Season</span>
+      <p style="font-size: 1.75rem; font-family: 'IBM Plex Serif', serif; font-weight: 700; color: var(--ink); margin: 0.25rem 0 0;">{{ season }}</p>
+    </div>
+  </header>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <span>Races Completed</span>
+      <strong id="metric-races">--</strong>
+    </div>
+    <div class="hero-stat">
+      <span>Championship Leader</span>
+      <strong id="metric-leader">---</strong>
+    </div>
+    <div class="hero-stat">
+      <span>Points</span>
+      <strong id="metric-points">--</strong>
+    </div>
+    <div class="hero-stat">
+      <span>Constructor Leader</span>
+      <strong id="metric-constructor">---</strong>
+    </div>
+  </div>
+</section>
+
+<div class="home-grid">
+  <!-- Latest Race Card -->
+  <section class="card" style="margin-top: 0;">
+    <h2>Latest Race</h2>
+    {% if latest_race %}
+    <div style="margin-bottom: 1rem;">
+      <p style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0;">Round {{ latest_race.round }}</p>
+      <p style="font-family: 'IBM Plex Serif', serif; font-size: 1.25rem; font-weight: 700; margin: 0.25rem 0 0;">{{ latest_race.name }}</p>
+    </div>
+
+    <ul class="podium-list">
+      {% for p in podium %}
+      <li class="podium-item">
+        <div class="podium-position p{{ p.position }}">{{ p.position }}</div>
+        <div class="podium-info">
+          <p class="podium-driver">{{ p.driver }}</p>
+          <p class="podium-team">{{ p.team }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <div style="margin-top: 1.5rem;">
+      <a href="/analytics/{{ season }}/{{ latest_race.round }}" class="btn btn-primary">
+        View Full Analytics
+      </a>
+    </div>
+    {% else %}
+    <p style="color: var(--muted);">No race data available yet.</p>
+    {% endif %}
+  </section>
+
+  <!-- Standings Card -->
+  <section class="card" style="margin-top: 0;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Championship Standings</h2>
+      <a href="/standings/{{ season }}" class="btn btn-outline">Full Standings</a>
+    </div>
+
+    <div class="standings-section">
+      <h3>Drivers</h3>
+      <div style="overflow-x: auto;">
+        <table id="driver-standings" class="data-table">
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Driver</th>
+              <th>Team</th>
+              <th>Pts</th>
+              <th>Wins</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 2rem;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="standings-section">
+      <h3>Constructors</h3>
+      <div style="overflow-x: auto;">
+        <table id="constructor-standings" class="data-table">
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Constructor</th>
+              <th>Pts</th>
+              <th>Wins</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="4" style="text-align: center; color: var(--muted); padding: 2rem;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.6/js/dataTables.min.js"></script>
+
+<script>
+const SEASON = {{ season }};
+
+function setMetric(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+async function loadStandings() {
+  try {
+    const resp = await fetch(`/api/v1/standings/${SEASON}`);
+    if (!resp.ok) throw new Error('Failed to load standings');
+    const data = await resp.json();
+
+    renderDriverStandings(data.drivers || []);
+    renderConstructorStandings(data.constructors || []);
+    updateHeroMetrics(data);
+  } catch (err) {
+    console.error('Error loading standings:', err);
+    document.querySelector('#driver-standings tbody').innerHTML =
+      '<tr><td colspan="5" style="text-align: center; color: var(--error); padding: 2rem;">Failed to load</td></tr>';
+  }
+}
+
+function renderDriverStandings(drivers) {
+  const tbody = document.querySelector('#driver-standings tbody');
+  if (!drivers.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted);">No data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = drivers.map((d, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><strong>${d.driver_name}</strong></td>
+      <td>${d.constructor_name}</td>
+      <td><strong>${d.points}</strong></td>
+      <td>${d.wins || 0}</td>
+    </tr>
+  `).join('');
+
+  if ($.fn.DataTable.isDataTable('#driver-standings')) {
+    $('#driver-standings').DataTable().destroy();
+  }
+  $('#driver-standings').DataTable({
+    order: [[3, 'desc']],
+    paging: false,
+    searching: false,
+    info: false,
+    scrollX: true
+  });
+}
+
+function renderConstructorStandings(constructors) {
+  const tbody = document.querySelector('#constructor-standings tbody');
+  if (!constructors.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--muted);">No data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = constructors.map((c, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><strong>${c.constructor_name}</strong></td>
+      <td><strong>${c.points}</strong></td>
+      <td>${c.wins || 0}</td>
+    </tr>
+  `).join('');
+
+  if ($.fn.DataTable.isDataTable('#constructor-standings')) {
+    $('#constructor-standings').DataTable().destroy();
+  }
+  $('#constructor-standings').DataTable({
+    order: [[2, 'desc']],
+    paging: false,
+    searching: false,
+    info: false,
+    scrollX: true
+  });
+}
+
+function updateHeroMetrics(data) {
+  const drivers = data.drivers || [];
+  const constructors = data.constructors || [];
+
+  setMetric('metric-races', data.races_completed || 0);
+
+  if (drivers.length >= 1) {
+    setMetric('metric-leader', drivers[0].driver_name.split(' ').pop());
+    setMetric('metric-points', drivers[0].points);
+  }
+
+  if (constructors.length) {
+    setMetric('metric-constructor', constructors[0].constructor_name);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadStandings);
+</script>
+{% endblock %}
