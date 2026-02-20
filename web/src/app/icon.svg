@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Red parallelogram background -->
+  <polygon points="4,6 28,6 24,26 0,26" fill="#e11d1d"/>
+  <!-- White "U" letter -->
+  <text x="10" y="22" font-family="Arial Black, sans-serif" font-size="16" font-weight="900" fill="white" font-style="italic">U</text>
+</svg>
