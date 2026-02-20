@@ -152,3 +152,74 @@ export interface CircuitsResponse {
   season: number;
   circuits: Circuit[];
 }
+
+export interface CircuitInfo {
+  id: string;
+  name: string;
+  country: string;
+  city: string;
+  lat: string | null;
+  lng: string | null;
+  url: string;
+}
+
+export interface RaceInfoDetail {
+  round: number;
+  date: string;
+  race_name: string;
+  winner: string | null;
+  winner_team: string | null;
+  pole: string | null;
+  fastest_lap: string | null;
+  fastest_lap_time: string | null;
+}
+
+export interface LapRecord {
+  driver: string;
+  time: string;
+  year: number;
+}
+
+export interface HistoricalWinner {
+  year: number;
+  driver: string;
+  driver_name: string;
+  team: string;
+}
+
+export interface CircuitDriverStats {
+  driver: string;
+  races: number;
+  wins: number;
+  podiums: number;
+  points: number;
+  avg_finish: number;
+}
+
+export interface CircuitTeamStats {
+  team: string;
+  races: number;
+  wins: number;
+  podiums: number;
+  points: number;
+}
+
+export interface StrategyPattern {
+  year: number;
+  most_common_stops: number;
+  compounds_used: string[];
+}
+
+export interface CircuitDetailResponse {
+  circuit: CircuitInfo;
+  season: number;
+  race_info: RaceInfoDetail | null;
+  lap_records: {
+    all_time_fastest: LapRecord | null;
+    season_fastest: LapRecord | null;
+  };
+  historical_winners: HistoricalWinner[];
+  driver_stats: CircuitDriverStats[];
+  team_stats: CircuitTeamStats[];
+  strategy_patterns: StrategyPattern[];
+}

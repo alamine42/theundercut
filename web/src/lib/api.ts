@@ -5,6 +5,7 @@ import type {
   SimpleLapData,
   HomepageResponse,
   CircuitsResponse,
+  CircuitDetailResponse,
 } from "@/types/api";
 
 const BASE_URL = API_CONFIG.baseUrl;
@@ -117,6 +118,22 @@ export async function fetchCircuits(
 
   if (!res.ok) {
     throw new Error(`Failed to fetch circuits: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchCircuitDetail(
+  season: number,
+  circuitId: string
+): Promise<CircuitDetailResponse> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/circuits/${season}/${circuitId}`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch circuit detail: ${res.status}`);
   }
 
   return res.json();
