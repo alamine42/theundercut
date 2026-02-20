@@ -52,17 +52,40 @@ def _fetch_constructor_standings(season: int) -> List[Dict[str, Any]]:
 
 
 def _fetch_race_results(season: int, limit: int = 5) -> List[Dict[str, Any]]:
-    """Fetch recent race results to compute last-N performance."""
-    # Fetch enough results: limit races * 25 drivers per race, minimum 1000
-    result_limit = max(limit * 25, 1000)
-    url = f"{JOLPICA_BASE}/{season}/results.json?limit={result_limit}"
+    """Fetch race results with pagination (API caps at 100 per request)."""
+    all_races: Dict[str, Dict] = {}  # round -> race data
+    offset = 0
+    page_limit = 100  # API maximum per request
+
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
+            while True:
+                url = f"{JOLPICA_BASE}/{season}/results.json?limit={page_limit}&offset={offset}"
+                resp = client.get(url)
+                resp.raise_for_status()
+                data = resp.json()
 
-        return data.get("MRData", {}).get("RaceTable", {}).get("Races", [])
+                races = data.get("MRData", {}).get("RaceTable", {}).get("Races", [])
+                if not races:
+                    break
+
+                # Merge races (API may return partial race data across pages)
+                for race in races:
+                    round_num = race.get("round")
+                    if round_num in all_races:
+                        # Append results to existing race
+                        all_races[round_num]["Results"].extend(race.get("Results", []))
+                    else:
+                        all_races[round_num] = race
+
+                # Check if we've fetched all results
+                total = int(data.get("MRData", {}).get("total", 0))
+                offset += page_limit
+                if offset >= total:
+                    break
+
+        # Return races sorted by round
+        return [all_races[r] for r in sorted(all_races.keys(), key=int)]
     except Exception:
         return []
 
