@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { CircuitStrategyChart } from "@/components/charts/circuit-strategy-chart";
 import { fetchCircuitDetail } from "@/lib/api";
+import { getCountryFlag } from "@/lib/utils";
 
 export const revalidate = 300; // 5 minutes ISR
 
@@ -55,7 +56,7 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
             <div>
               <HeroTitle>{circuit.name}</HeroTitle>
               <HeroSubtitle>
-                {circuit.city}, {circuit.country}
+                {getCountryFlag(circuit.country)} {circuit.city}, {circuit.country}
               </HeroSubtitle>
               {race_info && (
                 <p className="mt-2 text-sm text-muted">

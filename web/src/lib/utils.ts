@@ -84,3 +84,46 @@ export function uniqueDrivers(
 ): string[] {
   return [...new Set(items.map((item) => item.driver))].sort();
 }
+
+// =============================================================================
+// Country Flags
+// =============================================================================
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  "Australia": "🇦🇺",
+  "Austria": "🇦🇹",
+  "Azerbaijan": "🇦🇿",
+  "Bahrain": "🇧🇭",
+  "Belgium": "🇧🇪",
+  "Brazil": "🇧🇷",
+  "Canada": "🇨🇦",
+  "China": "🇨🇳",
+  "France": "🇫🇷",
+  "Germany": "🇩🇪",
+  "Hungary": "🇭🇺",
+  "Italy": "🇮🇹",
+  "Japan": "🇯🇵",
+  "Mexico": "🇲🇽",
+  "Monaco": "🇲🇨",
+  "Netherlands": "🇳🇱",
+  "Portugal": "🇵🇹",
+  "Qatar": "🇶🇦",
+  "Russia": "🇷🇺",
+  "Saudi Arabia": "🇸🇦",
+  "Singapore": "🇸🇬",
+  "Spain": "🇪🇸",
+  "Turkey": "🇹🇷",
+  "UAE": "🇦🇪",
+  "United Arab Emirates": "🇦🇪",
+  "UK": "🇬🇧",
+  "United Kingdom": "🇬🇧",
+  "United States": "🇺🇸",
+  "USA": "🇺🇸",
+  "Vietnam": "🇻🇳",
+  "Las Vegas": "🇺🇸",
+  "Miami": "🇺🇸",
+};
+
+export function getCountryFlag(country: string): string {
+  return COUNTRY_FLAGS[country] || "🏁";
+}

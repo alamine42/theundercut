@@ -4,6 +4,7 @@ import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components
 import { YearSelector } from "@/components/ui/year-selector";
 import { fetchCircuits } from "@/lib/api";
 import { AVAILABLE_SEASONS } from "@/lib/constants";
+import { getCountryFlag } from "@/lib/utils";
 
 export const revalidate = 300; // 5 minutes ISR
 
@@ -73,7 +74,7 @@ export default async function CircuitsPage({ params }: CircuitsPageProps) {
                         {circuit.name}
                       </h2>
                       <p className="mt-1 text-sm text-muted group-hover:text-paper/70">
-                        {circuit.city}, {circuit.country}
+                        {getCountryFlag(circuit.country)} {circuit.city}, {circuit.country}
                       </p>
                     </div>
                     {circuit.round && (
