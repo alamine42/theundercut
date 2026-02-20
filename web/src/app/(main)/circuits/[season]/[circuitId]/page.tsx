@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
+import { CircuitStrategyChart } from "@/components/charts/circuit-strategy-chart";
 import { fetchCircuitDetail } from "@/lib/api";
 
 export const revalidate = 300; // 5 minutes ISR
@@ -250,44 +251,7 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
 
           {/* Strategy Patterns */}
           {strategy_patterns.length > 0 && (
-            <article className="border-2 border-ink bg-paper p-6">
-              <h2 className="relative mb-6 text-lg font-semibold tracking-tight before:absolute before:-left-6 before:top-0 before:h-full before:w-1 before:bg-accent">
-                Strategy Patterns
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {strategy_patterns.map((pattern) => (
-                  <div key={pattern.year} className="border border-border-light p-4">
-                    <p className="text-xs text-muted uppercase tracking-wide mb-2">{pattern.year}</p>
-                    <p className="font-semibold">
-                      {pattern.most_common_stops} stop{pattern.most_common_stops !== 1 ? "s" : ""}
-                    </p>
-                    <div className="mt-2 flex gap-2">
-                      {pattern.compounds_used.map((compound) => (
-                        <span
-                          key={compound}
-                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                            compound === "SOFT"
-                              ? "bg-[#c41e3a] text-white"
-                              : compound === "MEDIUM"
-                              ? "bg-[#f5d547] text-ink"
-                              : compound === "HARD"
-                              ? "bg-[#eeeeee] text-ink"
-                              : compound === "INTERMEDIATE"
-                              ? "bg-[#43b02a] text-white"
-                              : compound === "WET"
-                              ? "bg-[#0067b1] text-white"
-                              : "bg-muted text-white"
-                          }`}
-                          title={compound}
-                        >
-                          {compound.charAt(0)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </article>
+            <CircuitStrategyChart patterns={strategy_patterns} circuitName={circuit.name} />
           )}
 
           {/* Link to trends */}
