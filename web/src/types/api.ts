@@ -223,3 +223,25 @@ export interface CircuitDetailResponse {
   team_stats: CircuitTeamStats[];
   strategy_patterns: StrategyPattern[];
 }
+
+// =============================================================================
+// Circuit Trends Data
+// =============================================================================
+
+export interface CircuitTrend {
+  year: number;
+  pole_driver: string | null;
+  pole_time: string | null;
+  pole_time_ms: number | null;
+  fastest_lap_driver: string | null;
+  fastest_lap_time: string | null;
+  fastest_lap_ms: number | null;
+  winner: string | null;
+  winner_team: string | null;
+  winner_time_ms: number | null;
+}
+
+export interface CircuitTrendsResponse {
+  circuit_id: string;
+  trends: CircuitTrend[];
+}

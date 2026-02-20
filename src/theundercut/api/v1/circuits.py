@@ -400,3 +400,155 @@ def get_circuit_detail(
 
     redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(payload))
     return payload
+
+
+def _parse_lap_time_to_ms(time_str: str) -> Optional[int]:
+    """Parse lap time string (e.g., '1:23.456') to milliseconds."""
+    if not time_str:
+        return None
+    try:
+        # Handle format "1:23.456" or "23.456"
+        if ":" in time_str:
+            parts = time_str.split(":")
+            minutes = int(parts[0])
+            seconds = float(parts[1])
+            return int((minutes * 60 + seconds) * 1000)
+        else:
+            return int(float(time_str) * 1000)
+    except (ValueError, IndexError):
+        return None
+
+
+def _fetch_circuit_qualifying_history(circuit_id: str) -> List[Dict[str, Any]]:
+    """Fetch historical qualifying results for a circuit."""
+    all_races: List[Dict] = []
+    offset = 0
+    page_limit = 100
+
+    try:
+        with httpx.Client(timeout=15) as client:
+            while True:
+                url = f"{JOLPICA_BASE}/circuits/{circuit_id}/qualifying.json?limit={page_limit}&offset={offset}"
+                resp = client.get(url)
+                resp.raise_for_status()
+                data = resp.json()
+
+                races = data.get("MRData", {}).get("RaceTable", {}).get("Races", [])
+                if not races:
+                    break
+
+                all_races.extend(races)
+                total = int(data.get("MRData", {}).get("total", 0))
+                offset += page_limit
+                if offset >= total:
+                    break
+
+        return all_races
+    except Exception:
+        return []
+
+
+@router.get("/trends/{circuit_id}")
+def get_circuit_trends(circuit_id: str) -> Dict[str, Any]:
+    """
+    Get lap time evolution across seasons for a circuit.
+
+    Returns pole times, fastest race laps, and winner info per season.
+    """
+    cache_key = f"circuit_trends:v1:{circuit_id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    # Fetch historical race results
+    race_results = _fetch_circuit_results(circuit_id, limit=50)
+
+    # Fetch historical qualifying
+    qualifying_results = _fetch_circuit_qualifying_history(circuit_id)
+
+    # Build qualifying lookup by season
+    qual_by_season: Dict[str, Dict] = {}
+    for qual in qualifying_results:
+        season = qual.get("season")
+        qual_results = qual.get("QualifyingResults", [])
+        if qual_results:
+            pole = qual_results[0]
+            # Get best qualifying time (Q3 > Q2 > Q1)
+            pole_time = pole.get("Q3") or pole.get("Q2") or pole.get("Q1")
+            qual_by_season[season] = {
+                "pole_driver": pole.get("Driver", {}).get("code"),
+                "pole_time": pole_time,
+                "pole_time_ms": _parse_lap_time_to_ms(pole_time),
+            }
+
+    # Build trends from race results
+    trends = []
+    for race in race_results:
+        season = race.get("season")
+        if not season:
+            continue
+
+        results = race.get("Results", [])
+        if not results:
+            continue
+
+        winner = results[0]
+
+        # Find fastest lap
+        fastest_lap_time = None
+        fastest_lap_ms = None
+        fastest_lap_driver = None
+        for result in results:
+            fl = result.get("FastestLap", {})
+            if fl.get("rank") == "1":
+                fastest_lap_time = fl.get("Time", {}).get("time")
+                fastest_lap_ms = _parse_lap_time_to_ms(fastest_lap_time)
+                fastest_lap_driver = result.get("Driver", {}).get("code")
+                break
+
+        # Get pole info
+        qual_info = qual_by_season.get(season, {})
+
+        # Parse winner time (total race time)
+        winner_time = winner.get("Time", {}).get("time")
+        winner_time_ms = None
+        if winner_time:
+            # Race time format varies - could be "1:23:45.678" or "+1 Lap" etc.
+            try:
+                if ":" in winner_time and "Lap" not in winner_time:
+                    parts = winner_time.split(":")
+                    if len(parts) == 3:
+                        hours = int(parts[0])
+                        minutes = int(parts[1])
+                        seconds = float(parts[2])
+                        winner_time_ms = int((hours * 3600 + minutes * 60 + seconds) * 1000)
+                    elif len(parts) == 2:
+                        minutes = int(parts[0])
+                        seconds = float(parts[1])
+                        winner_time_ms = int((minutes * 60 + seconds) * 1000)
+            except (ValueError, IndexError):
+                pass
+
+        trends.append({
+            "year": int(season),
+            "pole_driver": qual_info.get("pole_driver"),
+            "pole_time": qual_info.get("pole_time"),
+            "pole_time_ms": qual_info.get("pole_time_ms"),
+            "fastest_lap_driver": fastest_lap_driver,
+            "fastest_lap_time": fastest_lap_time,
+            "fastest_lap_ms": fastest_lap_ms,
+            "winner": winner.get("Driver", {}).get("code"),
+            "winner_team": winner.get("Constructor", {}).get("name"),
+            "winner_time_ms": winner_time_ms,
+        })
+
+    # Sort by year descending
+    trends.sort(key=lambda t: t["year"], reverse=True)
+
+    payload = {
+        "circuit_id": circuit_id,
+        "trends": trends,
+    }
+
+    redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(payload))
+    return payload

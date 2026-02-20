@@ -6,6 +6,7 @@ import type {
   HomepageResponse,
   CircuitsResponse,
   CircuitDetailResponse,
+  CircuitTrendsResponse,
 } from "@/types/api";
 
 const BASE_URL = API_CONFIG.baseUrl;
@@ -134,6 +135,21 @@ export async function fetchCircuitDetail(
 
   if (!res.ok) {
     throw new Error(`Failed to fetch circuit detail: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchCircuitTrends(
+  circuitId: string
+): Promise<CircuitTrendsResponse> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/circuits/trends/${circuitId}`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch circuit trends: ${res.status}`);
   }
 
   return res.json();
