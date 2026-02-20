@@ -8,6 +8,7 @@ import { DEFAULT_SEASON } from "@/lib/constants";
 const navLinks = [
   { href: "/", label: "Home" },
   { href: `/standings/${DEFAULT_SEASON}`, label: "Standings" },
+  { href: `/circuits/${DEFAULT_SEASON}`, label: "Circuits" },
   { href: `/analytics/${DEFAULT_SEASON}/1`, label: "Analytics" },
 ];
 
