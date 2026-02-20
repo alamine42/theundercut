@@ -133,3 +133,22 @@ export interface HomepageResponse {
   latest_race: LatestRace | null;
   podium: PodiumEntry[];
 }
+
+// =============================================================================
+// Circuit Data
+// =============================================================================
+
+export interface Circuit {
+  circuit_id: string;
+  name: string;
+  country: string;
+  city: string;
+  round: number | null;
+  race_name: string;
+  date: string;
+}
+
+export interface CircuitsResponse {
+  season: number;
+  circuits: Circuit[];
+}
