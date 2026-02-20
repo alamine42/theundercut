@@ -1,5 +1,21 @@
 services:
-  # 1️⃣ Web (FastAPI)
+  # 0️⃣ Frontend (Next.js)
+  - type: web
+    name: theundercut-frontend
+    runtime: node
+    plan: free
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: FASTAPI_URL
+        value: https://theundercut-web.onrender.com
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /
+    autoDeploy: true
+
+  # 1️⃣ API (FastAPI)
   - type: web
     name: theundercut-web
     env: docker
