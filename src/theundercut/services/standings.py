@@ -53,7 +53,9 @@ def _fetch_constructor_standings(season: int) -> List[Dict[str, Any]]:
 
 def _fetch_race_results(season: int, limit: int = 5) -> List[Dict[str, Any]]:
     """Fetch recent race results to compute last-N performance."""
-    url = f"{JOLPICA_BASE}/{season}/results.json?limit={limit * 25}"
+    # Fetch enough results: limit races * 25 drivers per race, minimum 1000
+    result_limit = max(limit * 25, 1000)
+    url = f"{JOLPICA_BASE}/{season}/results.json?limit={result_limit}"
     try:
         with httpx.Client(timeout=15) as client:
             resp = client.get(url)
@@ -189,6 +191,8 @@ def fetch_season_standings(db: Session, season: int) -> Dict[str, Any]:
         pts_last_5 = _compute_last_n_points(races, driver_code, 5)
         metrics = _compute_driver_metrics(races, driver_code)
 
+        # Use races_completed for points_per_race (more reliable than counting from results API)
+        driver_races = metrics["total_races"] if metrics["total_races"] > 0 else races_completed
         drivers.append({
             "driver_code": driver_code,
             "driver_name": f"{d.get('Driver', {}).get('givenName', '')} {d.get('Driver', {}).get('familyName', '')}".strip(),
@@ -196,7 +200,7 @@ def fetch_season_standings(db: Session, season: int) -> Dict[str, Any]:
             "points": int(points),
             "wins": wins,
             "pts_last_5": pts_last_5,
-            "points_per_race": round(points / metrics["total_races"], 1) if metrics["total_races"] else 0,
+            "points_per_race": round(points / driver_races, 1) if driver_races else 0,
             "points_won_lost": 0,  # TODO: compute from expected vs actual
             "alt_points": 0,  # TODO: compute alternate scoring
             **metrics,
