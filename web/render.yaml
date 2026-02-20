@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: theundercut-web
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: FASTAPI_URL
+        sync: false
+      - key: NEXT_PUBLIC_GA_ID
+        sync: false
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /
+    autoDeploy: true
