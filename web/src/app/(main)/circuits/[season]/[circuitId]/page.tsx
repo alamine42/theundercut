@@ -166,8 +166,8 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
-                    {historical_winners.map((winner) => (
-                      <tr key={winner.year} className="hover:bg-ink hover:text-paper transition-colors">
+                    {historical_winners.map((winner, index) => (
+                      <tr key={`${winner.year}-${winner.driver}-${index}`} className="hover:bg-ink hover:text-paper transition-colors">
                         <td className="px-6 py-4 text-sm font-semibold">{winner.year}</td>
                         <td className="px-6 py-4 text-sm">
                           <span className="font-semibold">{winner.driver}</span>
