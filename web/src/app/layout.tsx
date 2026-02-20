@@ -38,7 +38,9 @@ export default function RootLayout({
       >
         <Providers>
           {children}
-          {process.env.NODE_ENV === "development" && <Agentation />}
+          {process.env.NODE_ENV === "development" && (
+            <Agentation endpoint="http://localhost:4747" />
+          )}
         </Providers>
       </body>
     </html>
