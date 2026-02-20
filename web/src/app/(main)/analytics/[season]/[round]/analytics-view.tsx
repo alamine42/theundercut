@@ -5,12 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
+import { RaceSelector } from "@/components/ui/race-selector";
+import { useRouter } from "next/navigation";
 import { LapTimeChart } from "@/components/charts/lap-time-chart";
 import { PaceComparisonChart } from "@/components/charts/pace-comparison-chart";
 import { StintTimelineChart } from "@/components/charts/stint-timeline-chart";
 import { DriverGradesRadar } from "@/components/charts/driver-grades-radar";
 import { clientFetchAnalytics } from "@/lib/api";
-import { getDriverColor, getRaceName } from "@/lib/constants";
+import { getDriverColor, getRaceName, AVAILABLE_SEASONS } from "@/lib/constants";
 import { uniqueDrivers } from "@/lib/utils";
 import type { AnalyticsResponse } from "@/types/api";
 
@@ -21,7 +23,12 @@ interface AnalyticsViewProps {
 }
 
 export function AnalyticsView({ initialData, season, round }: AnalyticsViewProps) {
+  const router = useRouter();
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
+
+  const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    router.push(`/analytics/${e.target.value}/1`);
+  };
 
   // Use React Query for client-side filtering
   const { data } = useQuery({
@@ -53,10 +60,33 @@ export function AnalyticsView({ initialData, season, round }: AnalyticsViewProps
     <>
       <Hero>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <HeroTitle>{getRaceName(season, round)}</HeroTitle>
-          <HeroSubtitle>
-            {season} Season &middot; Round {round} &middot; Lap times, strategy, and performance grades
-          </HeroSubtitle>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <HeroTitle>{getRaceName(season, round)}</HeroTitle>
+              <HeroSubtitle>
+                {season} Season &middot; Round {round} &middot; Lap times, strategy, and performance grades
+              </HeroSubtitle>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={season}
+                onChange={handleYearChange}
+                className="h-10 px-3 border-2 border-ink bg-paper text-ink font-mono text-sm
+                           focus:outline-none focus:ring-2 focus:ring-ink cursor-pointer
+                           hover:bg-ink hover:text-paper transition-colors"
+              >
+                {AVAILABLE_SEASONS.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+              <RaceSelector
+                currentRound={round}
+                season={season}
+              />
+            </div>
+          </div>
 
           <HeroStats>
             <HeroStat label="Season" value={season} />
