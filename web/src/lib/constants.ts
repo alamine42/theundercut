@@ -148,3 +148,64 @@ export const AVAILABLE_SEASONS = [2025, 2024];
 // =============================================================================
 
 export const DEFAULT_SEASON = AVAILABLE_SEASONS[0];
+
+// =============================================================================
+// Race Names by Season and Round
+// =============================================================================
+
+const RACE_NAMES: Record<string, string> = {
+  // 2024 season
+  "2024-1": "Bahrain Grand Prix",
+  "2024-2": "Saudi Arabian Grand Prix",
+  "2024-3": "Australian Grand Prix",
+  "2024-4": "Japanese Grand Prix",
+  "2024-5": "Chinese Grand Prix",
+  "2024-6": "Miami Grand Prix",
+  "2024-7": "Emilia Romagna Grand Prix",
+  "2024-8": "Monaco Grand Prix",
+  "2024-9": "Canadian Grand Prix",
+  "2024-10": "Spanish Grand Prix",
+  "2024-11": "Austrian Grand Prix",
+  "2024-12": "British Grand Prix",
+  "2024-13": "Hungarian Grand Prix",
+  "2024-14": "Belgian Grand Prix",
+  "2024-15": "Dutch Grand Prix",
+  "2024-16": "Italian Grand Prix",
+  "2024-17": "Azerbaijan Grand Prix",
+  "2024-18": "Singapore Grand Prix",
+  "2024-19": "United States Grand Prix",
+  "2024-20": "Mexico City Grand Prix",
+  "2024-21": "São Paulo Grand Prix",
+  "2024-22": "Las Vegas Grand Prix",
+  "2024-23": "Qatar Grand Prix",
+  "2024-24": "Abu Dhabi Grand Prix",
+  // 2025 season
+  "2025-1": "Australian Grand Prix",
+  "2025-2": "Chinese Grand Prix",
+  "2025-3": "Japanese Grand Prix",
+  "2025-4": "Bahrain Grand Prix",
+  "2025-5": "Saudi Arabian Grand Prix",
+  "2025-6": "Miami Grand Prix",
+  "2025-7": "Emilia Romagna Grand Prix",
+  "2025-8": "Monaco Grand Prix",
+  "2025-9": "Spanish Grand Prix",
+  "2025-10": "Canadian Grand Prix",
+  "2025-11": "Austrian Grand Prix",
+  "2025-12": "British Grand Prix",
+  "2025-13": "Belgian Grand Prix",
+  "2025-14": "Hungarian Grand Prix",
+  "2025-15": "Dutch Grand Prix",
+  "2025-16": "Italian Grand Prix",
+  "2025-17": "Azerbaijan Grand Prix",
+  "2025-18": "Singapore Grand Prix",
+  "2025-19": "United States Grand Prix",
+  "2025-20": "Mexico City Grand Prix",
+  "2025-21": "São Paulo Grand Prix",
+  "2025-22": "Las Vegas Grand Prix",
+  "2025-23": "Qatar Grand Prix",
+  "2025-24": "Abu Dhabi Grand Prix",
+};
+
+export function getRaceName(season: number, round: number): string {
+  return RACE_NAMES[`${season}-${round}`] || `Round ${round}`;
+}

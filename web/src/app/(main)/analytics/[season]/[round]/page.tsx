@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { fetchAnalytics } from "@/lib/api";
+import { getRaceName } from "@/lib/constants";
 import { AnalyticsView } from "./analytics-view";
 
 export const revalidate = 300; // 5 minutes ISR
@@ -10,9 +11,10 @@ interface AnalyticsPageProps {
 
 export async function generateMetadata({ params }: AnalyticsPageProps) {
   const { season, round } = await params;
+  const raceName = getRaceName(parseInt(season, 10), parseInt(round, 10));
   return {
-    title: `Race ${round} Analytics - ${season} | The Undercut`,
-    description: `F1 ${season} Round ${round} race analytics - lap times, stint strategy, and driver grades`,
+    title: `${raceName} Analytics - ${season} | The Undercut`,
+    description: `F1 ${season} ${raceName} race analytics - lap times, stint strategy, and driver grades`,
   };
 }
 

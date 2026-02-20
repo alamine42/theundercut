@@ -10,7 +10,7 @@ import { PaceComparisonChart } from "@/components/charts/pace-comparison-chart";
 import { StintTimelineChart } from "@/components/charts/stint-timeline-chart";
 import { DriverGradesRadar } from "@/components/charts/driver-grades-radar";
 import { clientFetchAnalytics } from "@/lib/api";
-import { getDriverColor } from "@/lib/constants";
+import { getDriverColor, getRaceName } from "@/lib/constants";
 import { uniqueDrivers } from "@/lib/utils";
 import type { AnalyticsResponse } from "@/types/api";
 
@@ -53,9 +53,9 @@ export function AnalyticsView({ initialData, season, round }: AnalyticsViewProps
     <>
       <Hero>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <HeroTitle>Round {round} Analytics</HeroTitle>
+          <HeroTitle>{getRaceName(season, round)}</HeroTitle>
           <HeroSubtitle>
-            {season} Season - Lap times, strategy, and performance grades
+            {season} Season &middot; Round {round} &middot; Lap times, strategy, and performance grades
           </HeroSubtitle>
 
           <HeroStats>
