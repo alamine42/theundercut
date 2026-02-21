@@ -127,6 +127,51 @@ def _compute_constructor_last_n_points(races: List[Dict], constructor_id: str, n
     return int(points)
 
 
+def _extract_last_race_results(races: List[Dict], top_n: int = 10) -> Dict[str, Any] | None:
+    """Extract top N results from the most recent race."""
+    if not races:
+        return None
+
+    last_race = races[-1]
+    results = last_race.get("Results", [])[:top_n]
+
+    race_results = []
+    for result in results:
+        driver = result.get("Driver", {})
+        constructor = result.get("Constructor", {})
+        grid = int(result.get("grid", 0))
+        position = int(result.get("position", 0)) if result.get("position", "").isdigit() else 0
+        positions_gained = (grid - position) if grid > 0 and position > 0 else 0
+
+        # Determine status
+        status = result.get("status", "")
+        if status in ("Finished", "+1 Lap", "+2 Laps", "+3 Laps"):
+            display_status = status
+        elif "Lap" in status:
+            display_status = status
+        else:
+            display_status = "DNF" if position == 0 or status != "Finished" else "Finished"
+
+        race_results.append({
+            "position": position,
+            "driver_code": driver.get("code", "???"),
+            "driver_name": f"{driver.get('givenName', '')} {driver.get('familyName', '')}".strip(),
+            "team": constructor.get("name", "Unknown"),
+            "grid": grid,
+            "points": int(float(result.get("points", 0))),
+            "positions_gained": positions_gained,
+            "status": display_status,
+        })
+
+    return {
+        "round": int(last_race.get("round", 0)),
+        "race_name": last_race.get("raceName", ""),
+        "date": last_race.get("date", ""),
+        "circuit": last_race.get("Circuit", {}).get("circuitName", ""),
+        "results": race_results,
+    }
+
+
 def _compute_driver_metrics(races: List[Dict], driver_code: str) -> Dict[str, Any]:
     """Compute per-driver metrics from race history."""
     total_races = 0
@@ -249,6 +294,9 @@ def fetch_season_standings(db: Session, season: int) -> Dict[str, Any]:
             "alt_points": 0,
         })
 
+    # Extract last race results
+    last_race_results = _extract_last_race_results(races, top_n=10)
+
     return {
         "season": season,
         "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -256,4 +304,5 @@ def fetch_season_standings(db: Session, season: int) -> Dict[str, Any]:
         "races_remaining": races_remaining,
         "drivers": drivers,
         "constructors": constructors,
+        "last_race": last_race_results,
     }

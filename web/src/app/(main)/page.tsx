@@ -19,6 +19,25 @@ async function getHomeData() {
   }
 }
 
+function formatRaceDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function PositionChange({ gained }: { gained: number }) {
+  if (gained === 0) {
+    return <span className="text-muted">—</span>;
+  }
+  if (gained > 0) {
+    return <span className="text-success">+{gained} ↑</span>;
+  }
+  return <span className="text-error">{gained} ↓</span>;
+}
+
 export default async function HomePage() {
   const { standings, error } = await getHomeData();
 
@@ -26,6 +45,7 @@ export default async function HomePage() {
   const topConstructors = standings?.constructors.slice(0, 5) ?? [];
   const racesCompleted = standings?.races_completed ?? 0;
   const racesRemaining = standings?.races_remaining ?? 0;
+  const lastRace = standings?.last_race ?? null;
 
   return (
     <>
@@ -62,7 +82,60 @@ export default async function HomePage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-8 lg:grid-cols-2">
+            <div className="space-y-8">
+              {/* Last Race Results */}
+              {lastRace && lastRace.results.length > 0 && (
+                <Card accent>
+                  <CardHeader>
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <CardTitle>{lastRace.race_name} Results</CardTitle>
+                      <span className="text-sm text-muted">{formatRaceDate(lastRace.date)}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Pos</TableHead>
+                            <TableHead>Driver</TableHead>
+                            <TableHead>Team</TableHead>
+                            <TableHead className="text-center">Grid</TableHead>
+                            <TableHead className="text-right">Points</TableHead>
+                            <TableHead className="text-center">+/-</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lastRace.results.map((result) => (
+                            <TableRow key={result.driver_code}>
+                              <TableCell className="font-semibold">{result.position}</TableCell>
+                              <TableCell className="font-semibold">{result.driver_code}</TableCell>
+                              <TableCell><TeamWithLogo team={result.team} /></TableCell>
+                              <TableCell className="text-center text-muted">{result.grid}</TableCell>
+                              <TableCell className="text-right font-semibold">{result.points}</TableCell>
+                              <TableCell className="text-center">
+                                <PositionChange gained={result.positions_gained} />
+                              </TableCell>
+                              <TableCell className="text-muted">{result.status}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="mt-4">
+                      <Link href={`/analytics/${DEFAULT_SEASON}/${lastRace.round}`}>
+                        <Button variant="ghost" size="sm">
+                          View race analytics →
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Championship Standings */}
+              <div className="grid gap-8 lg:grid-cols-2">
               {/* Driver Standings */}
               <Card accent>
                 <CardHeader>
@@ -134,6 +207,7 @@ export default async function HomePage() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
             </div>
           )}
         </div>

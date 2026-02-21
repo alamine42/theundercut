@@ -92,6 +92,27 @@ export interface ConstructorStanding {
   alt_points: number;
 }
 
+// Last Race Result Entry
+export interface LastRaceResultEntry {
+  position: number;
+  driver_code: string;
+  driver_name: string;
+  team: string;
+  grid: number;
+  points: number;
+  positions_gained: number;
+  status: string;
+}
+
+// Last Race Results
+export interface LastRaceResults {
+  round: number;
+  race_name: string;
+  date: string;
+  circuit: string;
+  results: LastRaceResultEntry[];
+}
+
 export interface StandingsResponse {
   season: number;
   last_updated: string;
@@ -99,6 +120,7 @@ export interface StandingsResponse {
   races_remaining: number;
   drivers: DriverStanding[];
   constructors: ConstructorStanding[];
+  last_race: LastRaceResults | null;
 }
 
 // =============================================================================
