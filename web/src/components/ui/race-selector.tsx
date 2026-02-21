@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { getRaceName } from "@/lib/constants";
+import { getRaceShortname } from "@/lib/constants";
 
 interface RaceSelectorProps {
   currentRound: number;
@@ -30,7 +30,7 @@ export function RaceSelector({ currentRound, season, maxRounds = 24 }: RaceSelec
     >
       {rounds.map((round) => (
         <option key={round} value={round}>
-          R{round}: {getRaceName(season, round)}
+          R{round}: {getRaceShortname(season, round)}
         </option>
       ))}
     </select>

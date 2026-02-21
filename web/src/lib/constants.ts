@@ -150,6 +150,101 @@ export const AVAILABLE_SEASONS = [2025, 2024];
 export const DEFAULT_SEASON = AVAILABLE_SEASONS[0];
 
 // =============================================================================
+// Circuit Shortnames
+// =============================================================================
+
+export const CIRCUIT_SHORTNAMES: Record<string, string> = {
+  albert_park: "Albert Park",
+  americas: "COTA",
+  bahrain: "Bahrain",
+  baku: "Baku",
+  catalunya: "Barcelona",
+  hungaroring: "Hungary",
+  imola: "Imola",
+  interlagos: "Interlagos",
+  jeddah: "Jeddah",
+  losail: "Qatar",
+  marina_bay: "Singapore",
+  miami: "Miami",
+  monaco: "Monaco",
+  monza: "Monza",
+  red_bull_ring: "Austria",
+  rodriguez: "Mexico City",
+  shanghai: "China",
+  silverstone: "Silverstone",
+  spa: "Spa",
+  suzuka: "Suzuka",
+  vegas: "Vegas",
+  villeneuve: "Montreal",
+  yas_marina: "Abu Dhabi",
+  zandvoort: "Zandvoort",
+};
+
+export function getCircuitShortname(circuitId: string): string {
+  return CIRCUIT_SHORTNAMES[circuitId] || circuitId;
+}
+
+// Round to Circuit ID mapping by season
+const ROUND_TO_CIRCUIT: Record<string, string> = {
+  // 2024 season
+  "2024-1": "bahrain",
+  "2024-2": "jeddah",
+  "2024-3": "albert_park",
+  "2024-4": "suzuka",
+  "2024-5": "shanghai",
+  "2024-6": "miami",
+  "2024-7": "imola",
+  "2024-8": "monaco",
+  "2024-9": "villeneuve",
+  "2024-10": "catalunya",
+  "2024-11": "red_bull_ring",
+  "2024-12": "silverstone",
+  "2024-13": "hungaroring",
+  "2024-14": "spa",
+  "2024-15": "zandvoort",
+  "2024-16": "monza",
+  "2024-17": "baku",
+  "2024-18": "marina_bay",
+  "2024-19": "americas",
+  "2024-20": "rodriguez",
+  "2024-21": "interlagos",
+  "2024-22": "vegas",
+  "2024-23": "losail",
+  "2024-24": "yas_marina",
+  // 2025 season
+  "2025-1": "albert_park",
+  "2025-2": "shanghai",
+  "2025-3": "suzuka",
+  "2025-4": "bahrain",
+  "2025-5": "jeddah",
+  "2025-6": "miami",
+  "2025-7": "imola",
+  "2025-8": "monaco",
+  "2025-9": "catalunya",
+  "2025-10": "villeneuve",
+  "2025-11": "red_bull_ring",
+  "2025-12": "silverstone",
+  "2025-13": "spa",
+  "2025-14": "hungaroring",
+  "2025-15": "zandvoort",
+  "2025-16": "monza",
+  "2025-17": "baku",
+  "2025-18": "marina_bay",
+  "2025-19": "americas",
+  "2025-20": "rodriguez",
+  "2025-21": "interlagos",
+  "2025-22": "vegas",
+  "2025-23": "losail",
+  "2025-24": "yas_marina",
+};
+
+export function getRaceShortname(season: number, round: number): string {
+  const circuitId = ROUND_TO_CIRCUIT[`${season}-${round}`];
+  if (!circuitId) return `Round ${round}`;
+  return CIRCUIT_SHORTNAMES[circuitId] || `Round ${round}`;
+}
+
+// =============================================================================
 // Race Names by Season and Round
 // =============================================================================
 

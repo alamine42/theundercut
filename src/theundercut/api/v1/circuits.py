@@ -17,6 +17,39 @@ from theundercut.adapters.redis_cache import redis_client
 JOLPICA_BASE = "https://api.jolpi.ca/ergast/f1"
 CACHE_TTL_SECONDS = 600  # 10 minutes
 
+# Circuit shortnames for display
+CIRCUIT_SHORTNAMES: Dict[str, str] = {
+    "albert_park": "Albert Park",
+    "americas": "COTA",
+    "bahrain": "Bahrain",
+    "baku": "Baku",
+    "catalunya": "Barcelona",
+    "hungaroring": "Hungary",
+    "imola": "Imola",
+    "interlagos": "Interlagos",
+    "jeddah": "Jeddah",
+    "losail": "Qatar",
+    "marina_bay": "Singapore",
+    "miami": "Miami",
+    "monaco": "Monaco",
+    "monza": "Monza",
+    "red_bull_ring": "Austria",
+    "rodriguez": "Mexico City",
+    "shanghai": "China",
+    "silverstone": "Silverstone",
+    "spa": "Spa",
+    "suzuka": "Suzuka",
+    "vegas": "Vegas",
+    "villeneuve": "Montreal",
+    "yas_marina": "Abu Dhabi",
+    "zandvoort": "Zandvoort",
+}
+
+
+def get_circuit_shortname(circuit_id: str) -> str:
+    """Get the shortname for a circuit."""
+    return CIRCUIT_SHORTNAMES.get(circuit_id, circuit_id)
+
 router = APIRouter(
     prefix="/api/v1/circuits",
     tags=["circuits"],
@@ -280,6 +313,7 @@ def get_circuits(season: int) -> Dict[str, Any]:
         circuits.append({
             "circuit_id": circuit_id,
             "name": circuit.get("circuitName", ""),
+            "shortname": get_circuit_shortname(circuit_id),
             "country": circuit.get("Location", {}).get("country", ""),
             "city": circuit.get("Location", {}).get("locality", ""),
             "round": race_info.get("round"),
@@ -532,6 +566,7 @@ def get_circuit_detail(
         "circuit": {
             "id": circuit_id,
             "name": circuit_info.get("circuitName", ""),
+            "shortname": get_circuit_shortname(circuit_id),
             "country": circuit_info.get("Location", {}).get("country", ""),
             "city": circuit_info.get("Location", {}).get("locality", ""),
             "lat": circuit_info.get("Location", {}).get("lat"),

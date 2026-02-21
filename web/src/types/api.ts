@@ -141,6 +141,7 @@ export interface HomepageResponse {
 export interface Circuit {
   circuit_id: string;
   name: string;
+  shortname: string;
   country: string;
   city: string;
   round: number | null;
@@ -156,6 +157,7 @@ export interface CircuitsResponse {
 export interface CircuitInfo {
   id: string;
   name: string;
+  shortname: string;
   country: string;
   city: string;
   lat: string | null;
