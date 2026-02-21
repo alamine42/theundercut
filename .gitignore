@@ -2,7 +2,15 @@ __pycache__/
 *.pyc
 .cache/
 .env
+.env.local
 venv
 
 # local dev db
 *.db
+
+# local data/cache
+data/
+
+# playwright test artifacts
+web/playwright-report/
+web/test-results/
