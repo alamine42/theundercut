@@ -101,11 +101,14 @@ test.describe("Circuit Detail Page", () => {
   test("back link returns to circuit list", async ({ page }) => {
     await page.goto("/circuits/2024/silverstone");
 
-    // Click back link
-    await page.getByRole("link", { name: /Back to 2024 Circuits/ }).click();
+    // Click back link and wait for navigation
+    await Promise.all([
+      page.waitForURL(/\/circuits\/2024$/),
+      page.getByRole("link", { name: /Back to 2024 Circuits/ }).click(),
+    ]);
 
-    // Should be back on list page
-    await expect(page).toHaveURL(/\/circuits\/2024$/);
+    // Verify we're on the list page
+    await expect(page.getByRole("heading", { name: /2024 Circuits/ })).toBeVisible();
   });
 });
 
