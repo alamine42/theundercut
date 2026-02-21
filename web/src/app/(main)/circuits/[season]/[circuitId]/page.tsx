@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { CircuitStrategyChart } from "@/components/charts/circuit-strategy-chart";
+import { TeamWithLogo } from "@/components/ui/team-logo";
 import { fetchCircuitDetail } from "@/lib/api";
 import { getCountryFlag } from "@/lib/utils";
 
@@ -173,7 +174,7 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
                           <span className="font-semibold">{winner.driver}</span>
                           <span className="ml-2 text-muted">{winner.driver_name}</span>
                         </td>
-                        <td className="px-6 py-4 text-sm">{winner.team}</td>
+                        <td className="px-6 py-4 text-sm"><TeamWithLogo team={winner.team} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -237,7 +238,7 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
                   <tbody className="divide-y divide-border-light">
                     {team_stats.map((team) => (
                       <tr key={team.team} className="hover:bg-ink hover:text-paper transition-colors">
-                        <td className="px-6 py-4 text-sm font-semibold">{team.team}</td>
+                        <td className="px-6 py-4 text-sm font-semibold"><TeamWithLogo team={team.team} /></td>
                         <td className="px-6 py-4 text-sm text-center">{team.races}</td>
                         <td className="px-6 py-4 text-sm text-center font-semibold">{team.wins}</td>
                         <td className="px-6 py-4 text-sm text-center">{team.podiums}</td>

@@ -3,6 +3,7 @@ import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { TeamWithLogo } from "@/components/ui/team-logo";
 import { fetchStandings } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 
@@ -82,7 +83,7 @@ export default async function HomePage() {
                         <TableRow key={driver.driver_code}>
                           <TableCell className="font-semibold">{idx + 1}</TableCell>
                           <TableCell>{driver.driver_code}</TableCell>
-                          <TableCell className="text-muted">{driver.constructor_name}</TableCell>
+                          <TableCell className="text-muted"><TeamWithLogo team={driver.constructor_name} /></TableCell>
                           <TableCell className="text-right font-semibold">{driver.points}</TableCell>
                         </TableRow>
                       ))}
@@ -117,7 +118,7 @@ export default async function HomePage() {
                       {topConstructors.map((constructor, idx) => (
                         <TableRow key={constructor.constructor_id}>
                           <TableCell className="font-semibold">{idx + 1}</TableCell>
-                          <TableCell>{constructor.constructor_name}</TableCell>
+                          <TableCell><TeamWithLogo team={constructor.constructor_name} /></TableCell>
                           <TableCell className="text-right font-semibold">{constructor.points}</TableCell>
                           <TableCell className="text-right text-muted">{constructor.wins}</TableCell>
                         </TableRow>

@@ -50,6 +50,39 @@ export const TEAM_COLORS: Record<string, string> = {
   Haas: "#B6BABD",
 } as const;
 
+// Team name to ID mapping (for logo paths)
+export const TEAM_IDS: Record<string, string> = {
+  "Red Bull": "red_bull",
+  "Red Bull Racing": "red_bull",
+  Mercedes: "mercedes",
+  "Mercedes-AMG Petronas": "mercedes",
+  Ferrari: "ferrari",
+  "Scuderia Ferrari": "ferrari",
+  McLaren: "mclaren",
+  "McLaren F1 Team": "mclaren",
+  "Aston Martin": "aston_martin",
+  "Aston Martin Aramco": "aston_martin",
+  Alpine: "alpine",
+  "Alpine F1 Team": "alpine",
+  Williams: "williams",
+  "Williams Racing": "williams",
+  RB: "rb",
+  "Visa Cash App RB": "rb",
+  "Racing Bulls": "rb",
+  "AlphaTauri": "rb",
+  Sauber: "sauber",
+  "Kick Sauber": "sauber",
+  "Stake F1 Team": "sauber",
+  "Alfa Romeo": "sauber",
+  Haas: "haas",
+  "Haas F1 Team": "haas",
+  "MoneyGram Haas": "haas",
+} as const;
+
+export function getTeamId(teamName: string): string {
+  return TEAM_IDS[teamName] || teamName.toLowerCase().replace(/\s+/g, "_");
+}
+
 // =============================================================================
 // Driver to Team Mapping (2024)
 // =============================================================================

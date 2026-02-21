@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { TeamWithLogo } from "@/components/ui/team-logo";
 import { YearSelector } from "@/components/ui/year-selector";
 import { fetchStandings } from "@/lib/api";
 import { AVAILABLE_SEASONS } from "@/lib/constants";
@@ -92,7 +93,7 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
                         <TableRow key={driver.driver_code}>
                           <TableCell className="font-semibold">{idx + 1}</TableCell>
                           <TableCell className="font-semibold">{driver.driver_code}</TableCell>
-                          <TableCell className="text-muted">{driver.constructor_name}</TableCell>
+                          <TableCell className="text-muted"><TeamWithLogo team={driver.constructor_name} /></TableCell>
                           <TableCell className="text-right font-semibold">{driver.points}</TableCell>
                           <TableCell className="text-right">{driver.wins}</TableCell>
                           <TableCell className="text-right">{driver.total_races}</TableCell>
@@ -134,7 +135,7 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
                       {constructors.map((constructor, idx) => (
                         <TableRow key={constructor.constructor_id}>
                           <TableCell className="font-semibold">{idx + 1}</TableCell>
-                          <TableCell className="font-semibold">{constructor.constructor_name}</TableCell>
+                          <TableCell className="font-semibold"><TeamWithLogo team={constructor.constructor_name} /></TableCell>
                           <TableCell className="text-right font-semibold">{constructor.points}</TableCell>
                           <TableCell className="text-right">{constructor.wins}</TableCell>
                           <TableCell className="text-right">{constructor.pts_last_5}</TableCell>

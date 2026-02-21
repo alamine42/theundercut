@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { CircuitTrendsChart } from "@/components/charts/circuit-trends-chart";
+import { TeamWithLogo } from "@/components/ui/team-logo";
 import { fetchCircuitTrends } from "@/lib/api";
 
 export const revalidate = 300; // 5 minutes ISR
@@ -127,6 +128,7 @@ export default async function CircuitTrendsPage({ params }: CircuitTrendsPagePro
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Year</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Winner</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Team</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Pole</th>
                       <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide">Pole Time</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Fastest Lap</th>
@@ -142,12 +144,14 @@ export default async function CircuitTrendsPage({ params }: CircuitTrendsPagePro
                           <td className="px-6 py-4 text-sm font-semibold">{trend.year}</td>
                           <td className="px-6 py-4 text-sm">
                             {trend.winner ? (
-                              <>
-                                <span className="font-semibold">{trend.winner}</span>
-                                {trend.winner_team && (
-                                  <span className="ml-2 text-muted">{trend.winner_team}</span>
-                                )}
-                              </>
+                              <span className="font-semibold">{trend.winner}</span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            {trend.winner_team ? (
+                              <TeamWithLogo team={trend.winner_team} />
                             ) : (
                               <span className="text-muted">—</span>
                             )}
