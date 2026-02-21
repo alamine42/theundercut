@@ -58,16 +58,16 @@ export default async function CircuitsPage({ params }: CircuitsPageProps) {
         </div>
       </Hero>
 
-      <section className="py-12">
+      <section className="py-8 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {circuits.map((circuit) => (
               <Link
                 key={circuit.circuit_id}
                 href={`/circuits/${season}/${circuit.circuit_id}`}
                 className="group block"
               >
-                <article className="h-full border-2 border-ink bg-paper p-6 transition-colors group-hover:bg-ink group-hover:text-paper">
+                <article className="h-full border-2 border-ink bg-paper p-4 sm:p-6 transition-colors group-hover:bg-ink group-hover:text-paper">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h2 className="font-semibold tracking-tight">

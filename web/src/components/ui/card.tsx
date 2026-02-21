@@ -11,7 +11,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "border-2 border-ink bg-paper p-6",
+          "border-2 border-ink bg-paper p-4 sm:p-6",
           accent && "card-accent",
           className
         )}

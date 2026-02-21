@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         </div>
       </Hero>
 
-      <section className="py-12">
+      <section className="py-8 sm:py-12">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <Card>
             <CardContent className="prose prose-sm max-w-none space-y-6">

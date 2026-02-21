@@ -83,7 +83,7 @@ const TableHead = forwardRef<HTMLTableCellElement, ThHTMLAttributes<HTMLTableCel
       <th
         ref={ref}
         className={cn(
-          "h-10 px-4 text-left align-middle font-semibold uppercase tracking-wider text-xs",
+          "h-10 px-2 sm:px-4 text-left align-middle font-semibold uppercase tracking-wider text-xs whitespace-nowrap",
           "[&:has([role=checkbox])]:pr-0",
           className
         )}
@@ -101,7 +101,7 @@ const TableCell = forwardRef<HTMLTableCellElement, TdHTMLAttributes<HTMLTableCel
       <td
         ref={ref}
         className={cn(
-          "px-4 py-3 align-middle",
+          "px-2 sm:px-4 py-2 sm:py-3 align-middle",
           "[&:has([role=checkbox])]:pr-0",
           className
         )}

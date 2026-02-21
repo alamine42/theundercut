@@ -9,7 +9,7 @@ const Hero = forwardRef<HTMLElement, HeroProps>(
       <section
         ref={ref}
         className={cn(
-          "racing-stripe bg-paper py-12 md:py-16",
+          "racing-stripe bg-paper py-8 sm:py-12 md:py-16",
           className
         )}
         {...props}
@@ -26,7 +26,7 @@ const HeroTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingEleme
       <h1
         ref={ref}
         className={cn(
-          "font-serif text-3xl font-bold tracking-tight md:text-4xl lg:text-5xl",
+          "font-serif text-2xl sm:text-3xl font-bold tracking-tight md:text-4xl lg:text-5xl",
           className
         )}
         {...props}
@@ -64,7 +64,7 @@ const HeroStat = forwardRef<HTMLDivElement, HeroStatProps>(
         className={cn("text-center md:text-left", className)}
         {...props}
       >
-        <div className="text-2xl font-semibold md:text-3xl">{value}</div>
+        <div className="text-xl sm:text-2xl font-semibold md:text-3xl">{value}</div>
         <div className="text-xs text-muted uppercase tracking-wider">{label}</div>
       </div>
     );
@@ -79,7 +79,7 @@ const HeroStats = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
       <div
         ref={ref}
         className={cn(
-          "mt-8 flex flex-wrap justify-center gap-8 md:justify-start md:gap-12",
+          "mt-6 sm:mt-8 flex flex-wrap justify-center gap-6 sm:gap-8 md:justify-start md:gap-12",
           className
         )}
         {...props}

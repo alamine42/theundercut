@@ -75,7 +75,7 @@ export default async function HomePage() {
         </div>
       </Hero>
 
-      <section className="py-12">
+      <section className="py-8 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           {error ? (
             <Card>
@@ -101,11 +101,11 @@ export default async function HomePage() {
                           <TableRow>
                             <TableHead>Pos</TableHead>
                             <TableHead>Driver</TableHead>
-                            <TableHead>Team</TableHead>
-                            <TableHead className="text-center">Grid</TableHead>
+                            <TableHead className="hidden sm:table-cell">Team</TableHead>
+                            <TableHead className="text-center hidden sm:table-cell">Grid</TableHead>
                             <TableHead className="text-right">Points</TableHead>
                             <TableHead className="text-center">+/-</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead className="hidden md:table-cell">Status</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -113,13 +113,13 @@ export default async function HomePage() {
                             <TableRow key={result.driver_code}>
                               <TableCell className="font-semibold">{result.position}</TableCell>
                               <TableCell className="font-semibold">{result.driver_code}</TableCell>
-                              <TableCell><TeamWithLogo team={result.team} /></TableCell>
-                              <TableCell className="text-center text-muted">{result.grid}</TableCell>
+                              <TableCell className="hidden sm:table-cell"><TeamWithLogo team={result.team} /></TableCell>
+                              <TableCell className="text-center text-muted hidden sm:table-cell">{result.grid}</TableCell>
                               <TableCell className="text-right font-semibold">{result.points}</TableCell>
                               <TableCell className="text-center">
                                 <PositionChange gained={result.positions_gained} />
                               </TableCell>
-                              <TableCell className="text-muted">{result.status}</TableCell>
+                              <TableCell className="text-muted hidden md:table-cell">{result.status}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

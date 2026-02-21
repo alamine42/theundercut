@@ -62,9 +62,9 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
         </div>
       </Hero>
 
-      <section className="py-12">
+      <section className="py-8 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="space-y-12">
+          <div className="space-y-8 sm:space-y-12">
             {/* Driver Championship */}
             <Card accent>
               <CardHeader>
@@ -77,15 +77,15 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
                       <TableRow>
                         <TableHead>Pos</TableHead>
                         <TableHead>Driver</TableHead>
-                        <TableHead>Team</TableHead>
+                        <TableHead className="hidden sm:table-cell">Team</TableHead>
                         <TableHead className="text-right">Points</TableHead>
                         <TableHead className="text-right">Wins</TableHead>
-                        <TableHead className="text-right">Races</TableHead>
-                        <TableHead className="text-right">Last 5</TableHead>
-                        <TableHead className="text-right">Pts/Race</TableHead>
-                        <TableHead className="text-right">Avg Start</TableHead>
-                        <TableHead className="text-right">Avg Finish</TableHead>
-                        <TableHead className="text-right">Pos Gained</TableHead>
+                        <TableHead className="text-right hidden md:table-cell">Races</TableHead>
+                        <TableHead className="text-right hidden lg:table-cell">Last 5</TableHead>
+                        <TableHead className="text-right hidden lg:table-cell">Pts/Race</TableHead>
+                        <TableHead className="text-right hidden lg:table-cell">Avg Start</TableHead>
+                        <TableHead className="text-right hidden lg:table-cell">Avg Finish</TableHead>
+                        <TableHead className="text-right hidden md:table-cell">Pos Gained</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -93,15 +93,15 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
                         <TableRow key={driver.driver_code}>
                           <TableCell className="font-semibold">{idx + 1}</TableCell>
                           <TableCell className="font-semibold">{driver.driver_code}</TableCell>
-                          <TableCell className="text-muted"><TeamWithLogo team={driver.constructor_name} /></TableCell>
+                          <TableCell className="text-muted hidden sm:table-cell"><TeamWithLogo team={driver.constructor_name} /></TableCell>
                           <TableCell className="text-right font-semibold">{driver.points}</TableCell>
                           <TableCell className="text-right">{driver.wins}</TableCell>
-                          <TableCell className="text-right">{driver.total_races}</TableCell>
-                          <TableCell className="text-right">{driver.pts_last_5}</TableCell>
-                          <TableCell className="text-right">{formatNumber(driver.points_per_race)}</TableCell>
-                          <TableCell className="text-right">{formatNumber(driver.avg_start_pos)}</TableCell>
-                          <TableCell className="text-right">{formatNumber(driver.avg_finish_pos)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right hidden md:table-cell">{driver.total_races}</TableCell>
+                          <TableCell className="text-right hidden lg:table-cell">{driver.pts_last_5}</TableCell>
+                          <TableCell className="text-right hidden lg:table-cell">{formatNumber(driver.points_per_race)}</TableCell>
+                          <TableCell className="text-right hidden lg:table-cell">{formatNumber(driver.avg_start_pos)}</TableCell>
+                          <TableCell className="text-right hidden lg:table-cell">{formatNumber(driver.avg_finish_pos)}</TableCell>
+                          <TableCell className="text-right hidden md:table-cell">
                             <span className={driver.positions_gained >= 0 ? "text-success" : "text-error"}>
                               {driver.positions_gained >= 0 ? "+" : ""}{driver.positions_gained}
                             </span>

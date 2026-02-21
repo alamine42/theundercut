@@ -7,14 +7,16 @@ export interface ChartContainerProps extends HTMLAttributes<HTMLDivElement> {
   title?: string;
   description?: string;
   height?: number;
+  mobileHeight?: number;
 }
 
 const ChartContainer = forwardRef<HTMLDivElement, ChartContainerProps>(
-  ({ className, title, description, height = 400, children, ...props }, ref) => {
+  ({ className, title, description, height = 400, mobileHeight, children, ...props }, ref) => {
+    const mobile = mobileHeight ?? Math.min(height, 300);
     return (
       <div
         ref={ref}
-        className={cn("border-2 border-ink bg-paper p-4", className)}
+        className={cn("border-2 border-ink bg-paper p-3 sm:p-4", className)}
         {...props}
       >
         {(title || description) && (
@@ -27,7 +29,12 @@ const ChartContainer = forwardRef<HTMLDivElement, ChartContainerProps>(
             )}
           </div>
         )}
-        <div style={{ height }}>{children}</div>
+        <div
+          className="chart-height-container"
+          style={{ "--chart-height-mobile": `${mobile}px`, "--chart-height": `${height}px` } as React.CSSProperties}
+        >
+          {children}
+        </div>
       </div>
     );
   }

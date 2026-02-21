@@ -41,9 +41,9 @@ export function SeasonResultsTable({ season, raceSummaries }: SeasonResultsTable
                 <TableHead className="w-16">Round</TableHead>
                 <TableHead>Race</TableHead>
                 <TableHead>Winner</TableHead>
-                <TableHead className="text-center">Pole</TableHead>
-                <TableHead className="text-center">2nd</TableHead>
-                <TableHead className="text-center">3rd</TableHead>
+                <TableHead className="text-center hidden sm:table-cell">Pole</TableHead>
+                <TableHead className="text-center hidden md:table-cell">2nd</TableHead>
+                <TableHead className="text-center hidden md:table-cell">3rd</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -62,9 +62,9 @@ export function SeasonResultsTable({ season, raceSummaries }: SeasonResultsTable
                     <TeamWithLogo team={race.winner_team} />
                     <span className="ml-2 font-semibold">{race.winner_code}</span>
                   </TableCell>
-                  <TableCell className="text-center text-muted">{race.pole || "—"}</TableCell>
-                  <TableCell className="text-center text-muted">{race.second || "—"}</TableCell>
-                  <TableCell className="text-center text-muted">{race.third || "—"}</TableCell>
+                  <TableCell className="text-center text-muted hidden sm:table-cell">{race.pole || "—"}</TableCell>
+                  <TableCell className="text-center text-muted hidden md:table-cell">{race.second || "—"}</TableCell>
+                  <TableCell className="text-center text-muted hidden md:table-cell">{race.third || "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

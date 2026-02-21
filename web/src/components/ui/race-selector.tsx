@@ -26,7 +26,8 @@ export function RaceSelector({ currentRound, season, maxRounds = 24 }: RaceSelec
       onChange={handleChange}
       className="h-10 px-3 border-2 border-ink bg-paper text-ink font-mono text-sm
                  focus:outline-none focus:ring-2 focus:ring-ink cursor-pointer
-                 hover:bg-ink hover:text-paper transition-colors"
+                 hover:bg-ink hover:text-paper transition-colors
+                 min-w-0 flex-1 sm:flex-none"
     >
       {rounds.map((round) => (
         <option key={round} value={round}>

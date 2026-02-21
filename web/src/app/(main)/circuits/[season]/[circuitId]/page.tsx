@@ -81,17 +81,17 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
         </div>
       </Hero>
 
-      <section className="py-12">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-12">
+      <section className="py-8 sm:py-12">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-12">
           {/* Lap Records */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <article className="border-2 border-ink bg-paper p-6">
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+            <article className="border-2 border-ink bg-paper p-4 sm:p-6">
               <h2 className="relative mb-4 text-lg font-semibold tracking-tight before:absolute before:-left-6 before:top-0 before:h-full before:w-1 before:bg-accent">
                 All-Time Lap Record
               </h2>
               {lap_records.all_time_fastest ? (
                 <div className="space-y-2">
-                  <p className="text-3xl font-bold font-mono">{lap_records.all_time_fastest.time}</p>
+                  <p className="text-2xl sm:text-3xl font-bold font-mono">{lap_records.all_time_fastest.time}</p>
                   <p className="text-muted">
                     {lap_records.all_time_fastest.driver} &middot; {lap_records.all_time_fastest.year}
                   </p>
@@ -101,13 +101,13 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
               )}
             </article>
 
-            <article className="border-2 border-ink bg-paper p-6">
+            <article className="border-2 border-ink bg-paper p-4 sm:p-6">
               <h2 className="relative mb-4 text-lg font-semibold tracking-tight before:absolute before:-left-6 before:top-0 before:h-full before:w-1 before:bg-accent">
                 {season} Fastest Lap
               </h2>
               {lap_records.season_fastest ? (
                 <div className="space-y-2">
-                  <p className="text-3xl font-bold font-mono">{lap_records.season_fastest.time}</p>
+                  <p className="text-2xl sm:text-3xl font-bold font-mono">{lap_records.season_fastest.time}</p>
                   <p className="text-muted">{lap_records.season_fastest.driver}</p>
                 </div>
               ) : (
@@ -118,7 +118,7 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
 
           {/* Race Info Card */}
           {race_info && (
-            <article className="border-2 border-ink bg-paper p-6">
+            <article className="border-2 border-ink bg-paper p-4 sm:p-6">
               <h2 className="relative mb-4 text-lg font-semibold tracking-tight before:absolute before:-left-6 before:top-0 before:h-full before:w-1 before:bg-accent">
                 {season} Race Results
               </h2>
@@ -154,27 +154,27 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
           {/* Historical Winners */}
           {historical_winners.length > 0 && (
             <article className="border-2 border-ink bg-paper">
-              <h2 className="relative p-6 pb-4 text-lg font-semibold tracking-tight before:absolute before:left-0 before:top-6 before:h-6 before:w-1 before:bg-accent">
+              <h2 className="relative px-4 sm:p-6 pt-6 pb-4 text-lg font-semibold tracking-tight before:absolute before:left-0 before:top-6 before:h-6 before:w-1 before:bg-accent">
                 Historical Winners
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-ink text-paper">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Year</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Driver</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Team</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Year</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Driver</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Team</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {historical_winners.map((winner, index) => (
                       <tr key={`${winner.year}-${winner.driver}-${index}`} className="hover:bg-ink hover:text-paper transition-colors">
-                        <td className="px-6 py-4 text-sm font-semibold">{winner.year}</td>
-                        <td className="px-6 py-4 text-sm">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-semibold">{winner.year}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm">
                           <span className="font-semibold">{winner.driver}</span>
                           <span className="ml-2 text-muted">{winner.driver_name}</span>
                         </td>
-                        <td className="px-6 py-4 text-sm"><TeamWithLogo team={winner.team} /></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm"><TeamWithLogo team={winner.team} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -186,30 +186,30 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
           {/* Driver Performance at Circuit */}
           {driver_stats.length > 0 && (
             <article className="border-2 border-ink bg-paper">
-              <h2 className="relative p-6 pb-4 text-lg font-semibold tracking-tight before:absolute before:left-0 before:top-6 before:h-6 before:w-1 before:bg-accent">
+              <h2 className="relative px-4 sm:p-6 pt-6 pb-4 text-lg font-semibold tracking-tight before:absolute before:left-0 before:top-6 before:h-6 before:w-1 before:bg-accent">
                 Driver Performance at {circuit.name}
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-ink text-paper">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Driver</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Races</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Wins</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Podiums</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Points</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Avg Finish</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Driver</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Races</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Wins</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Podiums</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Points</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Avg Finish</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {driver_stats.map((driver) => (
                       <tr key={driver.driver} className="hover:bg-ink hover:text-paper transition-colors">
-                        <td className="px-6 py-4 text-sm font-semibold">{driver.driver}</td>
-                        <td className="px-6 py-4 text-sm text-center">{driver.races}</td>
-                        <td className="px-6 py-4 text-sm text-center font-semibold">{driver.wins}</td>
-                        <td className="px-6 py-4 text-sm text-center">{driver.podiums}</td>
-                        <td className="px-6 py-4 text-sm text-center">{driver.points}</td>
-                        <td className="px-6 py-4 text-sm text-center font-mono">{driver.avg_finish.toFixed(1)}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-semibold">{driver.driver}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center">{driver.races}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center font-semibold">{driver.wins}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center">{driver.podiums}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center">{driver.points}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center font-mono">{driver.avg_finish.toFixed(1)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -221,28 +221,28 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
           {/* Team Performance at Circuit */}
           {team_stats.length > 0 && (
             <article className="border-2 border-ink bg-paper">
-              <h2 className="relative p-6 pb-4 text-lg font-semibold tracking-tight before:absolute before:left-0 before:top-6 before:h-6 before:w-1 before:bg-accent">
+              <h2 className="relative px-4 sm:p-6 pt-6 pb-4 text-lg font-semibold tracking-tight before:absolute before:left-0 before:top-6 before:h-6 before:w-1 before:bg-accent">
                 Team Performance at {circuit.name}
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-ink text-paper">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide">Team</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Races</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Wins</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Podiums</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide">Points</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Team</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Races</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Wins</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Podiums</th>
+                      <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Points</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {team_stats.map((team) => (
                       <tr key={team.team} className="hover:bg-ink hover:text-paper transition-colors">
-                        <td className="px-6 py-4 text-sm font-semibold"><TeamWithLogo team={team.team} /></td>
-                        <td className="px-6 py-4 text-sm text-center">{team.races}</td>
-                        <td className="px-6 py-4 text-sm text-center font-semibold">{team.wins}</td>
-                        <td className="px-6 py-4 text-sm text-center">{team.podiums}</td>
-                        <td className="px-6 py-4 text-sm text-center">{team.points}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-semibold"><TeamWithLogo team={team.team} /></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center">{team.races}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center font-semibold">{team.wins}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center">{team.podiums}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-center">{team.points}</td>
                       </tr>
                     ))}
                   </tbody>

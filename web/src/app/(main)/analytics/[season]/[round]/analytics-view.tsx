@@ -67,13 +67,13 @@ export function AnalyticsView({ initialData, season, round }: AnalyticsViewProps
                 {season} Season &middot; Round {round} &middot; Lap times, strategy, and performance grades
               </HeroSubtitle>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <select
                 value={season}
                 onChange={handleYearChange}
                 className="h-10 px-3 border-2 border-ink bg-paper text-ink font-mono text-sm
                            focus:outline-none focus:ring-2 focus:ring-ink cursor-pointer
-                           hover:bg-ink hover:text-paper transition-colors"
+                           hover:bg-ink hover:text-paper transition-colors flex-1 sm:flex-none"
               >
                 {AVAILABLE_SEASONS.map((year) => (
                   <option key={year} value={year}>
