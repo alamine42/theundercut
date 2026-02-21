@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { DEFAULT_SEASON } from "@/lib/constants";
@@ -19,7 +20,14 @@ export function Nav() {
     <header className="border-b-2 border-ink bg-paper">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="font-serif text-xl font-bold tracking-tight">
+          <Link href="/" className="flex items-center gap-2 font-serif text-xl font-bold tracking-tight">
+            <Image
+              src="/logo.svg"
+              alt="The Undercut logo"
+              width={28}
+              height={28}
+              className="flex-shrink-0"
+            />
             THE UNDERCUT
           </Link>
 
