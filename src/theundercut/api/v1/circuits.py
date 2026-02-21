@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 
@@ -14,8 +16,21 @@ import httpx
 from theundercut.adapters.db import get_db
 from theundercut.adapters.redis_cache import redis_client
 
+logger = logging.getLogger(__name__)
+
 JOLPICA_BASE = "https://api.jolpi.ca/ergast/f1"
 CACHE_TTL_SECONDS = 600  # 10 minutes
+HISTORICAL_CACHE_TTL_SECONDS = 86400  # 24 hours for historical data
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Safely convert a value to int, returning default on failure."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
 
 # Circuit shortnames for display
 CIRCUIT_SHORTNAMES: Dict[str, str] = {
@@ -65,7 +80,8 @@ def _fetch_circuits(season: int) -> List[Dict[str, Any]]:
             resp.raise_for_status()
             data = resp.json()
         return data.get("MRData", {}).get("CircuitTable", {}).get("Circuits", [])
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch circuits for season {season}: {e}")
         return []
 
 
@@ -78,7 +94,8 @@ def _fetch_race_schedule(season: int) -> List[Dict[str, Any]]:
             resp.raise_for_status()
             data = resp.json()
         return data.get("MRData", {}).get("RaceTable", {}).get("Races", [])
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch race schedule for season {season}: {e}")
         return []
 
 
@@ -92,12 +109,23 @@ def _fetch_circuit_info(circuit_id: str) -> Optional[Dict[str, Any]]:
             data = resp.json()
         circuits = data.get("MRData", {}).get("CircuitTable", {}).get("Circuits", [])
         return circuits[0] if circuits else None
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch circuit info for {circuit_id}: {e}")
         return None
 
 
 def _fetch_circuit_results(circuit_id: str, limit: int = 30) -> List[Dict[str, Any]]:
-    """Fetch historical race results for a circuit with pagination."""
+    """Fetch historical race results for a circuit with pagination and caching."""
+    # Check cache first (historical data changes rarely)
+    cache_key = f"circuit_results:{circuit_id}:{limit}"
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error for circuit results {circuit_id}: {e}")
+        # Continue without cache
+
     all_races: List[Dict] = []
     offset = 0
     page_limit = 100
@@ -115,13 +143,21 @@ def _fetch_circuit_results(circuit_id: str, limit: int = 30) -> List[Dict[str, A
                     break
 
                 all_races.extend(races)
-                total = int(data.get("MRData", {}).get("total", 0))
+                total = _safe_int(data.get("MRData", {}).get("total", 0))
                 offset += page_limit
                 if offset >= total:
                     break
 
-        return all_races[:limit]
-    except Exception:
+        result = all_races[:limit]
+        # Only cache if we got data (avoid caching transient failures)
+        if result:
+            try:
+                redis_client.setex(cache_key, HISTORICAL_CACHE_TTL_SECONDS, json.dumps(result))
+            except Exception as e:
+                logger.warning(f"Redis write error for circuit results {circuit_id}: {e}")
+        return result
+    except Exception as e:
+        logger.warning(f"Failed to fetch circuit results for {circuit_id}: {e}")
         return []
 
 
@@ -161,13 +197,14 @@ def _fetch_circuit_qualifying_history(circuit_id: str) -> List[Dict[str, Any]]:
                     break
 
                 all_races.extend(races)
-                total = int(data.get("MRData", {}).get("total", 0))
+                total = _safe_int(data.get("MRData", {}).get("total", 0))
                 offset += page_limit
                 if offset >= total:
                     break
 
         return all_races
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch qualifying history for {circuit_id}: {e}")
         return []
 
 
@@ -253,7 +290,7 @@ def get_circuit_trends(circuit_id: str) -> Dict[str, Any]:
                 pass
 
         trends.append({
-            "year": int(season),
+            "year": _safe_int(season),
             "pole_driver": qual_info.get("pole_driver"),
             "pole_time": qual_info.get("pole_time"),
             "pole_time_ms": qual_info.get("pole_time_ms"),
@@ -277,17 +314,110 @@ def get_circuit_trends(circuit_id: str) -> Dict[str, Any]:
     return payload
 
 
+def _compute_preview_stats_from_races(races: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute preview stats from pre-fetched race data."""
+    if not races:
+        return {
+            "last_winner": None,
+            "last_winner_team": None,
+            "dominant_driver": None,
+            "dominant_driver_wins": 0,
+            "dominant_team": None,
+            "dominant_team_wins": 0,
+        }
+
+    # Sort races by season descending to get the most recent
+    sorted_races = sorted(races, key=lambda r: _safe_int(r.get("season", 0)), reverse=True)
+
+    # Get last winner
+    last_winner = None
+    last_winner_team = None
+    if sorted_races:
+        results = sorted_races[0].get("Results", [])
+        if results:
+            winner = results[0]
+            last_winner = winner.get("Driver", {}).get("code")
+            last_winner_team = winner.get("Constructor", {}).get("name")
+
+    # Count wins per driver and team
+    driver_wins: Dict[str, int] = defaultdict(int)
+    team_wins: Dict[str, int] = defaultdict(int)
+
+    for race in races:
+        results = race.get("Results", [])
+        if results:
+            winner = results[0]
+            driver_code = winner.get("Driver", {}).get("code")
+            team_name = winner.get("Constructor", {}).get("name")
+            if driver_code:
+                driver_wins[driver_code] += 1
+            if team_name:
+                team_wins[team_name] += 1
+
+    # Find dominant driver and team
+    dominant_driver = None
+    dominant_driver_wins = 0
+    if driver_wins:
+        dominant_driver = max(driver_wins.keys(), key=lambda k: driver_wins[k])
+        dominant_driver_wins = driver_wins[dominant_driver]
+
+    dominant_team = None
+    dominant_team_wins = 0
+    if team_wins:
+        dominant_team = max(team_wins.keys(), key=lambda k: team_wins[k])
+        dominant_team_wins = team_wins[dominant_team]
+
+    return {
+        "last_winner": last_winner,
+        "last_winner_team": last_winner_team,
+        "dominant_driver": dominant_driver,
+        "dominant_driver_wins": dominant_driver_wins,
+        "dominant_team": dominant_team,
+        "dominant_team_wins": dominant_team_wins,
+    }
+
+
+def _fetch_all_circuit_results_parallel(circuit_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    """Fetch historical results for multiple circuits in parallel."""
+    results: Dict[str, List[Dict[str, Any]]] = {}
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_circuit = {
+            executor.submit(_fetch_circuit_results, cid, 30): cid
+            for cid in circuit_ids
+        }
+        # Timeout after 45 seconds to prevent indefinite blocking
+        for future in as_completed(future_to_circuit, timeout=45):
+            circuit_id = future_to_circuit[future]
+            try:
+                results[circuit_id] = future.result()
+            except Exception as e:
+                logger.warning(f"Failed to fetch results for circuit {circuit_id}: {e}")
+                results[circuit_id] = []
+
+    # Handle any circuits that didn't complete in time
+    for circuit_id in circuit_ids:
+        if circuit_id not in results:
+            logger.warning(f"Timeout fetching results for circuit {circuit_id}")
+            results[circuit_id] = []
+
+    return results
+
+
 @router.get("/{season}")
 def get_circuits(season: int) -> Dict[str, Any]:
     """
     Get all circuits for a season with race information.
 
-    Returns circuit list with round numbers, race names, and dates.
+    Returns circuit list with round numbers, race names, dates, and preview stats.
     """
-    cache_key = f"circuits:v1:{season}"
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    cache_key = f"circuits:v2:{season}"
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error for circuits {season}: {e}")
 
     # Fetch circuits and race schedule
     circuits_raw = _fetch_circuits(season)
@@ -299,16 +429,26 @@ def get_circuits(season: int) -> Dict[str, Any]:
         circuit_id = race.get("Circuit", {}).get("circuitId")
         if circuit_id:
             race_by_circuit[circuit_id] = {
-                "round": int(race.get("round", 0)),
+                "round": _safe_int(race.get("round", 0)),
                 "race_name": race.get("raceName", ""),
                 "date": race.get("date", ""),
             }
 
-    # Build response
+    # Get all circuit IDs for parallel fetch
+    circuit_ids = [c.get("circuitId", "") for c in circuits_raw if c.get("circuitId")]
+
+    # Fetch all circuit historical results in parallel (cached individually)
+    all_circuit_results = _fetch_all_circuit_results_parallel(circuit_ids)
+
+    # Build response with preview stats
     circuits = []
     for circuit in circuits_raw:
         circuit_id = circuit.get("circuitId", "")
         race_info = race_by_circuit.get(circuit_id, {})
+
+        # Compute preview stats from pre-fetched data
+        circuit_races = all_circuit_results.get(circuit_id, [])
+        preview = _compute_preview_stats_from_races(circuit_races)
 
         circuits.append({
             "circuit_id": circuit_id,
@@ -319,6 +459,7 @@ def get_circuits(season: int) -> Dict[str, Any]:
             "round": race_info.get("round"),
             "race_name": race_info.get("race_name", ""),
             "date": race_info.get("date", ""),
+            "preview": preview,
         })
 
     # Sort by round number
@@ -329,7 +470,10 @@ def get_circuits(season: int) -> Dict[str, Any]:
         "circuits": circuits,
     }
 
-    redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(payload))
+    try:
+        redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(payload))
+    except Exception as e:
+        logger.warning(f"Redis write error for circuits {season}: {e}")
     return payload
 
 
@@ -343,7 +487,8 @@ def _fetch_circuit_qualifying(circuit_id: str, season: int) -> Optional[Dict[str
             data = resp.json()
         races = data.get("MRData", {}).get("RaceTable", {}).get("Races", [])
         return races[0] if races else None
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch qualifying for {circuit_id} season {season}: {e}")
         return None
 
 
@@ -357,7 +502,7 @@ def _get_strategy_patterns(db: Session, circuit_id: str, season: int) -> List[Di
         round_num = None
         for race in races:
             if race.get("Circuit", {}).get("circuitId") == circuit_id:
-                round_num = int(race.get("round", 0))
+                round_num = _safe_int(race.get("round", 0))
                 break
 
         if not round_num:
@@ -393,7 +538,8 @@ def _get_strategy_patterns(db: Session, circuit_id: str, season: int) -> List[Di
             "most_common_stops": most_common_stops,
             "compounds_used": sorted(list(compounds_used)),
         }]
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to get strategy patterns for {circuit_id} season {season}: {e}")
         return []
 
 
@@ -452,7 +598,7 @@ def get_circuit_detail(
                 pole_sitter = qual_results[0].get("Driver", {}).get("code")
 
         race_info = {
-            "round": int(current_race.get("round", 0)),
+            "round": _safe_int(current_race.get("round", 0)),
             "date": current_race.get("date", ""),
             "race_name": current_race.get("raceName", ""),
             "winner": winner.get("Driver", {}).get("code"),
@@ -474,7 +620,7 @@ def get_circuit_detail(
                     record = {
                         "driver": result.get("Driver", {}).get("code"),
                         "time": time_str,
-                        "year": int(race.get("season", 0)),
+                        "year": _safe_int(race.get("season", 0)),
                     }
                     if race.get("season") == str(season):
                         season_fastest = record
@@ -489,7 +635,7 @@ def get_circuit_detail(
         if results:
             winner = results[0]
             historical_winners.append({
-                "year": int(race.get("season", 0)),
+                "year": _safe_int(race.get("season", 0)),
                 "driver": winner.get("Driver", {}).get("code"),
                 "driver_name": f"{winner.get('Driver', {}).get('givenName', '')} {winner.get('Driver', {}).get('familyName', '')}".strip(),
                 "team": winner.get("Constructor", {}).get("name"),

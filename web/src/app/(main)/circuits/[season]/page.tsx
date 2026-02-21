@@ -24,7 +24,7 @@ export default async function CircuitsPage({ params }: CircuitsPageProps) {
   const { season: seasonStr } = await params;
   const season = parseInt(seasonStr, 10);
 
-  if (isNaN(season) || season < 2018 || season > 2030) {
+  if (isNaN(season) || !AVAILABLE_SEASONS.includes(season)) {
     notFound();
   }
 
@@ -61,61 +61,99 @@ export default async function CircuitsPage({ params }: CircuitsPageProps) {
       <section className="py-8 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {circuits.map((circuit) => (
-              <Link
-                key={circuit.circuit_id}
-                href={`/circuits/${season}/${circuit.circuit_id}`}
-                className="group block"
-              >
-                <article className="h-full border-2 border-ink bg-paper p-4 sm:p-6 transition-colors group-hover:bg-ink group-hover:text-paper">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h2 className="font-semibold tracking-tight">
-                        {circuit.name}
-                      </h2>
-                      <p className="mt-1 text-sm text-muted group-hover:text-paper/70">
-                        {getCountryFlag(circuit.country)} {circuit.city}, {circuit.country}
-                      </p>
+            {circuits.map((circuit) => {
+              const raceDate = circuit.date ? new Date(circuit.date) : null;
+              const isPastRace = raceDate && raceDate < new Date();
+
+              return (
+                <Link
+                  key={circuit.circuit_id}
+                  href={`/circuits/${season}/${circuit.circuit_id}`}
+                  aria-label={`View ${circuit.race_name} circuit analytics`}
+                  className="group block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  <article className="relative h-full overflow-hidden border-2 border-ink bg-paper p-4 sm:p-6 transition-all duration-200 group-hover:bg-ink group-hover:text-paper group-active:scale-[0.98]">
+                    {/* Track silhouette watermark */}
+                    <div
+                      className="absolute -right-4 -bottom-4 w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 opacity-[0.06] group-hover:opacity-[0.15] transition-all duration-200 pointer-events-none"
+                      style={{
+                        backgroundImage: `url(/circuits/${circuit.circuit_id}.svg)`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                      }}
+                    />
+
+                    {/* Content with z-index */}
+                    <div className="relative z-10">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h2 className="font-semibold tracking-tight">
+                            {circuit.name}
+                          </h2>
+                          <p className="mt-1 text-sm text-muted group-hover:text-paper/80">
+                            {getCountryFlag(circuit.country)} {circuit.city}, {circuit.country}
+                          </p>
+                        </div>
+                        {circuit.round && (
+                          <span className="ml-2 flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center border-2 border-current text-[10px] sm:text-xs font-bold">
+                            R{circuit.round}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 border-t border-current pt-4">
+                        <p className="text-sm font-medium">{circuit.race_name}</p>
+                        {raceDate && (
+                          <p className={`mt-1 text-xs ${
+                            isPastRace
+                              ? 'text-muted group-hover:text-paper/80'
+                              : 'font-semibold text-ink group-hover:text-paper'
+                          }`}>
+                            {raceDate.toLocaleDateString("en-US", {
+                              month: "long",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Headline stat */}
+                      {circuit.preview?.dominant_driver && circuit.preview.dominant_driver_wins > 1 ? (
+                        <div className="mt-3 text-xs text-muted group-hover:text-paper/80">
+                          <span className="font-bold">{circuit.preview.dominant_driver}</span>
+                          <span> dominates ({circuit.preview.dominant_driver_wins} wins)</span>
+                        </div>
+                      ) : circuit.preview?.last_winner && (
+                        <div className="mt-3 text-xs text-muted group-hover:text-paper/80">
+                          <span className="font-bold">{circuit.preview.last_winner}</span>
+                          <span> won last</span>
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex items-center text-xs text-muted group-hover:text-paper/80">
+                        <span>{isPastRace ? 'View analytics' : 'Preview'}</span>
+                        <svg
+                          aria-hidden="true"
+                          className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
                     </div>
-                    {circuit.round && (
-                      <span className="ml-2 flex h-8 w-8 items-center justify-center border-2 border-current text-xs font-bold">
-                        R{circuit.round}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-4 border-t border-current pt-4">
-                    <p className="text-sm font-medium">{circuit.race_name}</p>
-                    {circuit.date && (
-                      <p className="mt-1 text-xs text-muted group-hover:text-paper/70">
-                        {new Date(circuit.date).toLocaleDateString("en-US", {
-                          month: "long",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-center text-xs text-muted group-hover:text-paper/70">
-                    <span>View analytics</span>
-                    <svg
-                      className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
-                </article>
-              </Link>
-            ))}
+                  </article>
+                </Link>
+              );
+            })}
           </div>
 
           {circuits.length === 0 && (

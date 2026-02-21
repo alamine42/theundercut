@@ -174,6 +174,15 @@ export interface HomepageResponse {
 // Circuit Data
 // =============================================================================
 
+export interface CircuitPreview {
+  last_winner: string | null;
+  last_winner_team: string | null;
+  dominant_driver: string | null;
+  dominant_driver_wins: number;
+  dominant_team: string | null;
+  dominant_team_wins: number;
+}
+
 export interface Circuit {
   circuit_id: string;
   name: string;
@@ -183,6 +192,7 @@ export interface Circuit {
   round: number | null;
   race_name: string;
   date: string;
+  preview: CircuitPreview | null;
 }
 
 export interface CircuitsResponse {
