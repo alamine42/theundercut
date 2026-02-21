@@ -172,6 +172,53 @@ def _extract_last_race_results(races: List[Dict], top_n: int = 10) -> Dict[str, 
     }
 
 
+def _extract_season_race_summaries(races: List[Dict]) -> List[Dict[str, Any]]:
+    """Extract summary for each race in the season (winner, pole, podium)."""
+    summaries = []
+
+    for race in races:
+        results = race.get("Results", [])
+        if not results:
+            continue
+
+        # Get podium (top 3)
+        podium = []
+        for i, result in enumerate(results[:3]):
+            driver = result.get("Driver", {})
+            constructor = result.get("Constructor", {})
+            podium.append({
+                "position": i + 1,
+                "driver_code": driver.get("code", "???"),
+                "team": constructor.get("name", "Unknown"),
+            })
+
+        # Find pole position (grid == 1)
+        pole_driver = None
+        for result in results:
+            if int(result.get("grid", 0)) == 1:
+                pole_driver = result.get("Driver", {}).get("code", "???")
+                break
+
+        # Winner info
+        winner = results[0] if results else None
+        winner_driver = winner.get("Driver", {}) if winner else {}
+        winner_constructor = winner.get("Constructor", {}) if winner else {}
+
+        summaries.append({
+            "round": int(race.get("round", 0)),
+            "race_name": race.get("raceName", ""),
+            "circuit_id": race.get("Circuit", {}).get("circuitId", ""),
+            "date": race.get("date", ""),
+            "winner_code": winner_driver.get("code", "???"),
+            "winner_team": winner_constructor.get("name", "Unknown"),
+            "pole": pole_driver,
+            "second": podium[1]["driver_code"] if len(podium) > 1 else None,
+            "third": podium[2]["driver_code"] if len(podium) > 2 else None,
+        })
+
+    return summaries
+
+
 def _compute_driver_metrics(races: List[Dict], driver_code: str) -> Dict[str, Any]:
     """Compute per-driver metrics from race history."""
     total_races = 0
@@ -297,6 +344,9 @@ def fetch_season_standings(db: Session, season: int) -> Dict[str, Any]:
     # Extract last race results
     last_race_results = _extract_last_race_results(races, top_n=10)
 
+    # Extract season race summaries
+    race_summaries = _extract_season_race_summaries(races)
+
     return {
         "season": season,
         "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -305,4 +355,5 @@ def fetch_season_standings(db: Session, season: int) -> Dict[str, Any]:
         "drivers": drivers,
         "constructors": constructors,
         "last_race": last_race_results,
+        "race_summaries": race_summaries,
     }

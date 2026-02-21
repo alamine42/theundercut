@@ -113,6 +113,19 @@ export interface LastRaceResults {
   results: LastRaceResultEntry[];
 }
 
+// Race Summary (for season overview)
+export interface RaceSummary {
+  round: number;
+  race_name: string;
+  circuit_id: string;
+  date: string;
+  winner_code: string;
+  winner_team: string;
+  pole: string | null;
+  second: string | null;
+  third: string | null;
+}
+
 export interface StandingsResponse {
   season: number;
   last_updated: string;
@@ -121,6 +134,7 @@ export interface StandingsResponse {
   drivers: DriverStanding[];
   constructors: ConstructorStanding[];
   last_race: LastRaceResults | null;
+  race_summaries: RaceSummary[];
 }
 
 // =============================================================================

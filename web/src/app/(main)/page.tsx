@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { TeamWithLogo } from "@/components/ui/team-logo";
+import { SeasonResultsTable } from "@/components/season-results-table";
 import { fetchStandings } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 
@@ -46,6 +47,7 @@ export default async function HomePage() {
   const racesCompleted = standings?.races_completed ?? 0;
   const racesRemaining = standings?.races_remaining ?? 0;
   const lastRace = standings?.last_race ?? null;
+  const raceSummaries = standings?.race_summaries ?? [];
 
   return (
     <>
@@ -132,6 +134,11 @@ export default async function HomePage() {
                     </div>
                   </CardContent>
                 </Card>
+              )}
+
+              {/* Season Results Summary */}
+              {raceSummaries.length > 0 && (
+                <SeasonResultsTable season={DEFAULT_SEASON} raceSummaries={raceSummaries} />
               )}
 
               {/* Championship Standings */}
