@@ -11,6 +11,7 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: `/standings/${DEFAULT_SEASON}`, label: "Standings" },
   { href: "/circuits", label: "Circuits" },
+  { href: `/testing/${DEFAULT_SEASON}`, label: "Testing" },
   { href: `/analytics/${DEFAULT_SEASON}/1`, label: "Analytics" },
 ];
 

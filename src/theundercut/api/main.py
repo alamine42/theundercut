@@ -7,6 +7,7 @@ from theundercut.api.v1 import analytics as analytics_api
 from theundercut.api.v1 import circuits as circuits_api
 from theundercut.api.v1 import race as race_api          # JSON API
 from theundercut.api.v1 import standings as standings_api
+from theundercut.api.v1 import testing as testing_api
 from theundercut.web.routes import router as web_router  # Jinja pages
 
 app = FastAPI(title="The Undercut")
@@ -20,6 +21,7 @@ app.include_router(race_api.router)
 app.include_router(analytics_api.router)
 app.include_router(standings_api.router)
 app.include_router(circuits_api.router)
+app.include_router(testing_api.router)
 
 # Server-rendered pages
 app.include_router(web_router)

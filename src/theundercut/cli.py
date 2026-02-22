@@ -179,6 +179,146 @@ def drive_grade_backfill(
     typer.echo(f"✅ Backfilled {len(rounds)} round(s) for {season} {session_type}")
 
 
+# =============================================================================
+# Testing CLI
+# =============================================================================
+
+testing_app = typer.Typer(help="Pre-season testing data management")
+app.add_typer(testing_app, name="testing")
+
+
+@testing_app.command("sync")
+def testing_sync(
+    season: int = typer.Argument(..., help="Season year to sync testing events for"),
+):
+    """
+    Sync testing events from FastF1 schedule to database.
+    """
+    from theundercut.services.testing_ingestion import sync_testing_events
+
+    typer.echo(f"▶️  Syncing testing events for {season}...")
+    try:
+        results = sync_testing_events(season)
+        if not results:
+            typer.echo(f"⚠️  No testing events found for {season}")
+            return
+        for event in results:
+            action = event.get("action", "unknown")
+            event_id = event.get("event_id", "unknown")
+            typer.echo(f"  {action}: {event_id}")
+        typer.echo(f"✅ Synced {len(results)} testing event(s) for {season}")
+    except Exception as exc:
+        typer.echo(f"❌ Failed to sync testing events: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+
+@testing_app.command("ingest")
+def testing_ingest(
+    season: int = typer.Argument(..., help="Season year"),
+    event_id: str = typer.Argument(..., help="Testing event ID (e.g., 'pre_season_testing')"),
+    day: Optional[int] = typer.Option(
+        None,
+        "--day",
+        "-d",
+        help="Specific day to ingest (defaults to all days)",
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Re-ingest even if data exists"),
+):
+    """
+    Ingest testing data from FastF1.
+    """
+    from theundercut.services.testing_ingestion import (
+        ingest_testing_event,
+        ingest_testing_day,
+    )
+
+    if day is not None:
+        typer.echo(f"▶️  Ingesting day {day} of {event_id} ({season})...")
+        try:
+            result = ingest_testing_day(season, event_id, day, force=force)
+            status = result.get("status", "unknown")
+            laps = result.get("laps_count", 0)
+            stints = result.get("stints_count", 0)
+            if status == "completed":
+                typer.echo(f"✅ Ingested day {day}: {laps} laps, {stints} stints")
+            elif status == "already_ingested":
+                typer.echo(f"ℹ️  Day {day} already ingested ({laps} laps)")
+            elif status == "no_data":
+                typer.echo(f"⚠️  No data available for day {day}")
+            else:
+                typer.echo(f"⚠️  Day {day} status: {status}")
+        except Exception as exc:
+            typer.echo(f"❌ Failed to ingest day {day}: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
+    else:
+        typer.echo(f"▶️  Ingesting all days of {event_id} ({season})...")
+        try:
+            result = ingest_testing_event(season, event_id, force=force)
+            days = result.get("days_ingested", 0)
+            laps = result.get("total_laps", 0)
+            stints = result.get("total_stints", 0)
+            errors = result.get("errors", [])
+            if errors:
+                for error in errors:
+                    typer.echo(f"  ⚠️  {error}")
+            if days > 0:
+                typer.echo(f"✅ Ingested {days} day(s): {laps} laps, {stints} stints")
+            else:
+                typer.echo(f"⚠️  No data ingested for {event_id}")
+        except Exception as exc:
+            typer.echo(f"❌ Failed to ingest event: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
+
+
+@testing_app.command("backfill")
+def testing_backfill(
+    season: int = typer.Argument(..., help="Season year to backfill testing data for"),
+    force: bool = typer.Option(False, "--force", "-f", help="Re-ingest even if data exists"),
+):
+    """
+    Backfill all testing events for a season.
+    """
+    from theundercut.services.testing_ingestion import (
+        sync_testing_events,
+        ingest_testing_event,
+    )
+
+    typer.echo(f"▶️  Backfilling testing data for {season}...")
+
+    # First sync events
+    try:
+        events = sync_testing_events(season)
+        if not events:
+            typer.echo(f"⚠️  No testing events found for {season}")
+            return
+        typer.echo(f"  Found {len(events)} testing event(s)")
+    except Exception as exc:
+        typer.echo(f"❌ Failed to sync testing events: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    # Then ingest each event
+    total_laps = 0
+    total_stints = 0
+    for event in events:
+        event_id = event.get("event_id")
+        typer.echo(f"  ▶️  Ingesting {event_id}...")
+        try:
+            result = ingest_testing_event(season, event_id, force=force)
+            laps = result.get("total_laps", 0)
+            stints = result.get("total_stints", 0)
+            total_laps += laps
+            total_stints += stints
+            days = result.get("days_ingested", 0)
+            if days > 0:
+                typer.echo(f"    ✅ {days} day(s), {laps} laps, {stints} stints")
+            else:
+                typer.echo(f"    ⚠️  No data available")
+        except Exception as exc:
+            typer.echo(f"    ❌ Failed: {exc}")
+
+    typer.echo(f"✅ Backfill complete: {total_laps} laps, {total_stints} stints")
+
+
 @calibration_cli.command("import")
 def calibration_import_profile(
     name: str = typer.Argument(..., help="Calibration profile name to store"),

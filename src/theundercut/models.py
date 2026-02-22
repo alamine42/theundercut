@@ -8,8 +8,11 @@ from sqlalchemy import (
     ForeignKey,
     Float,
     JSON,
+    Date,
+    UniqueConstraint,
+    Index,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
@@ -224,3 +227,89 @@ class ValidationMetric(Base):
     metric_name = Column(String, nullable=False)
     metric_value = Column(Float)
     created_at  = Column(DateTime(timezone=True))
+
+
+# --- Pre-Season Testing tables ---------------------------------------------------
+
+class TestingEvent(Base):
+    """Pre-season or in-season testing event (e.g., Bahrain 2025 testing)."""
+    __tablename__ = "testing_events"
+    __table_args__ = (
+        UniqueConstraint("season", "event_id", name="uq_testing_event"),
+        Index("ix_testing_event_lookup", "season", "event_id"),
+    )
+
+    id         = Column(Integer, primary_key=True)
+    season     = Column(Integer, nullable=False, index=True)
+    event_id   = Column(String(50), nullable=False)  # e.g., "pre_season_2025"
+    event_name = Column(String(100), nullable=False)  # e.g., "Pre-Season Testing"
+    circuit_id = Column(String(50), nullable=False)  # e.g., "bahrain"
+    total_days = Column(Integer, default=3)
+    start_date = Column(Date)
+    end_date   = Column(Date)
+    status     = Column(String(20), default="scheduled")  # scheduled | running | completed
+
+    sessions = relationship("TestingSession", back_populates="event", cascade="all, delete-orphan")
+
+
+class TestingSession(Base):
+    """Single day of a testing event."""
+    __tablename__ = "testing_sessions"
+    __table_args__ = (
+        UniqueConstraint("event_id", "day", name="uq_testing_session"),
+    )
+
+    id       = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("testing_events.id"), nullable=False)
+    day      = Column(Integer, nullable=False)  # 1, 2, or 3
+    date     = Column(Date)
+    status   = Column(String(20), default="scheduled")  # scheduled | running | completed
+
+    event  = relationship("TestingEvent", back_populates="sessions")
+    laps   = relationship("TestingLap", back_populates="session", cascade="all, delete-orphan")
+    stints = relationship("TestingStint", back_populates="session", cascade="all, delete-orphan")
+
+
+class TestingLap(Base):
+    """Individual lap from a testing session."""
+    __tablename__ = "testing_laps"
+    __table_args__ = (
+        UniqueConstraint("session_id", "driver", "lap_number", name="uq_testing_lap"),
+        Index("ix_testing_lap_driver", "session_id", "driver"),
+    )
+
+    id          = Column(Integer, primary_key=True)
+    session_id  = Column(Integer, ForeignKey("testing_sessions.id"), nullable=False)
+    driver      = Column(String(3), nullable=False)  # Driver code (e.g., "VER")
+    team        = Column(String(50))  # Team name
+    lap_number  = Column(Integer, nullable=False)
+    lap_time_ms = Column(Float)  # Lap time in milliseconds
+    compound    = Column(String(20))  # Tire compound (SOFT, MEDIUM, HARD, etc.)
+    stint_number = Column(Integer)
+    sector_1_ms = Column(Float)
+    sector_2_ms = Column(Float)
+    sector_3_ms = Column(Float)
+    is_valid    = Column(Boolean, default=True)  # Valid lap (no track limits, etc.)
+
+    session = relationship("TestingSession", back_populates="laps")
+
+
+class TestingStint(Base):
+    """Aggregated stint from a testing session."""
+    __tablename__ = "testing_stints"
+    __table_args__ = (
+        UniqueConstraint("session_id", "driver", "stint_number", name="uq_testing_stint"),
+    )
+
+    id           = Column(Integer, primary_key=True)
+    session_id   = Column(Integer, ForeignKey("testing_sessions.id"), nullable=False)
+    driver       = Column(String(3), nullable=False)
+    team         = Column(String(50))
+    stint_number = Column(Integer, nullable=False)
+    compound     = Column(String(20))
+    start_lap    = Column(Integer)
+    end_lap      = Column(Integer)
+    lap_count    = Column(Integer)
+    avg_pace_ms  = Column(Float)  # Average lap time in milliseconds
+
+    session = relationship("TestingSession", back_populates="stints")

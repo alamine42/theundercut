@@ -293,3 +293,76 @@ export interface CircuitTrendsResponse {
   circuit_id: string;
   trends: CircuitTrend[];
 }
+
+// =============================================================================
+// Pre-Season Testing Data
+// =============================================================================
+
+export interface TestingEvent {
+  event_id: string;
+  event_name: string;
+  circuit_id: string;
+  circuit_name: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  status: "scheduled" | "running" | "completed";
+}
+
+export interface TestingEventsResponse {
+  season: number;
+  events: TestingEvent[];
+}
+
+export interface TestingStint {
+  stint_number: number;
+  compound: string;
+  lap_count: number;
+  avg_pace_ms: number;
+  avg_pace_formatted: string;
+}
+
+export interface TestingDriverResult {
+  position: number;
+  driver: string;
+  team: string;
+  best_lap_ms: number;
+  best_lap_formatted: string;
+  best_lap_compound: string;
+  gap_ms: number | null;
+  gap_formatted: string | null;
+  total_laps: number;
+  stints: TestingStint[];
+}
+
+export interface TestingLap {
+  driver: string;
+  lap_number: number;
+  lap_time_ms: number;
+  lap_time_formatted: string;
+  compound: string;
+  stint: number;
+  is_valid: boolean;
+  sector_1_ms: number | null;
+  sector_2_ms: number | null;
+  sector_3_ms: number | null;
+}
+
+export interface TestingDayResponse {
+  season: number;
+  event_id: string;
+  event_name: string;
+  circuit_id: string;
+  day: number;
+  date: string;
+  status: "scheduled" | "running" | "completed";
+  results: TestingDriverResult[];
+  laps: TestingLap[]; // Only populated if include_laps=true
+}
+
+export interface TestingLapsResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  laps: TestingLap[];
+}

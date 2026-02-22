@@ -7,6 +7,9 @@ import type {
   CircuitsResponse,
   CircuitDetailResponse,
   CircuitTrendsResponse,
+  TestingEventsResponse,
+  TestingDayResponse,
+  TestingLapsResponse,
 } from "@/types/api";
 
 const BASE_URL = API_CONFIG.baseUrl;
@@ -150,6 +153,82 @@ export async function fetchCircuitTrends(
 
   if (!res.ok) {
     throw new Error(`Failed to fetch circuit trends: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// =============================================================================
+// Testing API
+// =============================================================================
+
+export async function fetchTestingEvents(
+  season: number
+): Promise<TestingEventsResponse> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/testing/${season}`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch testing events: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchTestingDay(
+  season: number,
+  eventId: string,
+  day: number,
+  options?: { drivers?: string[]; includeLaps?: boolean }
+): Promise<TestingDayResponse> {
+  const url = new URL(
+    `${getBaseUrl()}${BASE_URL}/testing/${season}/${eventId}/${day}`,
+    getBaseUrl() || "http://localhost"
+  );
+
+  if (options?.drivers) {
+    options.drivers.forEach((d) => url.searchParams.append("drivers", d));
+  }
+  if (options?.includeLaps) {
+    url.searchParams.set("include_laps", "true");
+  }
+
+  const res = await fetch(url.toString(), fetchOptions());
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch testing day: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchTestingLaps(
+  season: number,
+  eventId: string,
+  day: number,
+  options?: { drivers?: string[]; offset?: number; limit?: number }
+): Promise<TestingLapsResponse> {
+  const url = new URL(
+    `${getBaseUrl()}${BASE_URL}/testing/${season}/${eventId}/${day}/laps`,
+    getBaseUrl() || "http://localhost"
+  );
+
+  if (options?.drivers) {
+    options.drivers.forEach((d) => url.searchParams.append("drivers", d));
+  }
+  if (options?.offset !== undefined) {
+    url.searchParams.set("offset", options.offset.toString());
+  }
+  if (options?.limit !== undefined) {
+    url.searchParams.set("limit", options.limit.toString());
+  }
+
+  const res = await fetch(url.toString(), fetchOptions());
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch testing laps: ${res.status}`);
   }
 
   return res.json();
