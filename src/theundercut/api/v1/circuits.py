@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
@@ -17,6 +18,10 @@ from theundercut.adapters.db import get_db
 from theundercut.adapters.redis_cache import redis_client
 
 logger = logging.getLogger(__name__)
+
+# Rate limiting: 1 request per second to avoid 429 errors
+_last_request_time = 0.0
+_request_interval = 1.0  # 1 second between requests
 
 JOLPICA_BASE = "https://api.jolpi.ca/ergast/f1"
 CACHE_TTL_SECONDS = 600  # 10 minutes
@@ -114,8 +119,44 @@ def _fetch_circuit_info(circuit_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _rate_limited_request(client: httpx.Client, url: str, max_retries: int = 5) -> httpx.Response:
+    """Make a rate-limited HTTP request with retry logic for 429 errors."""
+    global _last_request_time
+
+    for attempt in range(max_retries):
+        # Rate limiting: ensure minimum interval between requests
+        elapsed = time.time() - _last_request_time
+        if elapsed < _request_interval:
+            time.sleep(_request_interval - elapsed)
+
+        _last_request_time = time.time()
+
+        try:
+            resp = client.get(url)
+            if resp.status_code == 429:
+                # Rate limited - wait and retry with exponential backoff
+                wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s, 16s, 32s
+                logger.debug(f"Rate limited, waiting {wait_time}s before retry {attempt + 1}")
+                time.sleep(wait_time)
+                continue
+            resp.raise_for_status()
+            return resp
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429 and attempt < max_retries - 1:
+                wait_time = (2 ** attempt) * 2
+                time.sleep(wait_time)
+                continue
+            raise
+
+    # If we get here, all retries failed
+    raise httpx.HTTPStatusError(f"Max retries exceeded for {url}", request=None, response=None)
+
+
 def _fetch_circuit_results(circuit_id: str, limit: int = 30) -> List[Dict[str, Any]]:
-    """Fetch historical race results for a circuit with pagination and caching."""
+    """Fetch historical race results for a circuit with pagination and caching.
+
+    Fetches the MOST RECENT races by starting from the end of the dataset.
+    """
     # Check cache first (historical data changes rarely)
     cache_key = f"circuit_results:{circuit_id}:{limit}"
     try:
@@ -127,15 +168,28 @@ def _fetch_circuit_results(circuit_id: str, limit: int = 30) -> List[Dict[str, A
         # Continue without cache
 
     all_races: List[Dict] = []
-    offset = 0
-    page_limit = 100
+    page_limit = 100  # ~5 races per 100 results
 
     try:
-        with httpx.Client(timeout=15) as client:
-            while len(all_races) < limit:
+        with httpx.Client(timeout=30) as client:
+            # First, get the total count to calculate where to start
+            url = f"{JOLPICA_BASE}/circuits/{circuit_id}/results.json?limit=1&offset=0"
+            resp = _rate_limited_request(client, url)
+            data = resp.json()
+            total = _safe_int(data.get("MRData", {}).get("total", 0))
+
+            if total == 0:
+                return []
+
+            # Calculate starting offset to get the most recent races
+            # Each race has ~20 results, so limit races * 20 results per race
+            results_needed = limit * 20
+            start_offset = max(0, total - results_needed)
+
+            offset = start_offset
+            while len(all_races) < limit and offset < total:
                 url = f"{JOLPICA_BASE}/circuits/{circuit_id}/results.json?limit={page_limit}&offset={offset}"
-                resp = client.get(url)
-                resp.raise_for_status()
+                resp = _rate_limited_request(client, url)
                 data = resp.json()
 
                 races = data.get("MRData", {}).get("RaceTable", {}).get("Races", [])
@@ -143,12 +197,12 @@ def _fetch_circuit_results(circuit_id: str, limit: int = 30) -> List[Dict[str, A
                     break
 
                 all_races.extend(races)
-                total = _safe_int(data.get("MRData", {}).get("total", 0))
                 offset += page_limit
-                if offset >= total:
-                    break
 
+        # Sort by season descending to get most recent first
+        all_races.sort(key=lambda r: _safe_int(r.get("season", 0)), reverse=True)
         result = all_races[:limit]
+
         # Only cache if we got data (avoid caching transient failures)
         if result:
             try:
@@ -378,27 +432,21 @@ def _compute_preview_stats_from_races(races: List[Dict[str, Any]]) -> Dict[str, 
 
 
 def _fetch_all_circuit_results_parallel(circuit_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-    """Fetch historical results for multiple circuits in parallel."""
+    """Fetch historical results for multiple circuits sequentially with rate limiting.
+
+    Uses sequential fetching to properly enforce rate limits and avoid 429 errors.
+    Results are cached for 24 hours, so subsequent requests will be fast.
+    """
     results: Dict[str, List[Dict[str, Any]]] = {}
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_circuit = {
-            executor.submit(_fetch_circuit_results, cid, 30): cid
-            for cid in circuit_ids
-        }
-        # Timeout after 45 seconds to prevent indefinite blocking
-        for future in as_completed(future_to_circuit, timeout=45):
-            circuit_id = future_to_circuit[future]
-            try:
-                results[circuit_id] = future.result()
-            except Exception as e:
-                logger.warning(f"Failed to fetch results for circuit {circuit_id}: {e}")
-                results[circuit_id] = []
-
-    # Handle any circuits that didn't complete in time
+    # Fetch sequentially to properly enforce rate limiting
+    # The Jolpica API has strict rate limits (~1 req/sec)
+    # Only fetch 15 races per circuit - enough for preview stats
     for circuit_id in circuit_ids:
-        if circuit_id not in results:
-            logger.warning(f"Timeout fetching results for circuit {circuit_id}")
+        try:
+            results[circuit_id] = _fetch_circuit_results(circuit_id, 15)
+        except Exception as e:
+            logger.warning(f"Failed to fetch results for circuit {circuit_id}: {e}")
             results[circuit_id] = []
 
     return results
