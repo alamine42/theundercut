@@ -59,12 +59,13 @@ def get_testing_events(
 ) -> Dict[str, Any]:
     """Get all testing events for a season."""
     print(f"DEBUG: get_testing_events called for season={season}", flush=True)
-    cache_key = _testing_events_cache_key(season)
-    cached = redis_client.get(cache_key)
-    if cached:
-        print(f"DEBUG: Returning cached result for {cache_key}", flush=True)
-        return json.loads(cached)
-    print(f"DEBUG: No cache hit, querying database", flush=True)
+    # TEMP: Skip cache to debug
+    # cache_key = _testing_events_cache_key(season)
+    # cached = redis_client.get(cache_key)
+    # if cached:
+    #     print(f"DEBUG: Returning cached result for {cache_key}", flush=True)
+    #     return json.loads(cached)
+    print(f"DEBUG: Cache bypassed, querying database", flush=True)
 
     # Query testing events for the season
     stmt = select(TestingEvent).where(TestingEvent.season == season).order_by(TestingEvent.start_date)
@@ -96,10 +97,10 @@ def get_testing_events(
         "events": events_data,
     }
 
-    # Cache with appropriate TTL (don't cache empty results for long)
-    if events_data:
-        ttl = CACHE_TTL_SECONDS
-        redis_client.setex(cache_key, ttl, json.dumps(payload))
+    # TEMP: Skip caching for debug
+    # if events_data:
+    #     ttl = CACHE_TTL_SECONDS
+    #     redis_client.setex(cache_key, ttl, json.dumps(payload))
 
     return payload
 
