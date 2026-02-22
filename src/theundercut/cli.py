@@ -319,6 +319,163 @@ def testing_backfill(
     typer.echo(f"✅ Backfill complete: {total_laps} laps, {total_stints} stints")
 
 
+@testing_app.command("ingest-openf1")
+def testing_ingest_openf1(
+    season: int = typer.Argument(..., help="Season year"),
+):
+    """
+    Ingest 2026 pre-season testing data from OpenF1 API.
+
+    OpenF1 has testing data that FastF1 may not have yet.
+    """
+    import httpx
+    from datetime import datetime
+    from theundercut.adapters.db import SessionLocal
+    from theundercut.models import TestingEvent, TestingSession, TestingLap
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    if season != 2026:
+        typer.echo(f"⚠️  OpenF1 ingestion currently only supports 2026 season")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"▶️  Fetching 2026 pre-season testing data from OpenF1...")
+
+    # OpenF1 testing session keys for 2026
+    # Test 1: Feb 11-13 (Bahrain)
+    # Test 2: Feb 18-20 (Bahrain)
+    TESTING_SESSIONS = [
+        {"test": 1, "day": 1, "session_key": 11465, "date": "2026-02-11"},
+        {"test": 1, "day": 2, "session_key": 11466, "date": "2026-02-12"},
+        {"test": 1, "day": 3, "session_key": 11467, "date": "2026-02-13"},
+        {"test": 2, "day": 1, "session_key": 11470, "date": "2026-02-18"},
+        {"test": 2, "day": 2, "session_key": 11469, "date": "2026-02-19"},
+        {"test": 2, "day": 3, "session_key": 11468, "date": "2026-02-20"},
+    ]
+
+    # Fetch driver info first
+    typer.echo("  Fetching driver info...")
+    drivers_resp = httpx.get(
+        "https://api.openf1.org/v1/drivers",
+        params={"session_key": 11465}
+    )
+    drivers_data = drivers_resp.json()
+    driver_map = {d["driver_number"]: d for d in drivers_data}
+    typer.echo(f"    Found {len(driver_map)} drivers")
+
+    with SessionLocal() as db:
+        total_laps = 0
+
+        for test_num in [1, 2]:
+            event_id = f"bahrain_pre_season_test_{test_num}"
+            test_sessions = [s for s in TESTING_SESSIONS if s["test"] == test_num]
+
+            # Create or get the testing event
+            event = (
+                db.query(TestingEvent)
+                .filter(TestingEvent.season == season, TestingEvent.event_id == event_id)
+                .one_or_none()
+            )
+
+            if not event:
+                event = TestingEvent(
+                    season=season,
+                    event_id=event_id,
+                    event_name=f"Pre-Season Test {test_num}",
+                    circuit_id="bahrain",
+                    total_days=3,
+                    start_date=datetime.strptime(test_sessions[0]["date"], "%Y-%m-%d").date(),
+                    end_date=datetime.strptime(test_sessions[-1]["date"], "%Y-%m-%d").date(),
+                    status="completed",
+                )
+                db.add(event)
+                db.flush()
+                typer.echo(f"  Created event: {event_id}")
+            else:
+                typer.echo(f"  Found existing event: {event_id}")
+
+            # Process each day
+            for sess_info in test_sessions:
+                day = sess_info["day"]
+                session_key = sess_info["session_key"]
+
+                # Create or get the session
+                session = (
+                    db.query(TestingSession)
+                    .filter(TestingSession.event_id == event.id, TestingSession.day == day)
+                    .one_or_none()
+                )
+
+                if not session:
+                    session = TestingSession(
+                        event_id=event.id,
+                        day=day,
+                        status="completed",
+                    )
+                    db.add(session)
+                    db.flush()
+
+                # Check if laps already exist
+                existing_laps = db.query(TestingLap).filter(TestingLap.session_id == session.id).count()
+                if existing_laps > 0:
+                    typer.echo(f"    Test {test_num} Day {day}: Already has {existing_laps} laps")
+                    total_laps += existing_laps
+                    continue
+
+                # Fetch laps from OpenF1
+                typer.echo(f"    Fetching laps for Test {test_num} Day {day} (session_key={session_key})...")
+                laps_resp = httpx.get(
+                    "https://api.openf1.org/v1/laps",
+                    params={"session_key": session_key},
+                    timeout=60
+                )
+                laps_data = laps_resp.json()
+
+                if not laps_data:
+                    typer.echo(f"      No lap data found")
+                    continue
+
+                # Prepare lap records
+                records = []
+                for lap in laps_data:
+                    driver_num = lap.get("driver_number")
+                    driver_info = driver_map.get(driver_num, {})
+                    driver_code = driver_info.get("name_acronym", f"D{driver_num}")
+                    team = driver_info.get("team_name", "Unknown")
+
+                    lap_duration = lap.get("lap_duration")
+                    lap_time_ms = lap_duration * 1000 if lap_duration else None
+
+                    s1 = lap.get("duration_sector_1")
+                    s2 = lap.get("duration_sector_2")
+                    s3 = lap.get("duration_sector_3")
+
+                    records.append({
+                        "session_id": session.id,
+                        "driver": driver_code,
+                        "team": team,
+                        "lap_number": lap.get("lap_number", 0),
+                        "lap_time_ms": lap_time_ms,
+                        "compound": None,  # OpenF1 doesn't have compound in laps
+                        "stint_number": None,
+                        "sector_1_ms": s1 * 1000 if s1 else None,
+                        "sector_2_ms": s2 * 1000 if s2 else None,
+                        "sector_3_ms": s3 * 1000 if s3 else None,
+                        "is_valid": lap.get("is_pit_out_lap") is not True,
+                    })
+
+                if records:
+                    stmt = pg_insert(TestingLap).values(records)
+                    stmt = stmt.on_conflict_do_nothing(
+                        index_elements=["session_id", "driver", "lap_number"]
+                    )
+                    db.execute(stmt)
+                    typer.echo(f"      Inserted {len(records)} laps")
+                    total_laps += len(records)
+
+        db.commit()
+        typer.echo(f"✅ Ingested {total_laps} total laps for 2026 pre-season testing")
+
+
 @calibration_cli.command("import")
 def calibration_import_profile(
     name: str = typer.Argument(..., help="Calibration profile name to store"),
