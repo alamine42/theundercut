@@ -86,9 +86,10 @@ def get_testing_events(
         "events": events_data,
     }
 
-    # Cache with appropriate TTL
-    ttl = COMPLETED_CACHE_TTL_SECONDS if not events_data else CACHE_TTL_SECONDS
-    redis_client.setex(cache_key, ttl, json.dumps(payload))
+    # Cache with appropriate TTL (don't cache empty results for long)
+    if events_data:
+        ttl = CACHE_TTL_SECONDS
+        redis_client.setex(cache_key, ttl, json.dumps(payload))
 
     return payload
 

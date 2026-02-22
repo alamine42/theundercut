@@ -319,6 +319,22 @@ def testing_backfill(
     typer.echo(f"✅ Backfill complete: {total_laps} laps, {total_stints} stints")
 
 
+@testing_app.command("clear-cache")
+def testing_clear_cache():
+    """
+    Clear all testing-related cache entries from Redis.
+    """
+    from theundercut.adapters.redis_client import redis_client
+
+    typer.echo("Clearing testing cache...")
+    count = 0
+    for key in redis_client.scan_iter(match="testing:*"):
+        redis_client.delete(key)
+        count += 1
+        typer.echo(f"  Deleted: {key}")
+    typer.echo(f"✅ Cleared {count} cache entries")
+
+
 @testing_app.command("create-tables")
 def testing_create_tables():
     """
