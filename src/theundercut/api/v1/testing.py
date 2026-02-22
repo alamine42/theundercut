@@ -58,25 +58,14 @@ def get_testing_events(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Get all testing events for a season."""
-    print(f"DEBUG: get_testing_events called for season={season}", flush=True)
-    # TEMP: Skip cache to debug
-    # cache_key = _testing_events_cache_key(season)
-    # cached = redis_client.get(cache_key)
-    # if cached:
-    #     print(f"DEBUG: Returning cached result for {cache_key}", flush=True)
-    #     return json.loads(cached)
-    print(f"DEBUG: Cache bypassed, querying database", flush=True)
+    cache_key = _testing_events_cache_key(season)
+    cached = redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
 
     # Query testing events for the season
     stmt = select(TestingEvent).where(TestingEvent.season == season).order_by(TestingEvent.start_date)
     events = db.execute(stmt).scalars().all()
-    print(f"DEBUG: Testing events query: season={season}, found={len(events)}", flush=True)
-
-    # Debug: Also try raw SQL to compare
-    from sqlalchemy import text
-    raw_result = db.execute(text("SELECT COUNT(*) FROM testing_events WHERE season = :s"), {"s": season})
-    raw_count = raw_result.scalar()
-    print(f"DEBUG: Raw SQL count: {raw_count}", flush=True)
 
     # Build response
     events_data = []
@@ -97,10 +86,10 @@ def get_testing_events(
         "events": events_data,
     }
 
-    # TEMP: Skip caching for debug
-    # if events_data:
-    #     ttl = CACHE_TTL_SECONDS
-    #     redis_client.setex(cache_key, ttl, json.dumps(payload))
+    # Cache with appropriate TTL (don't cache empty results)
+    if events_data:
+        ttl = CACHE_TTL_SECONDS
+        redis_client.setex(cache_key, ttl, json.dumps(payload))
 
     return payload
 
