@@ -1,53 +1,41 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Circuit List Page", () => {
-  test("displays circuit cards for 2024 season", async ({ page }) => {
-    await page.goto("/circuits/2024");
+  test("displays circuit cards for current season", async ({ page }) => {
+    await page.goto("/circuits");
 
     // Page should load successfully
-    await expect(page).toHaveTitle(/2024 Circuits/);
+    await expect(page).toHaveTitle(/Circuits/);
 
     // Should display hero section
-    await expect(page.getByRole("heading", { name: /2024 Circuits/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Circuits/ })).toBeVisible();
 
     // Should display circuit cards
     const circuitCards = page.locator("article");
     await expect(circuitCards.first()).toBeVisible();
 
-    // Should have year selector
-    await expect(page.locator("select")).toBeVisible();
-  });
-
-  test("displays circuit cards for 2025 season", async ({ page }) => {
-    await page.goto("/circuits/2025");
-
-    await expect(page).toHaveTitle(/2025 Circuits/);
-    await expect(page.getByRole("heading", { name: /2025 Circuits/ })).toBeVisible();
-  });
-
-  test("year selector navigates between seasons", async ({ page }) => {
-    await page.goto("/circuits/2024");
-
-    // Change to 2025
-    await page.selectOption("select", "2025");
-
-    // Wait for navigation
-    await page.waitForURL(/\/circuits\/2025/);
-    await expect(page.getByRole("heading", { name: /2025 Circuits/ })).toBeVisible();
+    // Should NOT have year selector (removed)
+    await expect(page.locator("select")).not.toBeVisible();
   });
 
   test("circuit card links to detail page", async ({ page }) => {
-    await page.goto("/circuits/2024");
+    await page.goto("/circuits");
 
-    // Find links that contain articles (circuit cards)
+    // Find the first circuit card link
     const circuitLinks = page.locator("a.group.block");
     await expect(circuitLinks.first()).toBeVisible();
 
     // Click first circuit link
     await circuitLinks.first().click();
 
-    // Should navigate to circuit detail page
-    await expect(page).toHaveURL(/\/circuits\/2024\/[a-z_-]+/);
+    // Should navigate to circuit detail page (with season in URL)
+    await expect(page).toHaveURL(/\/circuits\/\d{4}\/[a-z_-]+/);
+  });
+
+  test("old season URLs redirect to circuits", async ({ page }) => {
+    // Old URLs like /circuits/2024 should redirect to /circuits
+    await page.goto("/circuits/2024");
+    await expect(page).toHaveURL("/circuits");
   });
 });
 
@@ -59,8 +47,8 @@ test.describe("Circuit Detail Page", () => {
     // Should show circuit name in title
     await expect(page).toHaveTitle(/silverstone.*2024/i);
 
-    // Should show back link
-    await expect(page.getByRole("link", { name: /Back to 2024 Circuits/ })).toBeVisible();
+    // Should show back link (now just "Back to Circuits")
+    await expect(page.getByRole("link", { name: /Back to Circuits/ })).toBeVisible();
 
     // Should show circuit name
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -89,8 +77,9 @@ test.describe("Circuit Detail Page", () => {
   test("has link to trends page", async ({ page }) => {
     await page.goto("/circuits/2024/silverstone");
 
-    // Should have link to trends (partial text match)
-    const trendsLink = page.getByRole("link", { name: /Trends/i });
+    // Should have link to trends - scroll to bottom where it is
+    const trendsLink = page.getByRole("link", { name: /Multi-Season Trends/i });
+    await trendsLink.scrollIntoViewIfNeeded();
     await expect(trendsLink).toBeVisible();
 
     // Click and verify navigation
@@ -103,12 +92,12 @@ test.describe("Circuit Detail Page", () => {
 
     // Click back link and wait for navigation
     await Promise.all([
-      page.waitForURL(/\/circuits\/2024$/),
-      page.getByRole("link", { name: /Back to 2024 Circuits/ }).click(),
+      page.waitForURL(/\/circuits$/),
+      page.getByRole("link", { name: /Back to Circuits/ }).click(),
     ]);
 
     // Verify we're on the list page
-    await expect(page.getByRole("heading", { name: /2024 Circuits/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Circuits/ })).toBeVisible();
   });
 });
 
@@ -120,8 +109,8 @@ test.describe("Circuit Trends Page", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/trends/i);
 
-    // Should show hero section with stats
-    await expect(page.getByText(/seasons/i)).toBeVisible();
+    // Should show hero section with stats (Seasons label)
+    await expect(page.getByText("Seasons", { exact: true })).toBeVisible();
   });
 
   test("displays records or empty state", async ({ page }) => {
@@ -151,34 +140,30 @@ test.describe("Circuit Navigation", () => {
     const circuitsLink = page.locator("header").getByRole("link", { name: /Circuits/i });
     await expect(circuitsLink).toBeVisible();
 
-    // Click and verify navigation
+    // Click and verify navigation to /circuits
     await circuitsLink.click();
-    await expect(page).toHaveURL(/\/circuits\/\d{4}$/);
+    await expect(page).toHaveURL(/\/circuits$/);
   });
 
   test("full circuit navigation flow", async ({ page }) => {
     // Start at circuits list
-    await page.goto("/circuits/2024");
+    await page.goto("/circuits");
 
-    // Click first circuit link
-    await page.locator("a").filter({ has: page.locator("article") }).first().click();
-    await expect(page).toHaveURL(/\/circuits\/2024\/[a-z_-]+/);
+    // Click first circuit card link
+    const circuitLinks = page.locator("a.group.block");
+    await expect(circuitLinks.first()).toBeVisible();
+    await circuitLinks.first().click();
+    await expect(page).toHaveURL(/\/circuits\/\d{4}\/[a-z_-]+/);
 
-    // Go to trends
-    await page.getByRole("link", { name: /Multi-Season Trends/i }).click();
+    // Go to trends - look for the link with "Multi-Season Trends" text
+    const trendsLink = page.getByRole("link", { name: /Multi-Season Trends/i });
+    await trendsLink.scrollIntoViewIfNeeded();
+    await trendsLink.click();
     await expect(page).toHaveURL(/\/circuits\/trends\/[a-z_-]+/);
   });
 });
 
 test.describe("Error Handling", () => {
-  test("invalid season shows error page", async ({ page }) => {
-    const response = await page.goto("/circuits/1990");
-    // Should return 404 status or show error content
-    const status = response?.status();
-    const hasErrorContent = await page.getByText(/404|not found|error/i).isVisible().catch(() => false);
-    expect(status === 404 || hasErrorContent).toBe(true);
-  });
-
   test("invalid circuit shows error page", async ({ page }) => {
     const response = await page.goto("/circuits/2024/nonexistent_circuit_xyz");
     // Should return 404 status or show error content
