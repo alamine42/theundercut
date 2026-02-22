@@ -319,6 +319,80 @@ def testing_backfill(
     typer.echo(f"✅ Backfill complete: {total_laps} laps, {total_stints} stints")
 
 
+@testing_app.command("create-tables")
+def testing_create_tables():
+    """
+    Create testing tables directly (bypasses Alembic migrations).
+
+    Use this if migrations are stuck and testing tables need to be created.
+    """
+    from theundercut.adapters.db import engine
+    from sqlalchemy import text
+
+    CREATE_SQL = """
+    CREATE TABLE IF NOT EXISTS testing_events (
+        id SERIAL PRIMARY KEY,
+        season INTEGER NOT NULL,
+        event_id VARCHAR(50) NOT NULL,
+        event_name VARCHAR(100) NOT NULL,
+        circuit_id VARCHAR(50) NOT NULL,
+        total_days INTEGER DEFAULT 3,
+        start_date DATE,
+        end_date DATE,
+        status VARCHAR(20) DEFAULT 'scheduled',
+        UNIQUE(season, event_id)
+    );
+    CREATE INDEX IF NOT EXISTS ix_testing_events_season ON testing_events(season);
+    CREATE INDEX IF NOT EXISTS ix_testing_event_lookup ON testing_events(season, event_id);
+
+    CREATE TABLE IF NOT EXISTS testing_sessions (
+        id SERIAL PRIMARY KEY,
+        event_id INTEGER NOT NULL REFERENCES testing_events(id) ON DELETE CASCADE,
+        day INTEGER NOT NULL,
+        date DATE,
+        status VARCHAR(20) DEFAULT 'scheduled',
+        UNIQUE(event_id, day)
+    );
+
+    CREATE TABLE IF NOT EXISTS testing_laps (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES testing_sessions(id) ON DELETE CASCADE,
+        driver VARCHAR(3) NOT NULL,
+        team VARCHAR(50),
+        lap_number INTEGER NOT NULL,
+        lap_time_ms FLOAT,
+        compound VARCHAR(20),
+        stint_number INTEGER,
+        sector_1_ms FLOAT,
+        sector_2_ms FLOAT,
+        sector_3_ms FLOAT,
+        is_valid BOOLEAN DEFAULT TRUE,
+        UNIQUE(session_id, driver, lap_number)
+    );
+    CREATE INDEX IF NOT EXISTS ix_testing_lap_driver ON testing_laps(session_id, driver);
+
+    CREATE TABLE IF NOT EXISTS testing_stints (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES testing_sessions(id) ON DELETE CASCADE,
+        driver VARCHAR(3) NOT NULL,
+        team VARCHAR(50),
+        stint_number INTEGER NOT NULL,
+        compound VARCHAR(20),
+        start_lap INTEGER,
+        end_lap INTEGER,
+        lap_count INTEGER,
+        avg_pace_ms FLOAT,
+        UNIQUE(session_id, driver, stint_number)
+    );
+    """
+
+    typer.echo("Creating testing tables...")
+    with engine.connect() as conn:
+        conn.execute(text(CREATE_SQL))
+        conn.commit()
+    typer.echo("✅ Testing tables created successfully")
+
+
 @testing_app.command("ingest-openf1")
 def testing_ingest_openf1(
     season: int = typer.Argument(..., help="Season year"),
