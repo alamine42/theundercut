@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 // Note: These tests are designed to work with or without testing data.
 // Since testing data may not be ingested yet, tests gracefully handle 404s.
 
-test.describe("Testing List Page", () => {
+test.describe("Pre-Season List Page", () => {
   test("displays testing page or handles empty data", async ({ page }) => {
     const response = await page.goto("/testing/2024");
     const status = response?.status();
@@ -65,7 +65,7 @@ test.describe("Testing List Page", () => {
   });
 });
 
-test.describe("Testing Event Detail Page", () => {
+test.describe("Pre-Season Event Detail Page", () => {
   test("handles event page navigation", async ({ page }) => {
     // Navigate to a testing event (may not exist)
     const response = await page.goto("/testing/2024/bahrain_pre_season_test");
@@ -119,7 +119,7 @@ test.describe("Testing Event Detail Page", () => {
   });
 });
 
-test.describe("Testing Day Tabs", () => {
+test.describe("Pre-Season Day Tabs", () => {
   test("switches content when clicking day tabs", async ({ page }) => {
     const response = await page.goto("/testing/2024/bahrain_pre_season_test?day=1");
     const status = response?.status();
@@ -178,7 +178,7 @@ test.describe("Testing Day Tabs", () => {
   });
 });
 
-test.describe("Testing Results Table", () => {
+test.describe("Pre-Season Results Table", () => {
   test("displays correct columns when data exists", async ({ page }) => {
     const response = await page.goto("/testing/2024/bahrain_pre_season_test?day=1");
     const status = response?.status();
@@ -228,7 +228,7 @@ test.describe("Testing Results Table", () => {
   });
 });
 
-test.describe("Testing Stint Summary", () => {
+test.describe("Pre-Season Stint Summary", () => {
   test("displays compound breakdown when data exists", async ({ page }) => {
     const response = await page.goto("/testing/2024/bahrain_pre_season_test?day=1");
     const status = response?.status();
@@ -250,7 +250,7 @@ test.describe("Testing Stint Summary", () => {
   });
 });
 
-test.describe("Testing Lap Chart", () => {
+test.describe("Pre-Season Lap Chart", () => {
   test("displays lap progression chart when data available", async ({ page }) => {
     const response = await page.goto("/testing/2024/bahrain_pre_season_test?day=1");
     const status = response?.status();
@@ -297,12 +297,12 @@ test.describe("Testing Lap Chart", () => {
   });
 });
 
-test.describe("Testing Navigation", () => {
-  test("nav bar has Testing link", async ({ page }) => {
+test.describe("Pre-Season Navigation", () => {
+  test("nav bar has Pre-Season link", async ({ page }) => {
     await page.goto("/");
 
-    // Should have Testing link in navigation (hidden on mobile, visible on desktop)
-    const testingLink = page.locator("header nav").getByRole("link", { name: /Testing/i });
+    // Should have Pre-Season link in navigation (hidden on mobile, visible on desktop)
+    const testingLink = page.locator("header nav").getByRole("link", { name: /Pre-Season/i });
 
     // Check if visible (desktop) or in mobile menu
     const isDesktopVisible = await testingLink.isVisible().catch(() => false);
@@ -318,7 +318,7 @@ test.describe("Testing Navigation", () => {
 
       if (hasMenuButton) {
         await menuButton.click();
-        const mobileLink = page.locator("header").getByRole("link", { name: /Testing/i });
+        const mobileLink = page.locator("header").getByRole("link", { name: /Pre-Season/i });
         await mobileLink.click();
         await expect(page).toHaveURL(/\/testing\/\d{4}/);
       }
@@ -356,7 +356,7 @@ test.describe("Testing Navigation", () => {
   });
 });
 
-test.describe("Testing Error Handling", () => {
+test.describe("Pre-Season Error Handling", () => {
   test("invalid season shows error page", async ({ page }) => {
     const response = await page.goto("/testing/1990");
 
