@@ -384,11 +384,19 @@ def testing_create_tables():
     ]
 
     typer.echo("Creating testing tables...")
+    typer.echo(f"  Database: {str(engine.url)[:50]}...")
     with engine.connect() as conn:
         for i, stmt in enumerate(STATEMENTS, 1):
             typer.echo(f"  Executing statement {i}/{len(STATEMENTS)}...")
             conn.execute(text(stmt))
         conn.commit()
+        typer.echo("  Committed. Verifying tables exist...")
+        result = conn.execute(text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='public' AND table_name LIKE 'testing%'"
+        ))
+        tables = [row[0] for row in result]
+        typer.echo(f"  Found tables: {tables}")
     typer.echo("✅ Testing tables created successfully")
 
 
