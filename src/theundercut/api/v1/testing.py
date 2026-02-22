@@ -66,6 +66,13 @@ def get_testing_events(
     # Query testing events for the season
     stmt = select(TestingEvent).where(TestingEvent.season == season).order_by(TestingEvent.start_date)
     events = db.execute(stmt).scalars().all()
+    logger.warning(f"Testing events query: season={season}, found={len(events)}")
+
+    # Debug: Also try raw SQL to compare
+    from sqlalchemy import text
+    raw_result = db.execute(text("SELECT COUNT(*) FROM testing_events WHERE season = :s"), {"s": season})
+    raw_count = raw_result.scalar()
+    logger.warning(f"Raw SQL count: {raw_count}")
 
     # Build response
     events_data = []
