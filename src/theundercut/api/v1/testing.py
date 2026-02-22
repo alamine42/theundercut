@@ -58,14 +58,25 @@ def get_testing_events(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Get all testing events for a season."""
+    print(f"DEBUG: season={season}, type={type(season)}", flush=True)
+
     cache_key = _testing_events_cache_key(season)
     cached = redis_client.get(cache_key)
     if cached:
+        print(f"DEBUG: returning cached result", flush=True)
         return json.loads(cached)
+
+    print(f"DEBUG: no cache, querying DB", flush=True)
 
     # Query testing events for the season
     stmt = select(TestingEvent).where(TestingEvent.season == season).order_by(TestingEvent.start_date)
     events = db.execute(stmt).scalars().all()
+    print(f"DEBUG: ORM query returned {len(events)} events", flush=True)
+
+    # Also try raw SQL
+    from sqlalchemy import text
+    raw = db.execute(text("SELECT COUNT(*) FROM testing_events WHERE season = :s"), {"s": season}).scalar()
+    print(f"DEBUG: Raw SQL count for season {season}: {raw}", flush=True)
 
     # Build response
     events_data = []
