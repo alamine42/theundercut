@@ -324,7 +324,7 @@ def testing_clear_cache():
     """
     Clear all testing-related cache entries from Redis.
     """
-    from theundercut.adapters.redis_client import redis_client
+    from theundercut.adapters.redis_cache import redis_client
 
     typer.echo("Clearing testing cache...")
     count = 0
