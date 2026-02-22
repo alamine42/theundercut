@@ -40,9 +40,13 @@ class Settings:
 def get_settings() -> Settings:
     """Return cached settings so modules share a single config instance."""
     cache_path = Path(_env("FASTF1_CACHE_DIR", _DEFAULT_CACHE_DIR))
+    # Render provides postgres:// URLs but SQLAlchemy needs postgresql://
+    db_url = _env("DATABASE_URL", _DEFAULT_DB) or _DEFAULT_DB
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
     return Settings(
         environment=_env("APP_ENV", "local") or "local",
-        database_url=_env("DATABASE_URL", _DEFAULT_DB) or _DEFAULT_DB,
+        database_url=db_url,
         redis_url=_env("REDIS_URL", _DEFAULT_REDIS) or _DEFAULT_REDIS,
         secret_key=_env("SECRET_KEY", _DEFAULT_SECRET) or _DEFAULT_SECRET,
         fastf1_cache_dir=cache_path,
