@@ -58,11 +58,8 @@ def get_testing_events(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Get all testing events for a season."""
-    # TODO: Re-enable caching after debugging
-    # cache_key = _testing_events_cache_key(season)
-    # cached = redis_client.get(cache_key)
-    # if cached:
-    #     return json.loads(cached)
+    # Note: Caching disabled for this endpoint as testing data changes infrequently
+    # and cache invalidation was causing issues. The database query is fast enough.
 
     # Query testing events for the season
     stmt = select(TestingEvent).where(TestingEvent.season == season).order_by(TestingEvent.start_date)
@@ -86,11 +83,6 @@ def get_testing_events(
         "season": season,
         "events": events_data,
     }
-
-    # TODO: Re-enable caching after debugging
-    # if events_data:
-    #     ttl = CACHE_TTL_SECONDS
-    #     redis_client.setex(cache_key, ttl, json.dumps(payload))
 
     return payload
 
