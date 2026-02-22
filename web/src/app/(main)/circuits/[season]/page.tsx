@@ -107,10 +107,10 @@ export default async function CircuitsPage({ params }: CircuitsPageProps) {
                       </div>
 
                       <div className="mt-3 pt-3 border-t border-ink/20 group-hover:border-paper/20">
-                        <p className="text-sm font-medium truncate">{circuit.race_name}</p>
-                        <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium truncate flex-1">{circuit.race_name}</p>
                           {raceDate && (
-                            <p className={`text-xs ${
+                            <p className={`text-xs ml-2 whitespace-nowrap ${
                               isPastRace
                                 ? 'text-muted group-hover:text-paper/70'
                                 : 'font-semibold text-ink group-hover:text-paper'
@@ -118,22 +118,65 @@ export default async function CircuitsPage({ params }: CircuitsPageProps) {
                               {raceDate.toLocaleDateString("en-US", {
                                 month: "short",
                                 day: "numeric",
-                                year: "numeric",
                               })}
                             </p>
                           )}
-
-                          {/* Dominant driver stat */}
-                          {circuit.preview?.dominant_driver && circuit.preview.dominant_driver_wins > 1 ? (
-                            <span className="text-xs text-muted group-hover:text-paper/70 font-medium">
-                              {circuit.preview.dominant_driver} × {circuit.preview.dominant_driver_wins}
-                            </span>
-                          ) : circuit.preview?.last_winner && (
-                            <span className="text-xs text-muted group-hover:text-paper/70">
-                              Last: {circuit.preview.last_winner}
-                            </span>
-                          )}
                         </div>
+
+                        {/* Stats row - compelling data */}
+                        {circuit.preview && (circuit.preview.dominant_driver || circuit.preview.last_winner) && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {/* Dominant driver badge */}
+                            {circuit.preview.dominant_driver && circuit.preview.dominant_driver_wins > 1 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-ink/10 group-hover:bg-paper/20 text-xs font-medium rounded-sm">
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="8" r="4" />
+                                  <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+                                </svg>
+                                {circuit.preview.dominant_driver}
+                                <span className="text-muted group-hover:text-paper/60">
+                                  {circuit.preview.dominant_driver_wins}W
+                                </span>
+                              </span>
+                            )}
+
+                            {/* Dominant team badge */}
+                            {circuit.preview.dominant_team && circuit.preview.dominant_team_wins > 1 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-ink/10 group-hover:bg-paper/20 text-xs font-medium rounded-sm">
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                  <circle cx="9" cy="7" r="4" />
+                                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                                {circuit.preview.dominant_team}
+                                <span className="text-muted group-hover:text-paper/60">
+                                  {circuit.preview.dominant_team_wins}W
+                                </span>
+                              </span>
+                            )}
+
+                            {/* Last winner - only if no dominant driver */}
+                            {!circuit.preview.dominant_driver && circuit.preview.last_winner && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-ink/10 group-hover:bg-paper/20 text-xs font-medium rounded-sm">
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                                  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                  <path d="M4 22h16" />
+                                  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" />
+                                  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" />
+                                  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                </svg>
+                                Last: {circuit.preview.last_winner}
+                                {circuit.preview.last_winner_team && (
+                                  <span className="text-muted group-hover:text-paper/60">
+                                    ({circuit.preview.last_winner_team})
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-3 flex items-center text-xs font-medium text-ink group-hover:text-paper">
