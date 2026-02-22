@@ -26,14 +26,23 @@ export default async function TestingPage({ params }: PageProps) {
     notFound();
   }
 
-  let testingData;
-  try {
-    testingData = await fetchTestingEvents(season);
-  } catch {
-    notFound();
-  }
+  let events: Array<{
+    event_id: string;
+    event_name: string;
+    circuit_id: string;
+    circuit_name: string;
+    start_date: string | null;
+    end_date: string | null;
+    total_days: number;
+    status: "scheduled" | "running" | "completed";
+  }> = [];
 
-  const { events } = testingData;
+  try {
+    const testingData = await fetchTestingEvents(season);
+    events = testingData.events;
+  } catch {
+    // No data available - show empty state instead of 404
+  }
 
   // Count events by status
   const completedEvents = events.filter((e) => e.status === "completed").length;
