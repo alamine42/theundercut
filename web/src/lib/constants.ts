@@ -174,7 +174,7 @@ export const API_CONFIG = {
 // Available Seasons (years with data, most recent first)
 // =============================================================================
 
-export const AVAILABLE_SEASONS = [2025, 2024];
+export const AVAILABLE_SEASONS = [2026, 2025, 2024];
 
 // =============================================================================
 // Default Season (most recent year)
