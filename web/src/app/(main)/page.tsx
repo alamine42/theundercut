@@ -5,18 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { TeamWithLogo } from "@/components/ui/team-logo";
 import { SeasonResultsTable } from "@/components/season-results-table";
-import { fetchStandings } from "@/lib/api";
+import { fetchStandings, fetchTestingEvents } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
+import { getCountryFlag } from "@/lib/utils";
+import type { TestingEvent } from "@/types/api";
 
 export const revalidate = 300; // 5 minutes ISR
 
 async function getHomeData() {
   try {
-    const standings = await fetchStandings(DEFAULT_SEASON);
-    return { standings, error: null };
+    const [standings, testingData] = await Promise.all([
+      fetchStandings(DEFAULT_SEASON),
+      fetchTestingEvents(DEFAULT_SEASON).catch(() => ({ events: [] })),
+    ]);
+    return { standings, testingEvents: testingData.events, error: null };
   } catch (error) {
     console.error("Failed to fetch homepage data:", error);
-    return { standings: null, error: "Failed to load data" };
+    return { standings: null, testingEvents: [], error: "Failed to load data" };
   }
 }
 
@@ -40,7 +45,7 @@ function PositionChange({ gained }: { gained: number }) {
 }
 
 export default async function HomePage() {
-  const { standings, error } = await getHomeData();
+  const { standings, testingEvents, error } = await getHomeData();
 
   const topDrivers = standings?.drivers.slice(0, 5) ?? [];
   const topConstructors = standings?.constructors.slice(0, 5) ?? [];
@@ -48,6 +53,7 @@ export default async function HomePage() {
   const racesRemaining = standings?.races_remaining ?? 0;
   const lastRace = standings?.last_race ?? null;
   const raceSummaries = standings?.race_summaries ?? [];
+  const showPreSeasonTesting = racesCompleted === 0 && testingEvents.length > 0;
 
   return (
     <>
@@ -85,6 +91,11 @@ export default async function HomePage() {
             </Card>
           ) : (
             <div className="space-y-8">
+              {/* Pre-Season Testing Widget - only shown before first race */}
+              {showPreSeasonTesting && (
+                <PreSeasonTestingWidget events={testingEvents} />
+              )}
+
               {/* Last Race Results */}
               {lastRace && lastRace.results.length > 0 && (
                 <Card accent>
@@ -146,7 +157,7 @@ export default async function HomePage() {
               {/* Driver Standings */}
               <Card accent>
                 <CardHeader>
-                  <CardTitle>Driver Championship</CardTitle>
+                  <CardTitle>{DEFAULT_SEASON} Driver Championship</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -182,7 +193,7 @@ export default async function HomePage() {
               {/* Constructor Standings */}
               <Card accent>
                 <CardHeader>
-                  <CardTitle>Constructor Championship</CardTitle>
+                  <CardTitle>{DEFAULT_SEASON} Constructor Championship</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -220,5 +231,94 @@ export default async function HomePage() {
         </div>
       </section>
     </>
+  );
+}
+
+function PreSeasonTestingWidget({ events }: { events: TestingEvent[] }) {
+  const circuitCountries: Record<string, string> = {
+    bahrain: "Bahrain",
+    barcelona: "Spain",
+    catalunya: "Spain",
+    silverstone: "UK",
+    albert_park: "Australia",
+  };
+
+  const formatDateRange = (start: string | null, end: string | null) => {
+    if (!start) return "TBD";
+    const startDate = new Date(start);
+    const endDate = end ? new Date(end) : null;
+    const startStr = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    if (!endDate) return startStr;
+    const endStr = endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${startStr} – ${endStr}`;
+  };
+
+  const completedEvents = events.filter((e) => e.status === "completed").length;
+  const totalDays = events.reduce((sum, e) => sum + e.total_days, 0);
+
+  return (
+    <Card accent>
+      <CardHeader>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>{DEFAULT_SEASON} Pre-Season Testing</CardTitle>
+          <span className="text-sm text-muted">
+            {completedEvents}/{events.length} events completed
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {events.map((event) => {
+            const country = circuitCountries[event.circuit_id] || "";
+            const statusColors = {
+              scheduled: "bg-ink/10 text-ink",
+              running: "bg-accent/20 text-accent",
+              completed: "bg-green-100 text-green-800",
+            };
+            const statusLabels = {
+              scheduled: "Upcoming",
+              running: "Live",
+              completed: "Completed",
+            };
+
+            return (
+              <Link
+                key={event.event_id}
+                href={`/testing/${DEFAULT_SEASON}/${event.event_id}`}
+                className="block group"
+              >
+                <div className="flex items-center justify-between p-4 border-2 border-ink/10 hover:border-ink hover:bg-ink hover:text-paper transition-all duration-200">
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-center justify-center bg-ink text-paper px-3 py-1.5 group-hover:bg-paper group-hover:text-ink transition-colors">
+                      <span className="text-lg font-bold">{event.total_days}</span>
+                      <span className="text-[10px] uppercase tracking-wider">Days</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{event.event_name}</h3>
+                      <p className="text-sm text-muted group-hover:text-paper/70">
+                        {getCountryFlag(country)} {event.circuit_name} · {formatDateRange(event.start_date, event.end_date)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 text-xs font-semibold rounded ${statusColors[event.status]}`}>
+                    {statusLabels[event.status]}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        <div className="mt-4 pt-4 border-t border-ink/10 flex items-center justify-between">
+          <p className="text-sm text-muted">
+            {totalDays} total testing days
+          </p>
+          <Link href={`/testing/${DEFAULT_SEASON}`}>
+            <Button variant="ghost" size="sm">
+              View all testing data →
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
