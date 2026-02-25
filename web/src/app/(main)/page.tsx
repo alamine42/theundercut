@@ -9,7 +9,8 @@ import { RaceWeekendWidget } from "@/components/race-weekend";
 import { fetchStandings, fetchTestingEvents, fetchCircuits, fetchWeekendData } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
-import type { TestingEvent, WeekendResponse } from "@/types/api";
+import type { TestingEvent, WeekendResponse, Circuit } from "@/types/api";
+import type { NextRaceInfo } from "@/components/race-weekend/types";
 
 export const revalidate = 300; // 5 minutes ISR
 
@@ -38,20 +39,33 @@ async function getHomeData() {
       }
     }
 
+    // Build nextRaceInfo from circuits data as fallback
+    let nextRaceInfo: NextRaceInfo | null = null;
+    if (upcomingRace) {
+      nextRaceInfo = {
+        raceName: upcomingRace.race_name || null,
+        circuitName: upcomingRace.name || null,
+        circuitCountry: upcomingRace.country || null,
+        fp1Date: upcomingRace.date || null, // Using race date as approximation for FP1
+        round: upcomingRace.round || 1,
+      };
+    }
+
     return {
       standings,
       testingEvents: testingData.events,
       weekendData,
+      nextRaceInfo,
       error: null,
     };
   } catch (error) {
     console.error("Failed to fetch homepage data:", error);
-    return { standings: null, testingEvents: [], weekendData: null, error: "Failed to load data" };
+    return { standings: null, testingEvents: [], weekendData: null, nextRaceInfo: null, error: "Failed to load data" };
   }
 }
 
 export default async function HomePage() {
-  const { standings, testingEvents, weekendData, error } = await getHomeData();
+  const { standings, testingEvents, weekendData, nextRaceInfo, error } = await getHomeData();
 
   const topDrivers = standings?.drivers.slice(0, 5) ?? [];
   const topConstructors = standings?.constructors.slice(0, 5) ?? [];
@@ -102,7 +116,7 @@ export default async function HomePage() {
               )}
 
               {/* Race Weekend Widget - shows current/upcoming race info and results */}
-              <RaceWeekendWidget weekendData={weekendData} />
+              <RaceWeekendWidget weekendData={weekendData} nextRaceInfo={nextRaceInfo} />
 
               {/* Season Results Summary */}
               {raceSummaries.length > 0 && (

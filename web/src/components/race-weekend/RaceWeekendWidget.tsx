@@ -5,7 +5,8 @@ import { RaceHeader } from "./RaceHeader";
 import { RaceCountdown } from "./RaceCountdown";
 import { HistoricalData } from "./HistoricalData";
 import { SessionGrid } from "./SessionGrid";
-import type { RaceWeekendWidgetProps, WidgetState } from "./types";
+import { getCountryFlag } from "@/lib/utils";
+import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo } from "./types";
 
 function determineWidgetState(
   schedule: { sessions: Array<{ session_type: string; start_time: string | null; status: string }> } | null
@@ -102,7 +103,86 @@ function StaleDataBanner({ lastUpdated }: { lastUpdated?: string }) {
   );
 }
 
-function EmptyState() {
+function getDaysUntilFP1(
+  sessions: Array<{ session_type: string; start_time: string | null }> | null
+): number | null {
+  if (!sessions) return null;
+
+  // Find FP1 or first session
+  const fp1 = sessions.find(
+    (s) => s.session_type.toLowerCase() === "fp1" || s.session_type.toLowerCase() === "practice_1"
+  );
+  const firstSession = fp1 || sessions.find((s) => s.start_time);
+
+  if (!firstSession?.start_time) return null;
+
+  const now = new Date();
+  const fp1Date = new Date(firstSession.start_time);
+  const diffMs = fp1Date.getTime() - now.getTime();
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  return days > 0 ? days : null;
+}
+
+function OffWeekState({
+  daysUntil,
+  nextRaceInfo,
+}: {
+  daysUntil: number;
+  nextRaceInfo?: { raceName: string | null; circuitCountry: string | null; round: number } | null;
+}) {
+  const flag = nextRaceInfo?.circuitCountry ? getCountryFlag(nextRaceInfo.circuitCountry) : "";
+
+  return (
+    <Card accent>
+      <CardContent className="py-8 sm:py-12">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🏁</div>
+          <h3 className="font-semibold text-lg mb-2">No Race This Week</h3>
+          <p className="text-muted text-sm mb-4">
+            Next race weekend begins in{" "}
+            <span className="font-bold text-ink">{daysUntil} day{daysUntil !== 1 ? "s" : ""}</span>
+          </p>
+          {nextRaceInfo?.raceName && (
+            <p className="text-sm text-ink/80 mb-4">
+              {flag && <span className="mr-1.5">{flag}</span>}
+              <span className="font-medium">{nextRaceInfo.raceName}</span>
+              <span className="text-muted"> • Round {nextRaceInfo.round}</span>
+            </p>
+          )}
+          <Link href="/circuits">
+            <Button variant="outline" size="sm">
+              View Full Calendar
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ nextRaceInfo }: { nextRaceInfo?: NextRaceInfo | null }) {
+  // If we have info about the next race from circuits data, show it
+  if (nextRaceInfo?.fp1Date) {
+    const now = new Date();
+    const fp1Date = new Date(nextRaceInfo.fp1Date);
+    const diffMs = fp1Date.getTime() - now.getTime();
+    const daysUntil = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (daysUntil > 0) {
+      return (
+        <OffWeekState
+          daysUntil={daysUntil}
+          nextRaceInfo={{
+            raceName: nextRaceInfo.raceName,
+            circuitCountry: nextRaceInfo.circuitCountry,
+            round: nextRaceInfo.round,
+          }}
+        />
+      );
+    }
+  }
+
   return (
     <Card accent>
       <CardContent className="py-8 sm:py-12">
@@ -144,27 +224,44 @@ function ErrorState({ error }: { error: string }) {
   );
 }
 
-export function RaceWeekendWidget({ weekendData, error }: RaceWeekendWidgetProps) {
+export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeekendWidgetProps) {
   if (error) {
     return <ErrorState error={error} />;
   }
 
   if (!weekendData || !weekendData.schedule) {
-    return <EmptyState />;
+    return <EmptyState nextRaceInfo={nextRaceInfo} />;
   }
 
   const { schedule, history, sessions: sessionResults, meta } = weekendData;
   const widgetState = determineWidgetState(schedule);
   const nextSession = getNextSession(schedule.sessions);
 
+  // For off-week state (>7 days until race), show simplified message
+  if (widgetState === "off-week") {
+    const daysUntil = getDaysUntilFP1(schedule.sessions);
+    if (daysUntil && daysUntil > 0) {
+      return (
+        <OffWeekState
+          daysUntil={daysUntil}
+          nextRaceInfo={{
+            raceName: schedule.race_name,
+            circuitCountry: schedule.circuit_country,
+            round: schedule.round,
+          }}
+        />
+      );
+    }
+  }
+
   // Show stale indicator if data is old
   const isStale = meta?.stale || false;
   const lastUpdated = meta?.last_updated;
 
-  const showCountdown = (widgetState === "pre-weekend" || widgetState === "race-week" || widgetState === "off-week") && nextSession?.start_time;
+  const showCountdown = (widgetState === "pre-weekend" || widgetState === "race-week") && nextSession?.start_time;
   const showDuringWeekendCountdown = widgetState === "during-weekend" && nextSession?.start_time;
   const showSessionGrid = widgetState === "during-weekend" || widgetState === "post-race";
-  const showHistoricalData = (widgetState === "pre-weekend" || widgetState === "race-week" || widgetState === "off-week") && history;
+  const showHistoricalData = (widgetState === "pre-weekend" || widgetState === "race-week") && history;
 
   return (
     <Card accent>

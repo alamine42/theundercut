@@ -16,8 +16,17 @@ export type WidgetState =
   | "post-race"     // Race completed
   | "off-week";     // >7 days to next race
 
+export interface NextRaceInfo {
+  raceName: string | null;
+  circuitName: string | null;
+  circuitCountry: string | null;
+  fp1Date: string | null;
+  round: number;
+}
+
 export interface RaceWeekendWidgetProps {
   weekendData: WeekendResponse | null;
+  nextRaceInfo?: NextRaceInfo | null;
   error?: string | null;
 }
 
