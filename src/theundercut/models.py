@@ -313,3 +313,39 @@ class TestingStint(Base):
     avg_pace_ms  = Column(Float)  # Average lap time in milliseconds
 
     session = relationship("TestingSession", back_populates="stints")
+
+
+# --- Race Weekend Widget tables --------------------------------------------------
+
+class SessionClassification(Base):
+    """Condensed session results for all session types (FP1-3, Quali, Sprint, Race).
+
+    Used by the Race Weekend Widget to display session results from a single source
+    of truth (Postgres) rather than fetching from external APIs on each request.
+    """
+    __tablename__ = "session_classifications"
+    __table_args__ = (
+        UniqueConstraint("season", "round", "session_type", "driver_code", name="uq_session_classification"),
+        Index("ix_session_classification_lookup", "season", "round", "session_type"),
+    )
+
+    id            = Column(Integer, primary_key=True)
+    season        = Column(Integer, nullable=False)
+    round         = Column(Integer, nullable=False)
+    session_type  = Column(String(20), nullable=False)  # fp1, fp2, fp3, qualifying, sprint_qualifying, sprint_race, race
+    driver_code   = Column(String(3), nullable=False)
+    driver_name   = Column(String(100))
+    team          = Column(String(50))
+    position      = Column(Integer)
+    time_ms       = Column(Float)   # Best lap time (practice) or classified time (race)
+    gap_ms        = Column(Float)   # Gap to leader
+    laps          = Column(Integer)
+    points        = Column(Integer) # For race/sprint sessions
+    # Qualifying-specific fields
+    q1_time_ms    = Column(Float)
+    q2_time_ms    = Column(Float)
+    q3_time_ms    = Column(Float)
+    eliminated_in = Column(String(5))  # Q1, Q2, or null
+    # Metadata
+    ingested_at   = Column(DateTime(timezone=True))
+    amended       = Column(Boolean, default=False)  # True if post-race penalty changed classification

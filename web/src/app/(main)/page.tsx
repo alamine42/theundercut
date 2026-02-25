@@ -5,53 +5,58 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { TeamWithLogo } from "@/components/ui/team-logo";
 import { SeasonResultsTable } from "@/components/season-results-table";
-import { fetchStandings, fetchTestingEvents } from "@/lib/api";
+import { RaceWeekendWidget } from "@/components/race-weekend";
+import { fetchStandings, fetchTestingEvents, fetchCircuits, fetchWeekendData } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
-import type { TestingEvent } from "@/types/api";
+import type { TestingEvent, WeekendResponse } from "@/types/api";
 
 export const revalidate = 300; // 5 minutes ISR
 
 async function getHomeData() {
   try {
-    const [standings, testingData] = await Promise.all([
+    const [standings, testingData, circuitsData] = await Promise.all([
       fetchStandings(DEFAULT_SEASON),
       fetchTestingEvents(DEFAULT_SEASON).catch(() => ({ events: [] })),
+      fetchCircuits(DEFAULT_SEASON).catch(() => ({ circuits: [] })),
     ]);
-    return { standings, testingEvents: testingData.events, error: null };
+
+    // Determine the next/current race round
+    const now = new Date();
+    const circuits = circuitsData.circuits || [];
+    const upcomingRace = circuits.find((c) => c.date && new Date(c.date) >= now);
+    const lastRace = [...circuits].reverse().find((c) => c.date && new Date(c.date) < now);
+    const currentRound = upcomingRace?.round || lastRace?.round || 1;
+
+    // Fetch weekend data for the current/next round
+    let weekendData: WeekendResponse | null = null;
+    if (currentRound) {
+      try {
+        weekendData = await fetchWeekendData(DEFAULT_SEASON, currentRound);
+      } catch {
+        // Weekend data fetch failed, continue without it
+      }
+    }
+
+    return {
+      standings,
+      testingEvents: testingData.events,
+      weekendData,
+      error: null,
+    };
   } catch (error) {
     console.error("Failed to fetch homepage data:", error);
-    return { standings: null, testingEvents: [], error: "Failed to load data" };
+    return { standings: null, testingEvents: [], weekendData: null, error: "Failed to load data" };
   }
-}
-
-function formatRaceDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function PositionChange({ gained }: { gained: number }) {
-  if (gained === 0) {
-    return <span className="text-muted">—</span>;
-  }
-  if (gained > 0) {
-    return <span className="text-success">+{gained} ↑</span>;
-  }
-  return <span className="text-error">{gained} ↓</span>;
 }
 
 export default async function HomePage() {
-  const { standings, testingEvents, error } = await getHomeData();
+  const { standings, testingEvents, weekendData, error } = await getHomeData();
 
   const topDrivers = standings?.drivers.slice(0, 5) ?? [];
   const topConstructors = standings?.constructors.slice(0, 5) ?? [];
   const racesCompleted = standings?.races_completed ?? 0;
   const racesRemaining = standings?.races_remaining ?? 0;
-  const lastRace = standings?.last_race ?? null;
   const raceSummaries = standings?.race_summaries ?? [];
   const showPreSeasonTesting = racesCompleted === 0 && testingEvents.length > 0;
 
@@ -96,56 +101,8 @@ export default async function HomePage() {
                 <PreSeasonTestingWidget events={testingEvents} />
               )}
 
-              {/* Last Race Results */}
-              {lastRace && lastRace.results.length > 0 && (
-                <Card accent>
-                  <CardHeader>
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <CardTitle>{lastRace.race_name} Results</CardTitle>
-                      <span className="text-sm text-muted">{formatRaceDate(lastRace.date)}</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Pos</TableHead>
-                            <TableHead>Driver</TableHead>
-                            <TableHead className="hidden sm:table-cell">Team</TableHead>
-                            <TableHead className="text-center hidden sm:table-cell">Grid</TableHead>
-                            <TableHead className="text-right">Points</TableHead>
-                            <TableHead className="text-center">+/-</TableHead>
-                            <TableHead className="hidden md:table-cell">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {lastRace.results.map((result) => (
-                            <TableRow key={result.driver_code}>
-                              <TableCell className="font-semibold">{result.position}</TableCell>
-                              <TableCell className="font-semibold">{result.driver_code}</TableCell>
-                              <TableCell className="hidden sm:table-cell"><TeamWithLogo team={result.team} /></TableCell>
-                              <TableCell className="text-center text-muted hidden sm:table-cell">{result.grid}</TableCell>
-                              <TableCell className="text-right font-semibold">{result.points}</TableCell>
-                              <TableCell className="text-center">
-                                <PositionChange gained={result.positions_gained} />
-                              </TableCell>
-                              <TableCell className="text-muted hidden md:table-cell">{result.status}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <div className="mt-4">
-                      <Link href={`/analytics/${DEFAULT_SEASON}/${lastRace.round}`}>
-                        <Button variant="ghost" size="sm">
-                          View race analytics →
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Race Weekend Widget - shows current/upcoming race info and results */}
+              <RaceWeekendWidget weekendData={weekendData} />
 
               {/* Season Results Summary */}
               {raceSummaries.length > 0 && (

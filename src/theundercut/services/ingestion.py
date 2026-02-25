@@ -29,6 +29,7 @@ from theundercut.models import (
     PenaltyEvent as PenaltyEventRecord,
     OvertakeEvent as OvertakeEventRecord,
     Circuit,
+    SessionClassification,
 )
 from theundercut.drive_grade.pipeline import (
     DriveGradePipeline,
@@ -49,10 +50,30 @@ from theundercut.drive_grade.calibration import (
     load_calibration_profile,
     set_active_calibration,
 )
-from theundercut.services.cache import invalidate_analytics_cache
+from theundercut.services.cache import invalidate_analytics_cache, invalidate_session_cache
 
 
 logger = logging.getLogger(__name__)
+
+
+# Session type mapping from FastF1 identifiers to our normalized types
+SESSION_TYPE_MAP = {
+    "FP1": "fp1",
+    "FP2": "fp2",
+    "FP3": "fp3",
+    "Practice 1": "fp1",
+    "Practice 2": "fp2",
+    "Practice 3": "fp3",
+    "Qualifying": "qualifying",
+    "Q": "qualifying",
+    "Sprint": "sprint_race",
+    "Sprint Qualifying": "sprint_qualifying",
+    "Sprint Shootout": "sprint_qualifying",
+    "SS": "sprint_qualifying",
+    "SQ": "sprint_qualifying",
+    "Race": "race",
+    "R": "race",
+}
 
 
 def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
@@ -95,6 +116,248 @@ def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
 
     db.execute(stmt)
 
+
+
+def _store_session_classifications(
+    db: Session,
+    season: int,
+    rnd: int,
+    session_type: str,
+    laps: pd.DataFrame,
+    provider,
+    session_results: pd.DataFrame = None,
+) -> None:
+    """
+    Store session classification results (positions, times, gaps).
+    Uses ON CONFLICT DO UPDATE to handle post-race penalties/amendments.
+
+    For race/sprint sessions, uses actual classification from session_results.
+    For practice sessions, derives from best lap times.
+    """
+    normalized_type = SESSION_TYPE_MAP.get(session_type, session_type.lower())
+    is_race_or_sprint = normalized_type in ("race", "sprint_race")
+    is_qualifying = "qualifying" in normalized_type
+
+    # Prefer session results for race/sprint/qualifying if available
+    if session_results is not None and not session_results.empty:
+        timestamp = dt.datetime.utcnow()
+
+        for _, row in session_results.iterrows():
+            driver_code = row.get("Abbreviation") or row.get("Driver")
+            if not driver_code or pd.isna(driver_code):
+                continue
+
+            driver_code = str(driver_code).strip().upper()
+
+            # Get driver name from results
+            first_name = row.get("FirstName", "")
+            last_name = row.get("LastName", "")
+            driver_name = f"{first_name} {last_name}".strip() if first_name or last_name else None
+
+            # Get position - use ClassifiedPosition or Position
+            position = row.get("ClassifiedPosition") or row.get("Position")
+            if pd.isna(position):
+                position = None
+            else:
+                try:
+                    position = int(position)
+                except (ValueError, TypeError):
+                    position = None
+
+            # Get team
+            team = row.get("TeamName") or row.get("Team")
+            if pd.isna(team):
+                team = None
+
+            # Get time and gap
+            time_ms = None
+            gap_ms = None
+
+            if "Time" in row and not pd.isna(row["Time"]):
+                try:
+                    time_val = row["Time"]
+                    if hasattr(time_val, "total_seconds"):
+                        time_ms = time_val.total_seconds() * 1000
+                    else:
+                        time_ms = float(time_val) * 1000 if time_val else None
+                except (ValueError, TypeError):
+                    pass
+
+            # Get laps completed
+            laps_completed = row.get("LapsCompleted")
+            if pd.isna(laps_completed):
+                laps_completed = None
+            else:
+                try:
+                    laps_completed = int(laps_completed)
+                except (ValueError, TypeError):
+                    laps_completed = None
+
+            # Get points for race/sprint
+            points = None
+            if is_race_or_sprint and "Points" in row:
+                try:
+                    points = int(row["Points"]) if not pd.isna(row["Points"]) else None
+                except (ValueError, TypeError):
+                    pass
+
+            # Get qualifying times if available
+            q1_time_ms = None
+            q2_time_ms = None
+            q3_time_ms = None
+            eliminated_in = None
+
+            if is_qualifying:
+                for q_col, q_attr in [("Q1", "q1_time_ms"), ("Q2", "q2_time_ms"), ("Q3", "q3_time_ms")]:
+                    if q_col in row and not pd.isna(row[q_col]):
+                        try:
+                            q_val = row[q_col]
+                            if hasattr(q_val, "total_seconds"):
+                                q_ms = q_val.total_seconds() * 1000
+                            else:
+                                q_ms = float(q_val) * 1000 if q_val else None
+                            if q_attr == "q1_time_ms":
+                                q1_time_ms = q_ms
+                            elif q_attr == "q2_time_ms":
+                                q2_time_ms = q_ms
+                            elif q_attr == "q3_time_ms":
+                                q3_time_ms = q_ms
+                        except (ValueError, TypeError):
+                            pass
+
+                # Determine elimination phase
+                if q3_time_ms is None and q2_time_ms is not None:
+                    eliminated_in = "Q2"
+                elif q2_time_ms is None and q1_time_ms is not None:
+                    eliminated_in = "Q1"
+
+            # Check for amendments
+            existing = (
+                db.query(SessionClassification)
+                .filter_by(season=season, round=rnd, session_type=normalized_type, driver_code=driver_code)
+                .one_or_none()
+            )
+            amended = existing and existing.position != position
+
+            stmt = pg_insert(SessionClassification).values(
+                season=season,
+                round=rnd,
+                session_type=normalized_type,
+                driver_code=driver_code,
+                driver_name=driver_name,
+                team=team,
+                position=position,
+                time_ms=time_ms,
+                gap_ms=gap_ms,
+                laps=laps_completed,
+                points=points,
+                q1_time_ms=q1_time_ms,
+                q2_time_ms=q2_time_ms,
+                q3_time_ms=q3_time_ms,
+                eliminated_in=eliminated_in,
+                ingested_at=timestamp,
+                amended=amended,
+            )
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_session_classification",
+                set_={
+                    "driver_name": stmt.excluded.driver_name,
+                    "position": stmt.excluded.position,
+                    "time_ms": stmt.excluded.time_ms,
+                    "gap_ms": stmt.excluded.gap_ms,
+                    "laps": stmt.excluded.laps,
+                    "team": stmt.excluded.team,
+                    "points": stmt.excluded.points,
+                    "q1_time_ms": stmt.excluded.q1_time_ms,
+                    "q2_time_ms": stmt.excluded.q2_time_ms,
+                    "q3_time_ms": stmt.excluded.q3_time_ms,
+                    "eliminated_in": stmt.excluded.eliminated_in,
+                    "ingested_at": stmt.excluded.ingested_at,
+                    "amended": amended,
+                }
+            )
+
+            db.execute(stmt)
+
+        logger.info("Stored %d session classifications from results for %s-%s %s",
+                    len(session_results), season, rnd, normalized_type)
+        return
+
+    # Fallback: derive from lap data (for practice sessions or if results unavailable)
+    if laps.empty:
+        logger.warning("No laps to extract classifications from for %s-%s %s", season, rnd, session_type)
+        return
+
+    # Group by driver and compute best lap, total laps
+    driver_stats = (
+        laps.groupby("Driver")
+        .agg(
+            best_lap_ms=("LapTime", lambda x: x.dropna().dt.total_seconds().min() * 1000 if not x.dropna().empty else None),
+            total_laps=("LapNumber", "max"),
+            team=("Team", "first") if "Team" in laps.columns else ("Driver", lambda x: "Unknown"),
+        )
+        .reset_index()
+    )
+
+    # Sort by best lap to get positions
+    driver_stats = driver_stats.sort_values("best_lap_ms", na_position="last")
+    driver_stats["position"] = range(1, len(driver_stats) + 1)
+
+    # Compute gap to leader
+    leader_time = driver_stats["best_lap_ms"].iloc[0] if not driver_stats.empty else None
+    driver_stats["gap_ms"] = driver_stats["best_lap_ms"] - leader_time if leader_time else None
+
+    timestamp = dt.datetime.utcnow()
+
+    for _, row in driver_stats.iterrows():
+        driver_code = row["Driver"]
+        if not driver_code or pd.isna(driver_code):
+            continue
+
+        # Check if record exists (for amended tracking)
+        existing = (
+            db.query(SessionClassification)
+            .filter_by(season=season, round=rnd, session_type=normalized_type, driver_code=driver_code)
+            .one_or_none()
+        )
+
+        amended = False
+        if existing and existing.position != row["position"]:
+            amended = True
+
+        stmt = pg_insert(SessionClassification).values(
+            season=season,
+            round=rnd,
+            session_type=normalized_type,
+            driver_code=driver_code,
+            driver_name=None,  # Not available from laps
+            team=row.get("team") if row.get("team") != "Unknown" else None,
+            position=int(row["position"]) if pd.notna(row["position"]) else None,
+            time_ms=row["best_lap_ms"] if pd.notna(row["best_lap_ms"]) else None,
+            gap_ms=row["gap_ms"] if pd.notna(row["gap_ms"]) and row["position"] != 1 else None,
+            laps=int(row["total_laps"]) if pd.notna(row["total_laps"]) else None,
+            ingested_at=timestamp,
+            amended=amended,
+        )
+
+        # On conflict, update the record (for post-race penalties)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_session_classification",
+            set_={
+                "position": stmt.excluded.position,
+                "time_ms": stmt.excluded.time_ms,
+                "gap_ms": stmt.excluded.gap_ms,
+                "laps": stmt.excluded.laps,
+                "team": stmt.excluded.team,
+                "ingested_at": stmt.excluded.ingested_at,
+                "amended": amended,
+            }
+        )
+
+        db.execute(stmt)
+
+    logger.info("Stored %d session classifications from laps for %s-%s %s", len(driver_stats), season, rnd, normalized_type)
 
 
 def _store_stints(db: Session, race_id: str, df: pd.DataFrame) -> None:
@@ -478,6 +741,16 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
         logger.warning("No laps for %s-%s %s", season, rnd, session_type)
         return
 
+    # Try to get session results (for race/qualifying classification)
+    session_results = None
+    try:
+        session_results = provider.load_results(session_type=session_type)
+    except AttributeError:
+        # Provider doesn't support load_results, will derive from laps
+        pass
+    except Exception as exc:
+        logger.warning("Failed to load session results for %s-%s %s: %s", season, rnd, session_type, exc)
+
     race_id = f"{season}-{rnd}"
     weekend_payload, grade_source = _try_fetch_drivegrade_weekend(season, rnd)
 
@@ -495,6 +768,11 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
         if not existing:
             _store_laps(db, race_id, laps)
             _store_stints(db, race_id, laps)
+        # Always store session classifications (supports amendments)
+        try:
+            _store_session_classifications(db, season, rnd, session_type, laps, provider, session_results)
+        except Exception as exc:
+            logger.exception("Failed to store session classifications for %s-%s %s: %s", season, rnd, session_type, exc)
         if weekend_payload:
             try:
                 _store_driver_grade_outputs(
@@ -521,4 +799,8 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
         invalidate_analytics_cache(season, rnd)
     except Exception as exc:  # pragma: no cover - cache should not block ingestion
         logger.warning("Failed to invalidate analytics cache for %s-%s: %s", season, rnd, exc)
+    try:
+        invalidate_session_cache(season, rnd, session_type)
+    except Exception as exc:  # pragma: no cover - cache should not block ingestion
+        logger.warning("Failed to invalidate session cache for %s-%s %s: %s", season, rnd, session_type, exc)
     logger.info("%s %s complete: len(laps)=%s", race_id, session_type, len(laps))

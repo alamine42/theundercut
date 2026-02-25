@@ -10,6 +10,10 @@ import type {
   TestingEventsResponse,
   TestingDayResponse,
   TestingLapsResponse,
+  RaceWeekendSchedule,
+  SessionResultsResponse,
+  CircuitHistoryResponse,
+  WeekendResponse,
 } from "@/types/api";
 
 const BASE_URL = API_CONFIG.baseUrl;
@@ -267,6 +271,75 @@ export async function clientFetchAnalytics(
 
   if (!res.ok) {
     throw new Error(`Failed to fetch analytics: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// =============================================================================
+// Race Weekend API
+// =============================================================================
+
+export async function fetchRaceWeekendSchedule(
+  season: number,
+  round: number
+): Promise<RaceWeekendSchedule> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/race/${season}/${round}/schedule`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch race schedule: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchSessionResults(
+  season: number,
+  round: number,
+  sessionType: string
+): Promise<SessionResultsResponse> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/race/${season}/${round}/session/${sessionType}/results`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch session results: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchCircuitHistory(
+  season: number,
+  circuitId: string
+): Promise<CircuitHistoryResponse> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/circuits/${season}/${circuitId}/history`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch circuit history: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchWeekendData(
+  season: number,
+  round: number
+): Promise<WeekendResponse> {
+  const res = await fetch(
+    `${getBaseUrl()}${BASE_URL}/race/${season}/${round}/weekend`,
+    fetchOptions()
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch weekend data: ${res.status}`);
   }
 
   return res.json();

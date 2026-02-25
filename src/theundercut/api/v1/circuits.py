@@ -781,3 +781,112 @@ def get_circuit_detail(
 
     redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(payload))
     return payload
+
+
+@router.get("/{season}/{circuit_id}/history")
+def get_circuit_history(
+    season: int,
+    circuit_id: str,
+) -> Dict[str, Any]:
+    """
+    Get previous year's race results for a circuit (for Race Weekend Widget).
+
+    Returns podium, pole position, and fastest lap from the previous season.
+    """
+    cache_key = f"circuit_history:v1:{season}:{circuit_id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    previous_season = season - 1
+
+    # Fetch historical results for this circuit
+    historical_races = _fetch_circuit_results(circuit_id, limit=10)
+
+    # Find the previous season's race
+    previous_race = None
+    for race in historical_races:
+        if race.get("season") == str(previous_season):
+            previous_race = race
+            break
+
+    if not previous_race:
+        # Circuit is new or wasn't on calendar last year
+        payload = {
+            "circuit_id": circuit_id,
+            "circuit_name": get_circuit_shortname(circuit_id),
+            "previous_year": None,
+        }
+        # Cache for 7 days (historical data doesn't change)
+        redis_client.setex(cache_key, 604800, json.dumps(payload))
+        return payload
+
+    results = previous_race.get("Results", [])
+
+    # Get podium
+    winner = None
+    second = None
+    third = None
+    if len(results) >= 1:
+        w = results[0]
+        winner = {
+            "driver_code": w.get("Driver", {}).get("code"),
+            "driver_name": f"{w.get('Driver', {}).get('givenName', '')} {w.get('Driver', {}).get('familyName', '')}".strip(),
+            "team": w.get("Constructor", {}).get("name"),
+        }
+    if len(results) >= 2:
+        s = results[1]
+        second = {
+            "driver_code": s.get("Driver", {}).get("code"),
+            "driver_name": f"{s.get('Driver', {}).get('givenName', '')} {s.get('Driver', {}).get('familyName', '')}".strip(),
+            "team": s.get("Constructor", {}).get("name"),
+        }
+    if len(results) >= 3:
+        t = results[2]
+        third = {
+            "driver_code": t.get("Driver", {}).get("code"),
+            "driver_name": f"{t.get('Driver', {}).get('givenName', '')} {t.get('Driver', {}).get('familyName', '')}".strip(),
+            "team": t.get("Constructor", {}).get("name"),
+        }
+
+    # Get pole position from qualifying
+    qual = _fetch_circuit_qualifying(circuit_id, previous_season)
+    pole = None
+    if qual:
+        qual_results = qual.get("QualifyingResults", [])
+        if qual_results:
+            p = qual_results[0]
+            pole = {
+                "driver_code": p.get("Driver", {}).get("code"),
+                "driver_name": f"{p.get('Driver', {}).get('givenName', '')} {p.get('Driver', {}).get('familyName', '')}".strip(),
+                "team": p.get("Constructor", {}).get("name"),
+            }
+
+    # Get fastest lap
+    fastest_lap = None
+    for r in results:
+        fl = r.get("FastestLap", {})
+        if fl.get("rank") == "1":
+            fastest_lap = {
+                "driver_code": r.get("Driver", {}).get("code"),
+                "driver_name": f"{r.get('Driver', {}).get('givenName', '')} {r.get('Driver', {}).get('familyName', '')}".strip(),
+                "time": fl.get("Time", {}).get("time"),
+            }
+            break
+
+    payload = {
+        "circuit_id": circuit_id,
+        "circuit_name": get_circuit_shortname(circuit_id),
+        "previous_year": {
+            "season": previous_season,
+            "winner": winner,
+            "second": second,
+            "third": third,
+            "pole": pole,
+            "fastest_lap": fastest_lap,
+        },
+    }
+
+    # Cache for 7 days (historical data doesn't change)
+    redis_client.setex(cache_key, 604800, json.dumps(payload))
+    return payload

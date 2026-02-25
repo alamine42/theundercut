@@ -63,3 +63,268 @@ body {
     height: var(--chart-height);
   }
 }
+
+/* =============================================================================
+   Race Weekend Widget Animations & Styles
+   ============================================================================= */
+
+/* Entrance animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes countdownPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 115, 26, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(217, 115, 26, 0.15);
+  }
+}
+
+@keyframes chevronBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-countdownPulse {
+  animation: countdownPulse 3s ease-in-out infinite;
+}
+
+.animate-chevronBounce {
+  animation: chevronBounce 1.5s ease-in-out infinite;
+}
+
+/* Animation delays for staggered entrance */
+.animation-delay-0 { animation-delay: 0ms; opacity: 0; }
+.animation-delay-100 { animation-delay: 100ms; opacity: 0; }
+.animation-delay-200 { animation-delay: 200ms; opacity: 0; }
+.animation-delay-300 { animation-delay: 300ms; opacity: 0; }
+.animation-delay-400 { animation-delay: 400ms; opacity: 0; }
+
+/* Session card interactive styles */
+.session-card {
+  @apply border-2 border-ink/10 transition-all duration-200;
+}
+
+.session-card:hover {
+  @apply border-ink/30 shadow-md;
+  transform: translateY(-2px);
+}
+
+.session-card:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.session-card-expanded {
+  @apply border-accent/30 bg-accent/5;
+}
+
+/* Session type color indicators */
+.session-type-practice {
+  border-left: 3px solid #3B82F6;
+}
+
+.session-type-qualifying {
+  border-left: 3px solid #8B5CF6;
+}
+
+.session-type-sprint {
+  border-left: 3px solid var(--color-accent);
+}
+
+.session-type-race {
+  border-left: 3px solid #EF4444;
+}
+
+/* Chevron rotation */
+.chevron-icon {
+  @apply transition-transform duration-300;
+}
+
+.chevron-icon.expanded {
+  transform: rotate(180deg);
+}
+
+/* Countdown styles */
+.countdown-container {
+  @apply bg-ink text-paper relative overflow-hidden;
+}
+
+.countdown-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+}
+
+.countdown-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Status badges */
+.status-completed {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full;
+}
+
+.status-live {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full;
+}
+
+.status-live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-scheduled {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-ink/10 text-ink rounded-full;
+}
+
+/* Position badges */
+.position-badge {
+  @apply inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full;
+}
+
+.position-1 {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.position-2 {
+  @apply bg-gray-100 text-gray-700;
+}
+
+.position-3 {
+  @apply bg-amber-100 text-amber-800;
+}
+
+/* Historical data podium */
+.podium-item {
+  @apply flex items-center gap-3 p-3 rounded-lg transition-all duration-200;
+}
+
+.podium-item:hover {
+  @apply bg-ink/5;
+}
+
+.podium-1 {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), transparent);
+}
+
+.podium-2 {
+  background: linear-gradient(135deg, rgba(192, 192, 192, 0.08), transparent);
+}
+
+.podium-3 {
+  background: linear-gradient(135deg, rgba(205, 127, 50, 0.08), transparent);
+}
+
+/* Table enhancements */
+.results-table thead {
+  @apply sticky top-0 z-10 bg-paper;
+}
+
+.results-table tbody tr {
+  @apply transition-colors duration-150;
+}
+
+.results-table tbody tr:hover {
+  @apply bg-ink/5;
+}
+
+/* Add visual gap every 5 rows */
+.results-table tbody tr:nth-child(5n) {
+  @apply border-b-2 border-ink/10;
+}
+
+/* Loading skeleton */
+.skeleton {
+  @apply bg-ink/10 rounded;
+  background: linear-gradient(
+    90deg,
+    rgba(15, 15, 15, 0.08) 25%,
+    rgba(15, 15, 15, 0.12) 50%,
+    rgba(15, 15, 15, 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Focus styles for accessibility */
+.focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2;
+}
+
+/* Mobile touch feedback */
+@media (hover: none) {
+  .session-card:active {
+    @apply bg-ink/5;
+    transform: scale(0.98);
+  }
+}
+
+/* Stale data warning */
+.stale-warning {
+  @apply flex items-start gap-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 text-sm rounded-r;
+}
+
+/* Smooth height transitions for expand/collapse */
+.expandable-content {
+  @apply overflow-hidden transition-all duration-300 ease-out;
+}
+
+.expandable-content[data-expanded="false"] {
+  max-height: 0;
+  opacity: 0;
+}
+
+.expandable-content[data-expanded="true"] {
+  max-height: 2000px;
+  opacity: 1;
+}

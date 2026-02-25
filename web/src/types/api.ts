@@ -366,3 +366,86 @@ export interface TestingLapsResponse {
   limit: number;
   laps: TestingLap[];
 }
+
+// =============================================================================
+// Race Weekend Widget Data
+// =============================================================================
+
+export interface RaceSession {
+  session_type: string;
+  start_time: string | null;
+  end_time: string | null;
+  status: "scheduled" | "running" | "ingested" | "completed";
+}
+
+export interface RaceWeekendSchedule {
+  season: number;
+  round: number;
+  race_name: string | null;
+  circuit_id: string | null;
+  circuit_name: string | null;
+  circuit_country: string | null;
+  is_sprint_weekend: boolean;
+  sessions: RaceSession[];
+}
+
+export interface SessionResult {
+  position: number;
+  driver_code: string;
+  driver_name: string | null;
+  team: string | null;
+  time: string | null;
+  gap: string | null;
+  laps: number | null;
+  points: number | null;
+  // Qualifying-specific
+  q1_time: string | null;
+  q2_time: string | null;
+  q3_time: string | null;
+  eliminated_in: string | null;
+}
+
+export interface SessionResultsResponse {
+  season: number;
+  round: number;
+  session_type: string;
+  results: SessionResult[];
+}
+
+export interface HistoricalDriver {
+  driver_code: string;
+  driver_name: string | null;
+  team: string | null;
+}
+
+export interface CircuitHistoryPreviousYear {
+  season: number;
+  winner: HistoricalDriver | null;
+  second: HistoricalDriver | null;
+  third: HistoricalDriver | null;
+  pole: HistoricalDriver | null;
+  fastest_lap: {
+    driver_code: string;
+    driver_name: string | null;
+    time: string | null;
+  } | null;
+}
+
+export interface CircuitHistoryResponse {
+  circuit_id: string;
+  circuit_name: string | null;
+  previous_year: CircuitHistoryPreviousYear | null;
+}
+
+export interface WeekendMeta {
+  last_updated: string;
+  stale: boolean;
+  errors: string[];
+}
+
+export interface WeekendResponse {
+  schedule: RaceWeekendSchedule | null;
+  history: CircuitHistoryResponse | null;
+  sessions: Record<string, SessionResultsResponse | null>;
+  meta: WeekendMeta;
+}
