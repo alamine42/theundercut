@@ -375,7 +375,7 @@ export interface RaceSession {
   session_type: string;
   start_time: string | null;
   end_time: string | null;
-  status: "scheduled" | "running" | "ingested" | "completed";
+  status: "scheduled" | "live" | "running" | "ingested" | "completed";
 }
 
 export interface RaceWeekendSchedule {

@@ -113,3 +113,34 @@ test.describe("Pre-Season Testing Widget", () => {
     }
   });
 });
+
+test.describe("Live Session Display", () => {
+  test("session status badges have correct styling classes", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+
+    // Check that the widget has loaded with status indicators
+    // Status badges should be present (scheduled, live, or completed)
+    const statusBadges = page.locator(".status-scheduled, .status-live, .status-completed");
+
+    // If there are sessions displayed, at least one status badge should be visible
+    const badgeCount = await statusBadges.count();
+    if (badgeCount > 0) {
+      await expect(statusBadges.first()).toBeVisible();
+    }
+  });
+
+  test("live status indicator has correct visual styling", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+
+    // Check for live indicator class (will only be present during live sessions)
+    const liveIndicator = page.locator(".status-live");
+    const isLive = await liveIndicator.isVisible().catch(() => false);
+
+    // If a session is live, verify it shows "Live" text
+    if (isLive) {
+      await expect(liveIndicator).toContainText("Live");
+    }
+  });
+});

@@ -217,6 +217,26 @@ describe("SessionCard", () => {
 
       expect(screen.getByText("Live")).toBeInTheDocument();
     });
+
+    it("shows 'Live' badge for live sessions", () => {
+      const session: RaceSession = {
+        session_type: "race",
+        start_time: pastDate(0, 1),
+        end_time: futureDate(0, 1),
+        status: "live",
+      };
+
+      render(
+        <SessionCard
+          session={session}
+          results={null}
+          isExpanded={false}
+          onToggle={mockOnToggle}
+        />
+      );
+
+      expect(screen.getByText("Live")).toBeInTheDocument();
+    });
   });
 
   describe("Session types", () => {

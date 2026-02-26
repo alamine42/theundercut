@@ -81,7 +81,7 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 
 function StatusBadge({ status, startTime }: { status: string; startTime: string | null }) {
   const isCompleted = status === "completed" || status === "ingested";
-  const isLive = status === "running";
+  const isLive = status === "live" || status === "running";
 
   if (isLive) {
     return (
