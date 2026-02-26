@@ -13,9 +13,14 @@ from theundercut.services.cache import invalidate_race_weekend_cache
 from theundercut.services.testing_ingestion import sync_testing_events
 
 
+def _utc_now() -> dt.datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return dt.datetime.now(dt.timezone.utc)
+
+
 def daily_calendar_sync():
     """Sync the F1 calendar for the current year."""
-    year = dt.datetime.utcnow().year
+    year = _utc_now().year
     with SessionLocal() as db:
         sync_year(db, year)
 
@@ -25,7 +30,7 @@ def mark_sessions_live():
     Mark sessions as 'live' when they start.
     Runs every minute to detect session start times.
     """
-    now = dt.datetime.utcnow()
+    now = _utc_now()
     with SessionLocal() as db:
         # Find scheduled sessions that have started
         rows = (
@@ -56,7 +61,7 @@ def _enqueue_upcoming_impl(scheduler):
     """
     from theundercut.services.ingestion import ingest_session
 
-    now = dt.datetime.utcnow()
+    now = _utc_now()
     with SessionLocal() as db:
         rows = (
             db.query(CalendarEvent)
@@ -85,7 +90,7 @@ def _enqueue_upcoming_impl(scheduler):
 
 def daily_testing_sync():
     """Sync testing events for the current year."""
-    year = dt.datetime.utcnow().year
+    year = _utc_now().year
     try:
         sync_testing_events(year)
         print(f"[scheduler] synced testing events for {year}")
@@ -103,7 +108,7 @@ def _enqueue_testing_ingestion_impl(scheduler):
     """
     from theundercut.services.testing_ingestion import ingest_testing_day
 
-    now = dt.datetime.utcnow()
+    now = _utc_now()
     today = now.date()
 
     with SessionLocal() as db:

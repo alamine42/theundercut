@@ -29,22 +29,23 @@ def enqueue_testing_ingestion():
     _enqueue_testing_ingestion_impl(scheduler)
 
 
-# ─── start recurring jobs ─────────────────────────────────────────────
-# Daily calendar refresh at 04:00 UTC
-scheduler.cron("0 4 * * *", func=daily_calendar_sync, repeat=None)
+if __name__ == "__main__":
+    # ─── start recurring jobs ─────────────────────────────────────────────
+    # Daily calendar refresh at 04:00 UTC
+    scheduler.cron("0 4 * * *", func=daily_calendar_sync, repeat=None)
 
-# Mark sessions as live every minute (detects session starts)
-scheduler.cron("* * * * *", func=mark_sessions_live, repeat=None)
+    # Mark sessions as live every minute (detects session starts)
+    scheduler.cron("* * * * *", func=mark_sessions_live, repeat=None)
 
-# Queue ingestion for completed sessions every 10 minutes
-scheduler.cron("*/10 * * * *", func=enqueue_upcoming, repeat=None)
+    # Queue ingestion for completed sessions every 10 minutes
+    scheduler.cron("*/10 * * * *", func=enqueue_upcoming, repeat=None)
 
-# Daily testing events sync at 05:00 UTC
-scheduler.cron("0 5 * * *", func=daily_testing_sync, repeat=None)
+    # Daily testing events sync at 05:00 UTC
+    scheduler.cron("0 5 * * *", func=daily_testing_sync, repeat=None)
 
-# Check for testing ingestion every 30 minutes
-scheduler.cron("*/30 * * * *", func=enqueue_testing_ingestion, repeat=None)
+    # Check for testing ingestion every 30 minutes
+    scheduler.cron("*/30 * * * *", func=enqueue_testing_ingestion, repeat=None)
 
-print("RQ Scheduler running ⏰")
-while True:
-    time.sleep(60)
+    print("RQ Scheduler running ⏰")
+    while True:
+        time.sleep(60)

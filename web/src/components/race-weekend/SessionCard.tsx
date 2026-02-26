@@ -2,7 +2,7 @@
 
 import { SessionCardCompact } from "./SessionCardCompact";
 import { SessionCardExpanded } from "./SessionCardExpanded";
-import type { SessionCardProps } from "./types";
+import type { SessionCardProps, RaceSession } from "./types";
 
 const SESSION_LABELS: Record<string, string> = {
   fp1: "Free Practice 1",
@@ -79,14 +79,14 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
   );
 }
 
-function StatusBadge({ status, startTime }: { status: string; startTime: string | null }) {
+function StatusBadge({ status, startTime }: { status: RaceSession["status"]; startTime: string | null }) {
   const isCompleted = status === "completed" || status === "ingested";
   const isLive = status === "live" || status === "running";
 
   if (isLive) {
     return (
-      <span className="status-live">
-        <span className="sr-only">Status:</span>
+      <span className="status-live" role="status" aria-label="Session currently in progress">
+        <span className="sr-only">Status: Currently live - </span>
         Live
       </span>
     );

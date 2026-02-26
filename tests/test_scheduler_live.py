@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from theundercut.models import CalendarEvent
+from theundercut.scheduler_jobs import _utc_now as utc_now
 
 
 class TestMarkSessionsLive:
@@ -13,7 +14,7 @@ class TestMarkSessionsLive:
     def test_marks_started_session_as_live(self, db_session):
         """Session that has started should be marked as 'live'."""
         # Create a session that started 30 minutes ago
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -41,7 +42,7 @@ class TestMarkSessionsLive:
 
     def test_ignores_future_sessions(self, db_session):
         """Sessions that haven't started yet should remain 'scheduled'."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -67,7 +68,7 @@ class TestMarkSessionsLive:
 
     def test_ignores_already_live_sessions(self, db_session):
         """Sessions already marked as 'live' should not be processed again."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -94,7 +95,7 @@ class TestMarkSessionsLive:
 
     def test_ignores_ingested_sessions(self, db_session):
         """Sessions already ingested should not be marked as 'live'."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -120,7 +121,7 @@ class TestMarkSessionsLive:
 
     def test_marks_multiple_sessions_as_live(self, db_session):
         """Multiple sessions that have started should all be marked as 'live'."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         # FP1 started 2 hours ago
         fp1 = CalendarEvent(
             season=2026,
@@ -163,7 +164,7 @@ class TestEnqueueUpcoming:
 
     def test_queues_ingestion_for_ended_live_sessions(self, db_session):
         """Live sessions that have ended should be queued for ingestion."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -189,7 +190,7 @@ class TestEnqueueUpcoming:
 
     def test_ignores_scheduled_sessions(self, db_session):
         """Scheduled sessions should not be queued (they need to be live first)."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -214,7 +215,7 @@ class TestEnqueueUpcoming:
 
     def test_ignores_still_running_live_sessions(self, db_session):
         """Live sessions that haven't ended yet should not be queued."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
@@ -239,7 +240,7 @@ class TestEnqueueUpcoming:
 
     def test_skips_existing_jobs(self, db_session):
         """Sessions with already-scheduled jobs should be skipped."""
-        now = dt.datetime.utcnow()
+        now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,

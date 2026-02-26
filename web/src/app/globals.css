@@ -125,6 +125,16 @@ body {
   animation: chevronBounce 1.5s ease-in-out infinite;
 }
 
+/* Live indicator pulse animation */
+@keyframes livePulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
 /* Animation delays for staggered entrance */
 .animation-delay-0 { animation-delay: 0ms; opacity: 0; }
 .animation-delay-100 { animation-delay: 100ms; opacity: 0; }
@@ -148,6 +158,14 @@ body {
 
 .session-card-expanded {
   @apply border-accent/30 bg-accent/5;
+}
+
+.session-card button:disabled {
+  @apply opacity-60 cursor-not-allowed;
+}
+
+.session-card button:disabled:hover {
+  transform: none;
 }
 
 /* Session type color indicators */
@@ -202,16 +220,18 @@ body {
 }
 
 .status-live {
-  @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full;
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full;
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
 }
 
 .status-live::before {
   content: '';
-  width: 6px;
-  height: 6px;
-  background: currentColor;
+  width: 8px;
+  height: 8px;
+  background-color: #dc2626;
   border-radius: 50%;
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: livePulse 1.5s ease-in-out infinite;
 }
 
 .status-scheduled {
