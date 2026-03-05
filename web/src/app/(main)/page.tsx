@@ -72,7 +72,26 @@ export default async function HomePage() {
   const racesCompleted = standings?.races_completed ?? 0;
   const racesRemaining = standings?.races_remaining ?? 0;
   const raceSummaries = standings?.race_summaries ?? [];
-  const showPreSeasonTesting = racesCompleted === 0 && testingEvents.length > 0;
+  // Determine if pre-season testing widget should be shown:
+  // Only before the first race, and hide once we're within 24 hours of the first session
+  const showPreSeasonTesting = (() => {
+    if (racesCompleted > 0 || testingEvents.length === 0) return false;
+
+    const now = new Date();
+    const sessions = weekendData?.schedule?.sessions ?? [];
+    const firstSessionStart = sessions
+      .map((s) => s.start_time)
+      .filter((t): t is string => t !== null)
+      .sort()[0];
+
+    if (firstSessionStart) {
+      const msUntilFirstSession = new Date(firstSessionStart).getTime() - now.getTime();
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      if (msUntilFirstSession <= twentyFourHoursMs) return false;
+    }
+
+    return true;
+  })();
 
   return (
     <>
@@ -110,13 +129,13 @@ export default async function HomePage() {
             </Card>
           ) : (
             <div className="space-y-8">
-              {/* Pre-Season Testing Widget - only shown before first race */}
+              {/* Race Weekend Widget - shows current/upcoming race info and results */}
+              <RaceWeekendWidget weekendData={weekendData} nextRaceInfo={nextRaceInfo} />
+
+              {/* Pre-Season Testing Widget - only shown before first race and >24h from first session */}
               {showPreSeasonTesting && (
                 <PreSeasonTestingWidget events={testingEvents} />
               )}
-
-              {/* Race Weekend Widget - shows current/upcoming race info and results */}
-              <RaceWeekendWidget weekendData={weekendData} nextRaceInfo={nextRaceInfo} />
 
               {/* Season Results Summary */}
               {raceSummaries.length > 0 && (
