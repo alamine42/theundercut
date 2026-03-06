@@ -38,7 +38,10 @@ def cleanup_session_results(season: int, rnd: int, session_type: str):
         db.commit()
         if deleted:
             print(f"  Deleted {deleted} existing {normalized_type} records")
-            invalidate_session_cache(season, rnd, normalized_type)
+            try:
+                invalidate_session_cache(season, rnd, normalized_type)
+            except Exception as e:
+                print(f"  Warning: Could not invalidate cache: {e}")
         return deleted
 
 
