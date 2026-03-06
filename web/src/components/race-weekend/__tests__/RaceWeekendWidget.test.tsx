@@ -110,13 +110,14 @@ describe("RaceWeekendWidget", () => {
   });
 
   describe("Pre-weekend state (3-7 days before)", () => {
-    it("renders race header and countdown", () => {
+    it("renders race header with 'Upcoming Race' title and countdown", () => {
       const weekendData = createMockWeekendResponse("pre-weekend");
 
       render(<RaceWeekendWidget weekendData={weekendData} />);
 
-      // Should show race info
-      expect(screen.getByText("Italian Grand Prix")).toBeInTheDocument();
+      // Should show "Upcoming Race" title (not GP name) before weekend starts
+      expect(screen.getByText("Upcoming Race")).toBeInTheDocument();
+      expect(screen.queryByText("Italian Grand Prix")).not.toBeInTheDocument();
       expect(screen.getByText("Autodromo Nazionale Monza")).toBeInTheDocument();
 
       // Should show countdown
@@ -137,21 +138,27 @@ describe("RaceWeekendWidget", () => {
   });
 
   describe("Race-week state (within 3 days)", () => {
-    it("renders countdown to next session", () => {
+    it("renders countdown with 'Upcoming Race' title", () => {
       const weekendData = createMockWeekendResponse("race-week");
 
       render(<RaceWeekendWidget weekendData={weekendData} />);
 
       expect(screen.getByRole("timer")).toBeInTheDocument();
-      expect(screen.getByText("Italian Grand Prix")).toBeInTheDocument();
+      // Should show "Upcoming Race" title (not GP name) before weekend starts
+      expect(screen.getByText("Upcoming Race")).toBeInTheDocument();
+      expect(screen.queryByText("Italian Grand Prix")).not.toBeInTheDocument();
     });
   });
 
   describe("During-weekend state", () => {
-    it("renders session grid with completed sessions", () => {
+    it("renders session grid with completed sessions and GP name as title", () => {
       const weekendData = createMockWeekendResponse("during-weekend");
 
       render(<RaceWeekendWidget weekendData={weekendData} />);
+
+      // Should show GP name as title during race weekend
+      expect(screen.getByText("Italian Grand Prix")).toBeInTheDocument();
+      expect(screen.queryByText("Upcoming Race")).not.toBeInTheDocument();
 
       // Should show session cards
       expect(screen.getByText("Free Practice 1")).toBeInTheDocument();
@@ -169,10 +176,14 @@ describe("RaceWeekendWidget", () => {
   });
 
   describe("Post-race state", () => {
-    it("renders all session results", () => {
+    it("renders all session results with GP name within 24h of race end", () => {
       const weekendData = createMockWeekendResponse("post-race");
 
       render(<RaceWeekendWidget weekendData={weekendData} />);
+
+      // Should show GP name (mock post-race has race ending ~22h ago, within 24h)
+      expect(screen.getByText("Italian Grand Prix")).toBeInTheDocument();
+      expect(screen.queryByText("Upcoming Race")).not.toBeInTheDocument();
 
       // Should show all sessions
       expect(screen.getByText("Free Practice 1")).toBeInTheDocument();
@@ -186,6 +197,23 @@ describe("RaceWeekendWidget", () => {
       render(<RaceWeekendWidget weekendData={weekendData} />);
 
       expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+    });
+
+    it("shows 'Upcoming Race' title after 24h have passed since race end", () => {
+      // Move time forward so race end was >24h ago
+      // Post-race mock has race end_time at pastDate(1, -2) = 1 day ago + 2h = 22h ago
+      // Advance time by 3 more hours so it's 25h since race end
+      const laterTime = new Date(BASE_DATE);
+      laterTime.setHours(laterTime.getHours() + 3);
+      vi.setSystemTime(laterTime);
+
+      const weekendData = createMockWeekendResponse("post-race");
+
+      render(<RaceWeekendWidget weekendData={weekendData} />);
+
+      // Should revert to "Upcoming Race" after 24h since race end
+      expect(screen.getByText("Upcoming Race")).toBeInTheDocument();
+      expect(screen.queryByText("Italian Grand Prix")).not.toBeInTheDocument();
     });
   });
 
@@ -241,12 +269,14 @@ describe("RaceWeekendWidget", () => {
       expect(screen.getByText("Sprint Qualifying")).toBeInTheDocument();
     });
 
-    it("shows sprint weekend race info", () => {
+    it("shows 'Upcoming Race' title for sprint pre-weekend", () => {
       const weekendData = createMockWeekendResponse("pre-weekend", { isSprint: true });
 
       render(<RaceWeekendWidget weekendData={weekendData} />);
 
-      expect(screen.getByText("Austrian Grand Prix")).toBeInTheDocument();
+      // Should show "Upcoming Race" title before weekend starts, even for sprint
+      expect(screen.getByText("Upcoming Race")).toBeInTheDocument();
+      expect(screen.queryByText("Austrian Grand Prix")).not.toBeInTheDocument();
       expect(screen.getByText("Red Bull Ring")).toBeInTheDocument();
     });
 

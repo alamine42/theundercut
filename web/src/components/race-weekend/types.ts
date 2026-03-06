@@ -37,6 +37,7 @@ export interface RaceHeaderProps {
   circuitName: string | null;
   circuitCountry: string | null;
   isSprintWeekend: boolean;
+  isRaceWeekendActive?: boolean;
 }
 
 export interface RaceCountdownProps {

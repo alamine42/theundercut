@@ -8,9 +8,11 @@ export function RaceHeader({
   circuitName,
   circuitCountry,
   isSprintWeekend,
+  isRaceWeekendActive = false,
 }: RaceHeaderProps) {
   const flag = circuitCountry ? getCountryFlag(circuitCountry) : "";
   const roundLabel = totalRounds ? `Round ${round} of ${totalRounds}` : `Round ${round}`;
+  const displayTitle = isRaceWeekendActive && raceName ? raceName : "Upcoming Race";
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -22,7 +24,7 @@ export function RaceHeader({
             </span>
           )}
           <h2 className="text-lg sm:text-xl font-bold tracking-tight truncate">
-            {raceName || "Upcoming Race"}
+            {displayTitle}
           </h2>
           {isSprintWeekend && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-accent/15 text-accent rounded">
