@@ -4,10 +4,6 @@ import { useState } from "react";
 import { SessionCard } from "./SessionCard";
 import type { SessionGridProps } from "./types";
 
-// Order sessions for display
-const STANDARD_ORDER = ["fp1", "fp2", "fp3", "qualifying", "race"];
-const SPRINT_ORDER = ["fp1", "sprint_qualifying", "sprint_race", "sprint", "qualifying", "race"];
-
 function normalizeSessionType(type: string): string {
   return type.toLowerCase().replace(/\s+/g, "_");
 }
@@ -15,28 +11,14 @@ function normalizeSessionType(type: string): string {
 export function SessionGrid({
   sessions,
   sessionResults,
-  isSprintWeekend,
 }: SessionGridProps) {
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
-  const sessionOrder = isSprintWeekend ? SPRINT_ORDER : STANDARD_ORDER;
-
-  // Sort sessions by predefined order
+  // Sort sessions by start time
   const sortedSessions = [...sessions].sort((a, b) => {
-    const typeA = normalizeSessionType(a.session_type);
-    const typeB = normalizeSessionType(b.session_type);
-    const indexA = sessionOrder.indexOf(typeA);
-    const indexB = sessionOrder.indexOf(typeB);
-
-    // If not in predefined order, sort by start time
-    if (indexA === -1 && indexB === -1) {
-      const timeA = a.start_time ? new Date(a.start_time).getTime() : 0;
-      const timeB = b.start_time ? new Date(b.start_time).getTime() : 0;
-      return timeA - timeB;
-    }
-    if (indexA === -1) return 1;
-    if (indexB === -1) return -1;
-    return indexA - indexB;
+    const timeA = a.start_time ? new Date(a.start_time).getTime() : 0;
+    const timeB = b.start_time ? new Date(b.start_time).getTime() : 0;
+    return timeA - timeB;
   });
 
   const handleToggle = (sessionType: string) => {
