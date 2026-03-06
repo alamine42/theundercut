@@ -124,6 +124,48 @@ function getDaysUntilFP1(
   return days > 0 ? days : null;
 }
 
+/**
+ * Determines if the race weekend is currently active.
+ * Active means: FP1 has started AND less than 24 hours have passed since the race end.
+ * When active, the widget title shows the GP name instead of "Upcoming Race".
+ */
+function checkRaceWeekendActive(
+  widgetState: WidgetState,
+  sessions: Array<{ session_type: string; start_time: string | null; end_time?: string | null; status: string }>
+): boolean {
+  // Race weekend is active during the weekend
+  if (widgetState === "during-weekend") {
+    return true;
+  }
+
+  // For post-race, check if less than 24 hours have passed since race end
+  if (widgetState === "post-race") {
+    const raceSession = sessions.find(
+      (s) => s.session_type.toLowerCase() === "race"
+    );
+
+    if (raceSession) {
+      const now = new Date();
+      // Use end_time if available, otherwise estimate as start_time + 2 hours
+      let raceEndTime: Date;
+      if (raceSession.end_time) {
+        raceEndTime = new Date(raceSession.end_time);
+      } else if (raceSession.start_time) {
+        raceEndTime = new Date(raceSession.start_time);
+        raceEndTime.setHours(raceEndTime.getHours() + 2);
+      } else {
+        return true; // No timing info, assume still active
+      }
+
+      const hoursSinceRaceEnd = (now.getTime() - raceEndTime.getTime()) / (1000 * 60 * 60);
+      return hoursSinceRaceEnd < 24;
+    }
+  }
+
+  // Pre-weekend, race-week, off-week: not active
+  return false;
+}
+
 function OffWeekState({
   daysUntil,
   nextRaceInfo,
@@ -272,6 +314,7 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
           circuitName={schedule.circuit_name}
           circuitCountry={schedule.circuit_country}
           isSprintWeekend={schedule.is_sprint_weekend}
+          isRaceWeekendActive={checkRaceWeekendActive(widgetState, schedule.sessions)}
         />
       </CardHeader>
 
