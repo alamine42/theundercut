@@ -95,12 +95,38 @@ class OpenF1Provider:
 
         return pd.DataFrame(data)
 
+    def _get_driver_mapping(self, session_key: int) -> Dict[str, Dict[str, str]]:
+        """
+        Fetch driver mapping from OpenF1.
+
+        Returns dict: {driver_number: {"abbreviation": "VER", "name": "Max VERSTAPPEN", "team": "Red Bull"}}
+        """
+        try:
+            r = httpx.get(
+                f"{_API}/drivers",
+                params={"session_key": session_key},
+                timeout=_TIMEOUT,
+            )
+            r.raise_for_status()
+            drivers = {}
+            for d in r.json():
+                num = str(d.get("driver_number", ""))
+                drivers[num] = {
+                    "abbreviation": d.get("name_acronym", num),
+                    "name": d.get("full_name") or d.get("broadcast_name", ""),
+                    "team": d.get("team_name", ""),
+                }
+            return drivers
+        except Exception as e:
+            logger.warning("Failed to fetch driver mapping: %s", e)
+            return {}
+
     def load_laps(self, session_type: str = "Race", enrich_stints: bool = True) -> pd.DataFrame:
         """
         Load lap data from OpenF1.
 
         Returns DataFrame with columns matching FastF1 format:
-        Driver, LapNumber, LapTime, Stint, Compound, PitInTime
+        Driver, LapNumber, LapTime, Stint, Compound, PitInTime, Team
 
         Args:
             session_type: Session to load (Race, Qualifying, etc.)
@@ -123,9 +149,24 @@ class OpenF1Provider:
 
         df = pd.DataFrame(data)
 
-        # Map OpenF1 columns to FastF1-compatible names
+        # Get driver mapping (number -> abbreviation, name, team)
+        driver_mapping = self._get_driver_mapping(session_key)
+
+        # Keep original driver number for mapping
+        df["DriverNumber"] = df["driver_number"].astype(str)
+
+        # Map driver number to abbreviation
+        df["Driver"] = df["DriverNumber"].map(
+            lambda x: driver_mapping.get(x, {}).get("abbreviation", x)
+        )
+
+        # Add team column from driver mapping
+        df["Team"] = df["DriverNumber"].map(
+            lambda x: driver_mapping.get(x, {}).get("team", "")
+        )
+
+        # Rename other columns to FastF1-compatible names
         df = df.rename(columns={
-            "driver_number": "Driver",
             "lap_number": "LapNumber",
             "lap_duration": "LapTime",
         })
@@ -160,6 +201,60 @@ class OpenF1Provider:
         df["PitInTime"] = pd.NaT  # Mark as not available
 
         return df
+
+    def load_results(self, session_type: str = "Race") -> pd.DataFrame:
+        """
+        Load session results from OpenF1.
+
+        Derives results from lap data - best lap time determines position.
+        Returns DataFrame with columns matching FastF1 format.
+        """
+        session_key = self._get_session_key(session_type)
+        if session_key is None:
+            return pd.DataFrame()
+
+        # Get driver mapping
+        driver_mapping = self._get_driver_mapping(session_key)
+
+        # Load lap data
+        laps_df = self.load_laps(session_type, enrich_stints=False)
+        if laps_df.empty:
+            return pd.DataFrame()
+
+        # Group by driver and get best lap
+        results = []
+        for driver_num in laps_df["DriverNumber"].unique():
+            driver_laps = laps_df[laps_df["DriverNumber"] == driver_num]
+            driver_info = driver_mapping.get(str(driver_num), {})
+
+            # Get best lap time
+            valid_laps = driver_laps[driver_laps["LapTime"].notna()]
+            if not valid_laps.empty:
+                best_lap = valid_laps.loc[valid_laps["LapTime"].idxmin()]
+                best_time = best_lap["LapTime"]
+            else:
+                best_time = None
+
+            results.append({
+                "Driver": driver_num,
+                "Abbreviation": driver_info.get("abbreviation", str(driver_num)),
+                "FirstName": driver_info.get("name", "").split()[0] if driver_info.get("name") else "",
+                "LastName": " ".join(driver_info.get("name", "").split()[1:]) if driver_info.get("name") else "",
+                "TeamName": driver_info.get("team", ""),
+                "Time": best_time,
+                "LapsCompleted": len(driver_laps),
+            })
+
+        # Sort by best time to determine position
+        results_df = pd.DataFrame(results)
+        results_df = results_df.sort_values(
+            by="Time",
+            na_position="last",
+            key=lambda x: x.apply(lambda t: t.total_seconds() if pd.notna(t) else float("inf"))
+        )
+        results_df["Position"] = range(1, len(results_df) + 1)
+
+        return results_df
 
     def _build_stint_map(self, stints_df: pd.DataFrame) -> Dict[tuple, dict]:
         """
