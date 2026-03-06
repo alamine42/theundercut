@@ -79,7 +79,15 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
   );
 }
 
-function StatusBadge({ status, startTime }: { status: RaceSession["status"]; startTime: string | null }) {
+function StatusBadge({
+  status,
+  startTime,
+  hasResults
+}: {
+  status: RaceSession["status"];
+  startTime: string | null;
+  hasResults: boolean;
+}) {
   const isCompleted = status === "completed" || status === "ingested";
   const isLive = status === "live" || status === "running";
 
@@ -92,7 +100,8 @@ function StatusBadge({ status, startTime }: { status: RaceSession["status"]; sta
     );
   }
 
-  if (isCompleted) {
+  // Show "See Results" if session is completed OR if we have results
+  if (isCompleted || hasResults) {
     return (
       <span className="status-completed">
         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -154,7 +163,7 @@ export function SessionCard({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          <StatusBadge status={session.status} startTime={session.start_time} />
+          <StatusBadge status={session.status} startTime={session.start_time} hasResults={!!hasResults} />
           {hasResults && (
             <ChevronIcon expanded={isExpanded} />
           )}
