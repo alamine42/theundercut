@@ -16,8 +16,9 @@ import argparse
 import datetime as dt
 
 from theundercut.adapters.db import SessionLocal
-from theundercut.models import CalendarEvent
+from theundercut.models import CalendarEvent, SessionClassification
 from theundercut.services.ingestion import ingest_session
+from theundercut.services.cache import invalidate_session_cache
 
 
 def _utc_now() -> dt.datetime:
@@ -25,9 +26,29 @@ def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def ingest_single_session(season: int, rnd: int, session_type: str, force: bool = False):
+def cleanup_session_results(season: int, rnd: int, session_type: str):
+    """Delete existing session classification records."""
+    normalized_type = session_type.lower().replace(" ", "_")
+    with SessionLocal() as db:
+        deleted = (
+            db.query(SessionClassification)
+            .filter_by(season=season, round=rnd, session_type=normalized_type)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        if deleted:
+            print(f"  Deleted {deleted} existing {normalized_type} records")
+            invalidate_session_cache(season, rnd, normalized_type)
+        return deleted
+
+
+def ingest_single_session(season: int, rnd: int, session_type: str, force: bool = False, cleanup: bool = False):
     """Ingest a specific session."""
     print(f"Ingesting {season}-{rnd} {session_type}...")
+
+    if cleanup:
+        cleanup_session_results(season, rnd, session_type)
+
     try:
         ingest_session(season, rnd, session_type, force=force)
         print(f"  ✓ Successfully ingested {season}-{rnd} {session_type}")
@@ -73,12 +94,13 @@ def main():
     parser.add_argument("--session", type=str, help="Session type (e.g., fp1, fp2, qualifying, race)")
     parser.add_argument("--all", action="store_true", help="Ingest all missed sessions for current year")
     parser.add_argument("--force", action="store_true", help="Force re-ingestion even if already ingested")
+    parser.add_argument("--cleanup", action="store_true", help="Delete existing records before ingesting")
     args = parser.parse_args()
 
     if args.all:
         ingest_all_missed(year=args.season, force=args.force)
     elif args.season and args.round and args.session:
-        ingest_single_session(args.season, args.round, args.session, force=args.force)
+        ingest_single_session(args.season, args.round, args.session, force=args.force, cleanup=args.cleanup)
     else:
         parser.print_help()
         print("\nError: Either use --all or specify --season, --round, and --session")
