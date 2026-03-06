@@ -14,6 +14,7 @@ SESSION_CACHE_PREFIX = "session:v1"
 SCHEDULE_CACHE_PREFIX = "schedule:v1"
 WEEKEND_CACHE_PREFIX = "weekend:v1"
 HISTORY_CACHE_PREFIX = "history:v1"
+STRATEGY_CACHE_PREFIX = "strategy"
 
 
 def analytics_cache_key(
@@ -100,6 +101,21 @@ def invalidate_schedule_cache(season: int, rnd: int) -> None:
     redis_client.delete(weekend_key)
 
 
+def strategy_cache_key(season: int, rnd: int, driver: Optional[str] = None) -> str:
+    """Build the canonical Redis key for strategy scores."""
+    if driver:
+        return f"{STRATEGY_CACHE_PREFIX}:{season}:{rnd}:{driver.upper()}"
+    return f"{STRATEGY_CACHE_PREFIX}:{season}:{rnd}"
+
+
+def invalidate_strategy_cache(season: int, rnd: int) -> None:
+    """Remove all cached strategy score payloads for a race."""
+    pattern = f"{STRATEGY_CACHE_PREFIX}:{season}:{rnd}*"
+    keys = list(redis_client.scan_iter(match=pattern))
+    if keys:
+        redis_client.delete(*keys)
+
+
 def invalidate_race_weekend_cache(season: int, rnd: int) -> None:
     """
     Invalidate all caches for a race weekend.
@@ -108,6 +124,7 @@ def invalidate_race_weekend_cache(season: int, rnd: int) -> None:
     invalidate_analytics_cache(season, rnd)
     invalidate_session_cache(season, rnd)
     invalidate_schedule_cache(season, rnd)
+    invalidate_strategy_cache(season, rnd)
 
 
 __all__ = [
@@ -118,11 +135,14 @@ __all__ = [
     "schedule_cache_key",
     "weekend_cache_key",
     "history_cache_key",
+    "strategy_cache_key",
     "invalidate_session_cache",
     "invalidate_schedule_cache",
+    "invalidate_strategy_cache",
     "invalidate_race_weekend_cache",
     "SESSION_CACHE_PREFIX",
     "SCHEDULE_CACHE_PREFIX",
     "WEEKEND_CACHE_PREFIX",
     "HISTORY_CACHE_PREFIX",
+    "STRATEGY_CACHE_PREFIX",
 ]

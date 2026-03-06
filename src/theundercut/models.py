@@ -349,3 +349,140 @@ class SessionClassification(Base):
     # Metadata
     ingested_at   = Column(DateTime(timezone=True))
     amended       = Column(Boolean, default=False)  # True if post-race penalty changed classification
+
+
+# --- Enhanced Strategy Score tables -----------------------------------------------
+
+class StrategyScore(Base):
+    """Enhanced strategy score per driver per race.
+
+    Stores comprehensive strategy evaluation with component sub-scores
+    for pit timing, tire selection, safety car response, and weather calls.
+    Linked to Entry for referential integrity.
+    """
+    __tablename__ = "strategy_scores"
+    __table_args__ = {"schema": "core"}
+
+    id                   = Column(Integer, primary_key=True)
+    entry_id             = Column(Integer, ForeignKey("core.entries.id"), unique=True, nullable=False)
+
+    # Component scores (0-100)
+    total_score          = Column(Float, nullable=False)
+    pit_timing_score     = Column(Float, nullable=False)
+    tire_selection_score = Column(Float, nullable=False)
+    safety_car_score     = Column(Float, nullable=False)
+    weather_score        = Column(Float, nullable=False)
+
+    # Metadata for recomputation
+    calibration_profile  = Column(String(50), nullable=False)
+    calibration_version  = Column(String(20), nullable=False)
+    computed_at          = Column(DateTime(timezone=True))
+
+    # Relationships
+    decisions = relationship("StrategyDecision", back_populates="strategy_score", cascade="all, delete-orphan")
+
+
+class StrategyDecision(Base):
+    """Individual strategic decision with impact assessment and explanation.
+
+    Provides explainability for strategy scores by logging each decision
+    with its impact on race outcome.
+    """
+    __tablename__ = "strategy_decisions"
+    __table_args__ = (
+        Index("ix_strategy_decision_score", "strategy_score_id"),
+        {"schema": "core"},
+    )
+
+    id                 = Column(Integer, primary_key=True)
+    strategy_score_id  = Column(Integer, ForeignKey("core.strategy_scores.id", ondelete="CASCADE"), nullable=False)
+
+    # Decision context
+    lap_number         = Column(Integer, nullable=False)
+    decision_type      = Column(String(50), nullable=False)  # pit_stop, stay_out, tire_change, compound_choice, etc.
+    factor             = Column(String(20), nullable=False)  # pit_timing, tire_selection, safety_car, weather
+
+    # Impact assessment
+    impact_score       = Column(Float, nullable=False)       # Positive = good, negative = bad
+    position_delta     = Column(Integer)                     # Positions gained/lost
+    time_delta_ms      = Column(Integer)                     # Time gained/lost in milliseconds
+
+    # Explainability
+    explanation        = Column(String, nullable=False)      # Human-readable explanation
+    comparison_context = Column(String)                      # What peers did, simulation alternative
+
+    created_at         = Column(DateTime(timezone=True))
+
+    # Relationships
+    strategy_score = relationship("StrategyScore", back_populates="decisions")
+
+
+class RaceControlEvent(Base):
+    """Safety Car, VSC, and Red Flag periods during a race.
+
+    Required for SafetyCar scorer to evaluate strategic decisions
+    during neutralization periods.
+    """
+    __tablename__ = "race_control_events"
+    __table_args__ = (
+        UniqueConstraint("race_id", "event_type", "start_lap", name="uq_race_control_event"),
+        Index("ix_race_control_event_race", "race_id"),
+        {"schema": "core"},
+    )
+
+    id         = Column(Integer, primary_key=True)
+    race_id    = Column(Integer, ForeignKey("core.races.id"), nullable=False)
+
+    event_type = Column(String(20), nullable=False)   # safety_car, vsc, red_flag
+    start_lap  = Column(Integer, nullable=False)
+    end_lap    = Column(Integer)                       # NULL if race ends under SC
+    start_time = Column(DateTime(timezone=True))
+    end_time   = Column(DateTime(timezone=True))
+    cause      = Column(String)                        # Incident description if available
+
+
+class RaceWeather(Base):
+    """Per-lap weather conditions during a race.
+
+    Required for Weather scorer to evaluate tire compound decisions
+    relative to track conditions.
+    """
+    __tablename__ = "race_weather"
+    __table_args__ = (
+        UniqueConstraint("race_id", "lap_number", name="uq_race_weather"),
+        Index("ix_race_weather_race", "race_id"),
+        {"schema": "core"},
+    )
+
+    id             = Column(Integer, primary_key=True)
+    race_id        = Column(Integer, ForeignKey("core.races.id"), nullable=False)
+    lap_number     = Column(Integer, nullable=False)
+
+    track_status   = Column(String(20), nullable=False)  # dry, damp, wet
+    air_temp_c     = Column(Float)
+    track_temp_c   = Column(Float)
+    humidity_pct   = Column(Float)
+    rain_intensity = Column(String(20))                   # none, light, moderate, heavy
+
+
+class LapPosition(Base):
+    """Per-lap position snapshots for position delta analysis.
+
+    Required for Position Delta Analyzer and Pit Timing Scorer
+    to track positions gained/lost around strategic decisions.
+    """
+    __tablename__ = "lap_positions"
+    __table_args__ = (
+        UniqueConstraint("race_id", "entry_id", "lap_number", name="uq_lap_position"),
+        Index("ix_lap_position_race_lap", "race_id", "lap_number"),
+        {"schema": "core"},
+    )
+
+    id              = Column(Integer, primary_key=True)
+    race_id         = Column(Integer, ForeignKey("core.races.id"), nullable=False)
+    entry_id        = Column(Integer, ForeignKey("core.entries.id"), nullable=False)
+    lap_number      = Column(Integer, nullable=False)
+
+    position        = Column(Integer, nullable=False)    # Race position at end of lap
+    gap_to_leader_ms = Column(Integer)                   # Gap to P1 in milliseconds
+    gap_to_ahead_ms  = Column(Integer)                   # Gap to car ahead

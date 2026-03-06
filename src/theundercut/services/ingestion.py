@@ -30,6 +30,11 @@ from theundercut.models import (
     OvertakeEvent as OvertakeEventRecord,
     Circuit,
     SessionClassification,
+    LapPosition,
+    RaceControlEvent,
+    RaceWeather,
+    StrategyScore,
+    StrategyDecision,
 )
 from theundercut.drive_grade.pipeline import (
     DriveGradePipeline,
@@ -50,7 +55,22 @@ from theundercut.drive_grade.calibration import (
     load_calibration_profile,
     set_active_calibration,
 )
-from theundercut.services.cache import invalidate_analytics_cache, invalidate_session_cache
+from theundercut.services.cache import (
+    invalidate_analytics_cache,
+    invalidate_session_cache,
+    invalidate_strategy_cache,
+)
+from theundercut.drive_grade.strategy import (
+    StrategyScoreEngine,
+    StrategyEngineConfig,
+    StrategyScoreResult,
+)
+from theundercut.drive_grade.strategy.types import (
+    PitStop as StrategyPitStop,
+    RaceControlPeriod,
+    WeatherCondition,
+    LapPositionSnapshot,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -383,6 +403,612 @@ def _store_stints(db: Session, race_id: str, df: pd.DataFrame) -> None:
             "records"
         ),
     )
+
+
+def _store_lap_positions(
+    db: Session,
+    race_row: Race,
+    entry_map: dict[str, Entry],
+    laps: pd.DataFrame,
+) -> None:
+    """
+    Store per-lap position data for position delta analysis.
+    Extracts position from laps DataFrame if available, or derives from lap times.
+    """
+    if laps.empty:
+        logger.warning("No laps for position extraction")
+        return
+
+    # Check if Position column exists
+    has_position = "Position" in laps.columns
+
+    records = []
+    for lap_num in laps["LapNumber"].dropna().unique():
+        lap_data = laps[laps["LapNumber"] == lap_num].copy()
+
+        if has_position:
+            # Use existing position data
+            lap_data = lap_data.dropna(subset=["Position"])
+            lap_data = lap_data.sort_values("Position")
+        else:
+            # Derive position from cumulative time (sum of lap times up to this lap)
+            # This is approximate but better than nothing
+            lap_data = lap_data.dropna(subset=["LapTime"])
+            lap_data = lap_data.sort_values("LapTime")
+            lap_data["Position"] = range(1, len(lap_data) + 1)
+
+        leader_time = None
+        prev_time = None
+
+        for idx, row in lap_data.iterrows():
+            driver_code = row.get("Driver")
+            if not driver_code or pd.isna(driver_code):
+                continue
+
+            driver_code = str(driver_code).strip().upper()
+            if driver_code not in entry_map:
+                continue
+
+            entry = entry_map[driver_code]
+            position = int(row["Position"]) if pd.notna(row["Position"]) else None
+
+            # Calculate gaps - prefer FastF1's actual gap columns when available
+            gap_to_leader_ms = None
+            gap_to_ahead_ms = None
+
+            # Try to get gaps from FastF1's actual timing data
+            if "GapToLeader" in row.index and pd.notna(row.get("GapToLeader")):
+                try:
+                    gap_val = row["GapToLeader"]
+                    if hasattr(gap_val, "total_seconds"):
+                        gap_to_leader_ms = int(gap_val.total_seconds() * 1000)
+                    elif isinstance(gap_val, (int, float)):
+                        gap_to_leader_ms = int(gap_val * 1000) if gap_val < 1000 else int(gap_val)
+                except (AttributeError, TypeError, ValueError):
+                    pass
+
+            if "Gap" in row.index and pd.notna(row.get("Gap")):
+                try:
+                    gap_val = row["Gap"]
+                    if hasattr(gap_val, "total_seconds"):
+                        gap_to_ahead_ms = int(gap_val.total_seconds() * 1000)
+                    elif isinstance(gap_val, (int, float)):
+                        gap_to_ahead_ms = int(gap_val * 1000) if gap_val < 1000 else int(gap_val)
+                except (AttributeError, TypeError, ValueError):
+                    pass
+
+            # Fallback: derive from cumulative time if gap data not available
+            if gap_to_leader_ms is None and "Time" in row.index and pd.notna(row.get("Time")):
+                try:
+                    current_time = row["Time"].total_seconds() * 1000 if hasattr(row["Time"], "total_seconds") else float(row["Time"]) * 1000
+                    if leader_time is None:
+                        leader_time = current_time
+                    else:
+                        gap_to_leader_ms = int(current_time - leader_time)
+                    if prev_time is not None and gap_to_ahead_ms is None:
+                        gap_to_ahead_ms = int(current_time - prev_time)
+                    prev_time = current_time
+                except (AttributeError, TypeError, ValueError):
+                    pass
+
+            records.append({
+                "race_id": race_row.id,
+                "entry_id": entry.id,
+                "lap_number": int(lap_num),
+                "position": position,
+                "gap_to_leader_ms": gap_to_leader_ms,
+                "gap_to_ahead_ms": gap_to_ahead_ms,
+            })
+
+    if records:
+        # Use ON CONFLICT DO UPDATE to support re-ingestion with corrected data
+        for record in records:
+            stmt = pg_insert(LapPosition).values(**record)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_lap_position",
+                set_={
+                    "position": stmt.excluded.position,
+                    "gap_to_leader_ms": stmt.excluded.gap_to_leader_ms,
+                    "gap_to_ahead_ms": stmt.excluded.gap_to_ahead_ms,
+                },
+            )
+            db.execute(stmt)
+
+        logger.info("Stored %d lap positions for race %s", len(records), race_row.id)
+
+
+def _store_race_control_events(
+    db: Session,
+    race_row: Race,
+    race_control: pd.DataFrame,
+) -> None:
+    """
+    Store Safety Car, VSC, and Red Flag events from race control messages.
+    Extracts SC/VSC periods and persists to race_control_events table.
+    """
+    if race_control is None or race_control.empty:
+        logger.info("No race control data available for race %s", race_row.id)
+        return
+
+    # Filter for SC, VSC, and Red Flag events
+    sc_events = []
+    current_event = None
+
+    for _, row in race_control.iterrows():
+        category = row.get("Category", "")
+        flag = row.get("Flag", "")
+        message = str(row.get("Message", "")).upper()
+        lap = row.get("Lap")
+        time = row.get("Time")
+
+        # Detect Safety Car events (non-virtual)
+        if "SAFETY CAR" in message and "VIRTUAL" not in message:
+            # SC end: "IN THIS LAP" or "ENDING" indicate SC is ending
+            if "IN THIS LAP" in message or "ENDING" in message:
+                if current_event and current_event["event_type"] == "safety_car":
+                    current_event["end_lap"] = int(lap) if pd.notna(lap) else None
+                    current_event["end_time"] = time if pd.notna(time) else None
+                    sc_events.append(current_event)
+                    current_event = None
+            # SC start: only "DEPLOYED" indicates actual start
+            elif "DEPLOYED" in message:
+                if current_event is None:
+                    current_event = {
+                        "event_type": "safety_car",
+                        "start_lap": int(lap) if pd.notna(lap) else None,
+                        "start_time": time if pd.notna(time) else None,
+                        "cause": row.get("Message"),
+                    }
+
+        # Detect Virtual Safety Car events
+        elif "VIRTUAL SAFETY CAR" in message or "VSC" in message:
+            # VSC end
+            if "ENDING" in message:
+                if current_event and current_event["event_type"] == "vsc":
+                    current_event["end_lap"] = int(lap) if pd.notna(lap) else None
+                    current_event["end_time"] = time if pd.notna(time) else None
+                    sc_events.append(current_event)
+                    current_event = None
+            # VSC start
+            elif "DEPLOYED" in message:
+                if current_event is None:
+                    current_event = {
+                        "event_type": "vsc",
+                        "start_lap": int(lap) if pd.notna(lap) else None,
+                        "start_time": time if pd.notna(time) else None,
+                        "cause": row.get("Message"),
+                    }
+
+        # Detect Red Flag events
+        elif "RED FLAG" in message:
+            # Red Flag end
+            if "GREEN" in message or "RESTART" in message:
+                if current_event and current_event["event_type"] == "red_flag":
+                    current_event["end_lap"] = int(lap) if pd.notna(lap) else None
+                    current_event["end_time"] = time if pd.notna(time) else None
+                    sc_events.append(current_event)
+                    current_event = None
+            # Red Flag start
+            elif current_event is None:
+                current_event = {
+                    "event_type": "red_flag",
+                    "start_lap": int(lap) if pd.notna(lap) else None,
+                    "start_time": time if pd.notna(time) else None,
+                    "cause": row.get("Message"),
+                }
+
+    # Handle event that didn't end (race finished under SC)
+    if current_event:
+        sc_events.append(current_event)
+
+    # Store events with ON CONFLICT DO UPDATE for re-ingestion support
+    for event in sc_events:
+        if event.get("start_lap") is None:
+            continue
+
+        stmt = pg_insert(RaceControlEvent).values(
+            race_id=race_row.id,
+            event_type=event["event_type"],
+            start_lap=event["start_lap"],
+            end_lap=event.get("end_lap"),
+            start_time=event.get("start_time"),
+            end_time=event.get("end_time"),
+            cause=event.get("cause"),
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_race_control_event",
+            set_={
+                "end_lap": stmt.excluded.end_lap,
+                "end_time": stmt.excluded.end_time,
+                "cause": stmt.excluded.cause,
+            },
+        )
+        db.execute(stmt)
+
+    logger.info("Stored %d race control events for race %s", len(sc_events), race_row.id)
+
+
+def _store_race_weather(
+    db: Session,
+    race_row: Race,
+    weather: pd.DataFrame,
+    laps: pd.DataFrame,
+) -> None:
+    """
+    Store per-lap weather conditions for weather strategy analysis.
+    Maps weather data to lap numbers.
+    """
+    if weather is None or weather.empty:
+        logger.info("No weather data available for race %s", race_row.id)
+        return
+
+    if laps.empty:
+        logger.warning("No laps to map weather data to")
+        return
+
+    # Get unique lap numbers from laps
+    lap_numbers = sorted(laps["LapNumber"].dropna().unique())
+
+    # Weather data has timestamps, need to map to laps
+    # Get lap start times if available
+    lap_times = {}
+    if "LapStartTime" in laps.columns:
+        for lap_num in lap_numbers:
+            lap_data = laps[laps["LapNumber"] == lap_num]
+            if not lap_data.empty:
+                first_start = lap_data["LapStartTime"].min()
+                if pd.notna(first_start):
+                    lap_times[lap_num] = first_start
+
+    # Pre-sort weather data once for efficient lookup (avoid O(n²) copies)
+    weather_sorted = None
+    weather_times = None
+    if "Time" in weather.columns:
+        weather_sorted = weather.sort_values("Time").reset_index(drop=True)
+        weather_times = weather_sorted["Time"].tolist()
+
+    records = []
+    for lap_num in lap_numbers:
+        # Find closest weather reading for this lap
+        weather_row = None
+
+        if lap_times and lap_num in lap_times and weather_sorted is not None:
+            lap_start = lap_times[lap_num]
+            # Binary search for closest weather reading (O(log n) instead of O(n))
+            import bisect
+            idx = bisect.bisect_left(weather_times, lap_start)
+            # Check neighbors to find closest
+            if idx == 0:
+                weather_row = weather_sorted.iloc[0]
+            elif idx >= len(weather_times):
+                weather_row = weather_sorted.iloc[-1]
+            else:
+                before = weather_times[idx - 1]
+                after = weather_times[idx]
+                if abs(lap_start - before) <= abs(after - lap_start):
+                    weather_row = weather_sorted.iloc[idx - 1]
+                else:
+                    weather_row = weather_sorted.iloc[idx]
+        elif weather_sorted is not None:
+            # Fallback: use proportional position in weather data
+            idx = int((lap_num - 1) / max(len(lap_numbers) - 1, 1) * (len(weather_sorted) - 1))
+            idx = min(idx, len(weather_sorted) - 1)
+            weather_row = weather_sorted.iloc[idx]
+        else:
+            # No time column, use proportional index on original
+            idx = int((lap_num - 1) / max(len(lap_numbers) - 1, 1) * (len(weather) - 1))
+            idx = min(idx, len(weather) - 1)
+            weather_row = weather.iloc[idx]
+
+        if weather_row is None:
+            continue
+
+        # Determine track status
+        track_status = "dry"
+        rainfall = weather_row.get("Rainfall")
+        if pd.notna(rainfall) and rainfall > 0:
+            track_status = "wet" if rainfall > 0.5 else "damp"
+
+        # Also check TrackStatus if available
+        track_status_raw = weather_row.get("TrackStatus")
+        if pd.notna(track_status_raw):
+            status_str = str(track_status_raw).lower()
+            if "wet" in status_str:
+                track_status = "wet"
+            elif "damp" in status_str:
+                track_status = "damp"
+
+        # Determine rain intensity
+        rain_intensity = "none"
+        if pd.notna(rainfall):
+            if rainfall > 2.0:
+                rain_intensity = "heavy"
+            elif rainfall > 0.5:
+                rain_intensity = "moderate"
+            elif rainfall > 0:
+                rain_intensity = "light"
+
+        records.append({
+            "race_id": race_row.id,
+            "lap_number": int(lap_num),
+            "track_status": track_status,
+            "air_temp_c": float(weather_row.get("AirTemp")) if pd.notna(weather_row.get("AirTemp")) else None,
+            "track_temp_c": float(weather_row.get("TrackTemp")) if pd.notna(weather_row.get("TrackTemp")) else None,
+            "humidity_pct": float(weather_row.get("Humidity")) if pd.notna(weather_row.get("Humidity")) else None,
+            "rain_intensity": rain_intensity,
+        })
+
+    # Store weather records with ON CONFLICT DO UPDATE for re-ingestion support
+    for record in records:
+        stmt = pg_insert(RaceWeather).values(**record)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_race_weather",
+            set_={
+                "track_status": stmt.excluded.track_status,
+                "air_temp_c": stmt.excluded.air_temp_c,
+                "track_temp_c": stmt.excluded.track_temp_c,
+                "humidity_pct": stmt.excluded.humidity_pct,
+                "rain_intensity": stmt.excluded.rain_intensity,
+            },
+        )
+        db.execute(stmt)
+
+    logger.info("Stored %d weather records for race %s", len(records), race_row.id)
+
+
+def _build_minimal_weekend_from_laps(laps: pd.DataFrame, season: int, rnd: int) -> dict | None:
+    """
+    Build minimal weekend payload from laps data when DriveGrade payload is unavailable.
+    This allows strategy scoring to work even without full DriveGrade data.
+    """
+    if laps.empty:
+        return None
+
+    drivers = []
+    for driver_code in laps["Driver"].dropna().unique():
+        driver_code = str(driver_code).strip().upper()
+        if not driver_code:
+            continue
+
+        # Get team if available
+        driver_laps = laps[laps["Driver"] == driver_code]
+        team = "Unknown"
+        if "Team" in driver_laps.columns and not driver_laps["Team"].dropna().empty:
+            team = str(driver_laps["Team"].dropna().iloc[0])
+
+        drivers.append({
+            "driver": driver_code,
+            "team": team,
+        })
+
+    if not drivers:
+        return None
+
+    return {
+        "season": season,
+        "round": rnd,
+        "race_name": f"Round {rnd}",
+        "slug": f"{season}-{rnd}",
+        "drivers": drivers,
+    }
+
+
+def _compute_and_store_strategy_scores(
+    db: Session,
+    race_row: Race,
+    entry_map: dict[str, Entry],
+    laps: pd.DataFrame,
+    season: int,
+    rnd: int,
+) -> None:
+    """
+    Compute enhanced strategy scores for all drivers in the race.
+    Uses the StrategyScoreEngine with all available race data.
+    """
+    if laps.empty:
+        logger.warning("No laps for strategy scoring")
+        return
+
+    # Get total laps
+    total_laps = int(laps["LapNumber"].max()) if not laps.empty else 0
+    if total_laps == 0:
+        logger.warning("Cannot compute strategy scores without lap data")
+        return
+
+    # Load lap positions from DB
+    db_positions = db.query(LapPosition).filter(
+        LapPosition.race_id == race_row.id
+    ).all()
+
+    positions = []
+    for pos in db_positions:
+        # Look up driver code from entry
+        driver_code = None
+        for code, entry in entry_map.items():
+            if entry.id == pos.entry_id:
+                driver_code = code
+                break
+        if driver_code:
+            positions.append(LapPositionSnapshot(
+                lap_number=pos.lap_number,
+                driver_code=driver_code,
+                entry_id=pos.entry_id,
+                position=pos.position,
+                gap_to_leader_ms=pos.gap_to_leader_ms,
+                gap_to_ahead_ms=pos.gap_to_ahead_ms,
+            ))
+
+    if not positions:
+        logger.warning("No position data available for strategy scoring")
+        return
+
+    # Extract pit stops from laps data
+    pit_stops = []
+    pit_laps = laps[laps["PitInTime"].notna()]
+    for _, row in pit_laps.iterrows():
+        driver_code = str(row.get("Driver", "")).strip().upper()
+        if not driver_code or driver_code not in entry_map:
+            continue
+
+        entry = entry_map[driver_code]
+        lap_num = int(row["LapNumber"]) if pd.notna(row["LapNumber"]) else 0
+
+        # Get compound info
+        compound_in = row.get("Compound")
+        if pd.isna(compound_in):
+            compound_in = None
+
+        # Try to find the compound going on from next lap
+        next_lap = laps[
+            (laps["Driver"] == row["Driver"]) &
+            (laps["LapNumber"] == lap_num + 1)
+        ]
+        compound_out = None
+        if not next_lap.empty and pd.notna(next_lap.iloc[0].get("Compound")):
+            compound_out = next_lap.iloc[0]["Compound"]
+
+        pit_stops.append(StrategyPitStop(
+            lap=lap_num,
+            driver_code=driver_code,
+            entry_id=entry.id,
+            compound_in=str(compound_in) if compound_in else None,
+            compound_out=str(compound_out) if compound_out else None,
+        ))
+
+    # Load stint data - stints use string race_id like "2024-5"
+    stint_race_id = f"{season}-{rnd}"
+    stints = db.query(Stint).filter(Stint.race_id == stint_race_id).all()
+    stint_data = []
+    for stint in stints:
+        stint_data.append({
+            "driver": stint.driver,
+            "stint_no": stint.stint_no,
+            "compound": stint.compound,
+            "laps": stint.laps,
+            "avg_lap_ms": stint.avg_lap_ms,
+        })
+
+    # Load race control events
+    db_race_control = db.query(RaceControlEvent).filter(
+        RaceControlEvent.race_id == race_row.id
+    ).all()
+
+    race_control = []
+    for event in db_race_control:
+        race_control.append(RaceControlPeriod(
+            event_type=event.event_type,
+            start_lap=event.start_lap,
+            end_lap=event.end_lap,
+            cause=event.cause,
+        ))
+
+    # Load weather data
+    db_weather = db.query(RaceWeather).filter(
+        RaceWeather.race_id == race_row.id
+    ).all()
+
+    weather = []
+    for w in db_weather:
+        weather.append(WeatherCondition(
+            lap_number=w.lap_number,
+            track_status=w.track_status,
+            air_temp_c=w.air_temp_c,
+            track_temp_c=w.track_temp_c,
+            rain_intensity=w.rain_intensity,
+        ))
+
+    # Build lap times list
+    lap_times = []
+    for _, row in laps.iterrows():
+        driver = row.get("Driver")
+        lap_num = row.get("LapNumber")
+        lap_time = row.get("LapTime")
+        if pd.notna(driver) and pd.notna(lap_num) and pd.notna(lap_time):
+            try:
+                lap_ms = int(lap_time.total_seconds() * 1000)
+                lap_times.append({
+                    "driver": str(driver).upper(),
+                    "lap": int(lap_num),
+                    "lap_ms": lap_ms,
+                })
+            except (AttributeError, TypeError):
+                pass
+
+    # Initialize and run the strategy engine
+    engine = StrategyScoreEngine(
+        positions=positions,
+        pit_stops=pit_stops,
+        stint_data=stint_data,
+        race_control=race_control,
+        weather=weather,
+        lap_times=lap_times,
+        total_laps=total_laps,
+    )
+
+    # Score all drivers
+    results = engine.score_all_drivers()
+    timestamp = dt.datetime.utcnow()
+
+    # Store results
+    for result in results:
+        entry = entry_map.get(result.driver_code)
+        if not entry:
+            continue
+
+        # Upsert strategy score
+        stmt = pg_insert(StrategyScore).values(
+            entry_id=entry.id,
+            total_score=result.total_score,
+            pit_timing_score=result.pit_timing_score,
+            tire_selection_score=result.tire_selection_score,
+            safety_car_score=result.safety_car_score,
+            weather_score=result.weather_score,
+            calibration_profile=result.calibration_profile,
+            calibration_version=result.calibration_version,
+            computed_at=timestamp,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["entry_id"],
+            set_={
+                "total_score": stmt.excluded.total_score,
+                "pit_timing_score": stmt.excluded.pit_timing_score,
+                "tire_selection_score": stmt.excluded.tire_selection_score,
+                "safety_car_score": stmt.excluded.safety_car_score,
+                "weather_score": stmt.excluded.weather_score,
+                "calibration_profile": stmt.excluded.calibration_profile,
+                "calibration_version": stmt.excluded.calibration_version,
+                "computed_at": stmt.excluded.computed_at,
+            },
+        )
+        db.execute(stmt)
+        db.flush()
+
+        # Get the strategy score ID
+        strategy_score = db.query(StrategyScore).filter(
+            StrategyScore.entry_id == entry.id
+        ).one()
+
+        # Delete old decisions and insert new ones
+        db.query(StrategyDecision).filter(
+            StrategyDecision.strategy_score_id == strategy_score.id
+        ).delete()
+
+        for decision in result.decisions:
+            db.add(StrategyDecision(
+                strategy_score_id=strategy_score.id,
+                lap_number=decision.lap_number,
+                decision_type=decision.decision_type.value,
+                factor=decision.factor.value,
+                impact_score=decision.impact_score,
+                position_delta=decision.position_delta,
+                time_delta_ms=decision.time_delta_ms,
+                explanation=decision.explanation,
+                comparison_context=decision.comparison_context,
+            ))
+
+    db.flush()
+    logger.info("Computed and stored strategy scores for %d drivers in race %s",
+                len(results), race_row.id)
 
 
 def _int_or_none(value) -> int | None:
@@ -751,6 +1377,26 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
     except Exception as exc:
         logger.warning("Failed to load session results for %s-%s %s: %s", season, rnd, session_type, exc)
 
+    # Load race control and weather data (for Race sessions only)
+    race_control = None
+    weather_data = None
+    is_race = session_type.lower() in ("race", "r")
+
+    if is_race:
+        try:
+            race_control = provider.load_race_control(session_type=session_type)
+        except AttributeError:
+            logger.debug("Provider doesn't support load_race_control")
+        except Exception as exc:
+            logger.warning("Failed to load race control for %s-%s: %s", season, rnd, exc)
+
+        try:
+            weather_data = provider.load_weather(session_type=session_type)
+        except AttributeError:
+            logger.debug("Provider doesn't support load_weather")
+        except Exception as exc:
+            logger.warning("Failed to load weather for %s-%s: %s", season, rnd, exc)
+
     race_id = f"{season}-{rnd}"
     weekend_payload, grade_source = _try_fetch_drivegrade_weekend(season, rnd)
 
@@ -773,7 +1419,19 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
             _store_session_classifications(db, season, rnd, session_type, laps, provider, session_results)
         except Exception as exc:
             logger.exception("Failed to store session classifications for %s-%s %s: %s", season, rnd, session_type, exc)
+
+        # Variables to hold race context for strategy data
+        race_row = None
+        entry_map = None
+
         if weekend_payload:
+            # First ensure we have race/entry reference data (independent of DriveGrade)
+            try:
+                race_row, entry_map = _ensure_reference_entries(db, season, rnd, weekend_payload)
+            except Exception as exc:
+                logger.exception("Failed to create reference entries for %s: %s", race_id, exc)
+
+            # Then compute DriveGrade scores (can fail without blocking strategy scoring)
             try:
                 _store_driver_grade_outputs(
                     db,
@@ -783,9 +1441,47 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
                     grade_source or provider.__class__.__name__,
                 )
             except Exception as exc:  # pragma: no cover - defensive
-                logger.exception("Failed to compute grades for %s: %s", race_id, exc)
+                logger.exception("Failed to compute DriveGrade for %s: %s", race_id, exc)
         else:
             logger.warning("No Drive Grade weekend payload for %s", race_id)
+            # Fallback: Try to build minimal race/entry data from laps for strategy scoring
+            if is_race and not laps.empty:
+                try:
+                    fallback_payload = _build_minimal_weekend_from_laps(laps, season, rnd)
+                    if fallback_payload:
+                        race_row, entry_map = _ensure_reference_entries(db, season, rnd, fallback_payload)
+                        logger.info("Created fallback race context from laps for %s", race_id)
+                except Exception as exc:
+                    logger.warning("Failed to create fallback race context for %s: %s", race_id, exc)
+
+        # Store strategy-related data (only for Race sessions with valid race context)
+        if is_race and race_row and entry_map:
+            # Store lap positions
+            try:
+                _store_lap_positions(db, race_row, entry_map, laps)
+            except Exception as exc:
+                logger.warning("Failed to store lap positions for %s: %s", race_id, exc)
+
+            # Store race control events (SC, VSC, red flags)
+            if race_control is not None:
+                try:
+                    _store_race_control_events(db, race_row, race_control)
+                except Exception as exc:
+                    logger.warning("Failed to store race control events for %s: %s", race_id, exc)
+
+            # Store weather data
+            if weather_data is not None:
+                try:
+                    _store_race_weather(db, race_row, weather_data, laps)
+                except Exception as exc:
+                    logger.warning("Failed to store weather data for %s: %s", race_id, exc)
+
+            # Compute and store enhanced strategy scores
+            try:
+                _compute_and_store_strategy_scores(db, race_row, entry_map, laps, season, rnd)
+            except Exception as exc:
+                logger.warning("Failed to compute strategy scores for %s: %s", race_id, exc)
+
         # mark calendar row
         ev = (
             db.query(CalendarEvent)
@@ -803,4 +1499,8 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
         invalidate_session_cache(season, rnd, session_type)
     except Exception as exc:  # pragma: no cover - cache should not block ingestion
         logger.warning("Failed to invalidate session cache for %s-%s %s: %s", season, rnd, session_type, exc)
+    try:
+        invalidate_strategy_cache(season, rnd)
+    except Exception as exc:  # pragma: no cover - cache should not block ingestion
+        logger.warning("Failed to invalidate strategy cache for %s-%s: %s", season, rnd, exc)
     logger.info("%s %s complete: len(laps)=%s", race_id, session_type, len(laps))

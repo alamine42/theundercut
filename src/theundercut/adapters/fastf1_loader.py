@@ -47,6 +47,69 @@ class FastF1Provider:
             )
             raise
 
+    def load_results(self, session_type: str = "Race") -> pd.DataFrame:
+        """Load session results (classification)."""
+        def _load() -> pd.DataFrame:
+            ses = fastf1.get_session(self.season, self.rnd, session_type)
+            ses.load()
+            return ses.results
+
+        try:
+            return run_with_timeout(
+                _load,
+                timeout=FASTF1_TIMEOUT,
+                description=f"FastF1 load_results({self.season}, {self.rnd}, {session_type})",
+            )
+        except TimeoutError:
+            logger.warning(
+                "FastF1 timed out loading results for %d round %d",
+                self.season,
+                self.rnd,
+            )
+            raise
+
+    def load_race_control(self, session_type: str = "Race") -> pd.DataFrame:
+        """Load race control messages (SC, VSC, flags, etc.)."""
+        def _load() -> pd.DataFrame:
+            ses = fastf1.get_session(self.season, self.rnd, session_type)
+            ses.load()
+            return ses.race_control_messages
+
+        try:
+            return run_with_timeout(
+                _load,
+                timeout=FASTF1_TIMEOUT,
+                description=f"FastF1 load_race_control({self.season}, {self.rnd}, {session_type})",
+            )
+        except TimeoutError:
+            logger.warning(
+                "FastF1 timed out loading race control for %d round %d",
+                self.season,
+                self.rnd,
+            )
+            raise
+
+    def load_weather(self, session_type: str = "Race") -> pd.DataFrame:
+        """Load weather data during session."""
+        def _load() -> pd.DataFrame:
+            ses = fastf1.get_session(self.season, self.rnd, session_type)
+            ses.load()
+            return ses.weather_data
+
+        try:
+            return run_with_timeout(
+                _load,
+                timeout=FASTF1_TIMEOUT,
+                description=f"FastF1 load_weather({self.season}, {self.rnd}, {session_type})",
+            )
+        except TimeoutError:
+            logger.warning(
+                "FastF1 timed out loading weather for %d round %d",
+                self.season,
+                self.rnd,
+            )
+            raise
+
     # placeholder for future telemetry usage
     def load_telemetry(self):
         return None
