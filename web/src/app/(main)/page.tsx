@@ -20,7 +20,7 @@ const RACE_ACTIVE_HOURS_ESTIMATE = 42; // Race date + ~18h for race end + 24h wi
 async function getHomeData() {
   try {
     const [standings, testingData, circuitsData] = await Promise.all([
-      fetchStandings(DEFAULT_SEASON),
+      fetchStandings(DEFAULT_SEASON).catch(() => null),
       fetchTestingEvents(DEFAULT_SEASON).catch(() => ({ events: [] })),
       fetchCircuits(DEFAULT_SEASON).catch(() => ({ circuits: [] })),
     ]);
