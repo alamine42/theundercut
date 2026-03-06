@@ -55,7 +55,10 @@ def mark_sessions_live():
 def _enqueue_upcoming_impl(scheduler):
     """
     Queue ingestion jobs for sessions that have ended.
-    Looks for 'live' sessions where end_ts + 5 min has passed.
+    Looks for sessions where end_ts + 5 min has passed and status is 'live' or 'scheduled'.
+
+    The 'scheduled' check catches sessions that were missed by mark_sessions_live
+    (e.g., if the scheduler was down when the session started).
 
     Takes scheduler as parameter for testability.
     """
@@ -63,11 +66,13 @@ def _enqueue_upcoming_impl(scheduler):
 
     now = _utc_now()
     with SessionLocal() as db:
+        # Find sessions that have ended but not yet ingested
+        # Include both 'live' (normal flow) and 'scheduled' (missed sessions)
         rows = (
             db.query(CalendarEvent)
             .filter(
                 CalendarEvent.end_ts + dt.timedelta(minutes=5) <= now,
-                CalendarEvent.status == "live",
+                CalendarEvent.status.in_(["live", "scheduled"]),
             )
             .all()
         )
@@ -75,6 +80,16 @@ def _enqueue_upcoming_impl(scheduler):
             job_id = f"{ev.season}-{ev.round}-{ev.session_type}"
             if scheduler.job_exists(job_id):
                 continue
+
+            # If session was 'scheduled' but has ended, mark it as 'live' first for consistency
+            if ev.status == "scheduled":
+                ev.status = "live"
+                print(f"[scheduler] session missed start, marking live: {ev.season}-{ev.round}-{ev.session_type}")
+                try:
+                    invalidate_race_weekend_cache(ev.season, ev.round)
+                except Exception as exc:
+                    print(f"[scheduler] cache invalidation failed: {exc}")
+
             scheduler.enqueue_at(
                 ev.end_ts + dt.timedelta(minutes=5),
                 ingest_session,

@@ -188,16 +188,46 @@ class TestEnqueueUpcoming:
 
         mock_scheduler.enqueue_at.assert_called_once()
 
-    def test_ignores_scheduled_sessions(self, db_session):
-        """Scheduled sessions should not be queued (they need to be live first)."""
+    def test_queues_missed_scheduled_sessions(self, db_session):
+        """Scheduled sessions that have ended should still be queued (catches missed sessions)."""
         now = utc_now()
         session = CalendarEvent(
             season=2026,
             round=1,
             session_type="race",
             start_ts=now - dt.timedelta(hours=3),
-            end_ts=now - dt.timedelta(minutes=10),
-            status="scheduled",  # Not live
+            end_ts=now - dt.timedelta(minutes=10),  # Ended 10 minutes ago
+            status="scheduled",  # Was never marked live (missed by mark_sessions_live)
+        )
+        db_session.add(session)
+        db_session.commit()
+
+        mock_scheduler = MagicMock()
+        mock_scheduler.job_exists.return_value = False
+
+        with patch("theundercut.scheduler_jobs.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__.return_value = db_session
+            mock_session_local.return_value.__exit__ = MagicMock()
+
+            from theundercut.scheduler_jobs import _enqueue_upcoming_impl
+            _enqueue_upcoming_impl(mock_scheduler)
+
+        # Should queue ingestion for missed session
+        mock_scheduler.enqueue_at.assert_called_once()
+        # Session status should be updated to 'live'
+        db_session.refresh(session)
+        assert session.status == "live"
+
+    def test_ignores_future_scheduled_sessions(self, db_session):
+        """Scheduled sessions that haven't ended yet should not be queued."""
+        now = utc_now()
+        session = CalendarEvent(
+            season=2026,
+            round=1,
+            session_type="race",
+            start_ts=now + dt.timedelta(hours=1),  # Starts in 1 hour
+            end_ts=now + dt.timedelta(hours=3),    # Ends in 3 hours
+            status="scheduled",
         )
         db_session.add(session)
         db_session.commit()

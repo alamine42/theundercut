@@ -1398,20 +1398,34 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
             logger.warning("Failed to load weather for %s-%s: %s", season, rnd, exc)
 
     race_id = f"{season}-{rnd}"
+    normalized_session = SESSION_TYPE_MAP.get(session_type, session_type.lower())
     weekend_payload, grade_source = _try_fetch_drivegrade_weekend(season, rnd)
 
+    # Check if this specific session has already been ingested (by CalendarEvent status)
     with SessionLocal() as db:
-        already = db.scalar(
+        event = (
+            db.query(CalendarEvent)
+            .filter_by(season=season, round=rnd)
+            .filter(CalendarEvent.session_type.ilike(f"%{session_type}%"))
+            .one_or_none()
+        )
+        session_already_ingested = event and event.status == "ingested"
+
+        # Also check if lap_times exist for this race (for race-specific data)
+        lap_data_exists = db.scalar(
             sa.text("SELECT 1 FROM lap_times WHERE race_id = :rid LIMIT 1"),
             {"rid": f"{season}-{rnd}"},
         )
-    existing = bool(already)
-    if existing and not force:
-        logger.info("%s-%s already ingested; skipping", season, rnd)
+
+    if session_already_ingested and not force:
+        logger.info("%s-%s %s already ingested; skipping", season, rnd, session_type)
         return
 
     with SessionLocal() as db:
-        if not existing:
+        # Store laps/stints only if this is race session and no lap data exists yet
+        # (Practice sessions don't need separate lap storage - we derive classifications from provider data)
+        is_race_session = normalized_session in ("race", "sprint_race")
+        if is_race_session and not lap_data_exists:
             _store_laps(db, race_id, laps)
             _store_stints(db, race_id, laps)
         # Always store session classifications (supports amendments)
