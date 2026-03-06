@@ -144,6 +144,14 @@ export function SessionCard({
   const hasResults = results && results.results.length > 0;
   const sessionTypeClass = getSessionTypeClass(session.session_type);
 
+  // Check if session has ended based on time
+  const now = new Date();
+  const sessionEnded = session.end_time ? new Date(session.end_time) < now :
+    (session.start_time ? new Date(session.start_time).getTime() + (2 * 60 * 60 * 1000) < now.getTime() : false);
+
+  // Session is expandable if it has results OR if it's done (to show pending message)
+  const isExpandable = hasResults || sessionEnded;
+
   return (
     <div
       className={`session-card ${sessionTypeClass} ${isExpanded ? "session-card-expanded" : ""}`}
@@ -151,9 +159,9 @@ export function SessionCard({
       <button
         onClick={onToggle}
         className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-3 focus-ring rounded-sm min-h-[52px]"
-        disabled={!hasResults}
-        aria-expanded={hasResults ? isExpanded : undefined}
-        aria-controls={hasResults ? `session-${session.session_type}-content` : undefined}
+        disabled={!isExpandable}
+        aria-expanded={isExpandable ? isExpanded : undefined}
+        aria-controls={isExpandable ? `session-${session.session_type}-content` : undefined}
       >
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <div className="flex flex-col min-w-0">
@@ -161,7 +169,7 @@ export function SessionCard({
               <span className="sm:hidden">{shortLabel}</span>
               <span className="hidden sm:inline">{label}</span>
             </span>
-            {!isCompleted && session.start_time && (
+            {!isCompleted && !sessionEnded && session.start_time && (
               <span className="text-xs text-muted mt-0.5">
                 {formatSessionTime(session.start_time)}
               </span>
@@ -176,29 +184,36 @@ export function SessionCard({
             endTime={session.end_time}
             hasResults={!!hasResults}
           />
-          {hasResults && (
+          {isExpandable && (
             <ChevronIcon expanded={isExpanded} />
           )}
         </div>
       </button>
 
-      {hasResults && (
+      {isExpandable && (
         <div
           id={`session-${session.session_type}-content`}
           className="expandable-content"
           data-expanded={isExpanded}
         >
           <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-0">
-            {isExpanded ? (
-              <SessionCardExpanded
-                results={results.results}
-                sessionType={session.session_type}
-              />
+            {hasResults ? (
+              isExpanded ? (
+                <SessionCardExpanded
+                  results={results.results}
+                  sessionType={session.session_type}
+                />
+              ) : (
+                <SessionCardCompact
+                  results={results.results}
+                  sessionType={session.session_type}
+                />
+              )
             ) : (
-              <SessionCardCompact
-                results={results.results}
-                sessionType={session.session_type}
-              />
+              <div className="text-center py-4">
+                <p className="text-sm text-muted">Results are being processed...</p>
+                <p className="text-xs text-muted mt-1">Check back shortly</p>
+              </div>
             )}
           </div>
         </div>

@@ -388,7 +388,7 @@ describe("SessionCard", () => {
   });
 
   describe("Edge cases", () => {
-    it("handles empty results by disabling expand", () => {
+    it("handles empty results by showing pending message when expanded", () => {
       const session: RaceSession = {
         session_type: "fp1",
         start_time: pastDate(1),
@@ -402,17 +402,39 @@ describe("SessionCard", () => {
         <SessionCard
           session={session}
           results={emptyResults}
-          isExpanded={false}
+          isExpanded={true}
           onToggle={mockOnToggle}
         />
       );
 
-      // When results are empty, button should be disabled (no expandable content)
-      const button = screen.getByRole("button");
-      expect(button).toBeDisabled();
+      // Completed sessions with empty results should show pending message
+      expect(screen.getByText("Results are being processed...")).toBeInTheDocument();
+      expect(screen.getByText("Check back shortly")).toBeInTheDocument();
     });
 
-    it("handles null results gracefully", () => {
+    it("handles null results gracefully for completed sessions", () => {
+      const session: RaceSession = {
+        session_type: "fp1",
+        start_time: pastDate(1),
+        end_time: pastDate(1, -1),
+        status: "completed",
+      };
+
+      render(
+        <SessionCard
+          session={session}
+          results={null}
+          isExpanded={true}
+          onToggle={mockOnToggle}
+        />
+      );
+
+      // Completed sessions with null results should show pending message
+      expect(screen.getByText("Results are being processed...")).toBeInTheDocument();
+      expect(screen.getByText("Check back shortly")).toBeInTheDocument();
+    });
+
+    it("completed sessions are expandable even without results", () => {
       const session: RaceSession = {
         session_type: "fp1",
         start_time: pastDate(1),
@@ -429,9 +451,13 @@ describe("SessionCard", () => {
         />
       );
 
-      // When results are null, button should be disabled
+      // Button should be enabled for completed sessions
       const button = screen.getByRole("button");
-      expect(button).toBeDisabled();
+      expect(button).not.toBeDisabled();
+
+      // Clicking should trigger onToggle
+      fireEvent.click(button);
+      expect(mockOnToggle).toHaveBeenCalledTimes(1);
     });
   });
 });
