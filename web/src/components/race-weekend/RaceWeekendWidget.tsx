@@ -354,7 +354,6 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
             <SessionGrid
               sessions={schedule.sessions}
               sessionResults={sessionResults}
-              isSprintWeekend={schedule.is_sprint_weekend}
             />
           </div>
         )}

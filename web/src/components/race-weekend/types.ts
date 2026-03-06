@@ -54,7 +54,6 @@ export interface HistoricalDataProps {
 export interface SessionGridProps {
   sessions: RaceSession[];
   sessionResults: Record<string, SessionResultsResponse | null>;
-  isSprintWeekend: boolean;
 }
 
 export interface SessionCardProps {

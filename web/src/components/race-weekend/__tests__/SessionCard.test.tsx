@@ -41,7 +41,7 @@ describe("SessionCard", () => {
       );
 
       expect(screen.getByText("Free Practice 1")).toBeInTheDocument();
-      expect(screen.getByText("Done")).toBeInTheDocument();
+      expect(screen.getByText("See Results")).toBeInTheDocument();
     });
 
     it("shows top 3 results in compact view", () => {
@@ -137,7 +137,7 @@ describe("SessionCard", () => {
   });
 
   describe("Status badges", () => {
-    it("shows 'Done' badge for completed sessions", () => {
+    it("shows green 'See Results' badge for completed sessions", () => {
       const session: RaceSession = {
         session_type: "fp1",
         start_time: pastDate(1),
@@ -154,10 +154,10 @@ describe("SessionCard", () => {
         />
       );
 
-      expect(screen.getByText("Done")).toBeInTheDocument();
+      expect(screen.getByText("See Results")).toBeInTheDocument();
     });
 
-    it("shows 'Done' badge for ingested sessions (post-race)", () => {
+    it("shows green 'See Results' badge for ingested sessions (post-race)", () => {
       const session: RaceSession = {
         session_type: "qualifying",
         start_time: pastDate(2),
@@ -174,7 +174,7 @@ describe("SessionCard", () => {
         />
       );
 
-      expect(screen.getByText("Done")).toBeInTheDocument();
+      expect(screen.getByText("See Results")).toBeInTheDocument();
     });
 
     it("shows countdown for scheduled sessions", () => {
