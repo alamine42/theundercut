@@ -8,8 +8,42 @@ import { SessionGrid } from "./SessionGrid";
 import { getCountryFlag } from "@/lib/utils";
 import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo } from "./types";
 
-/** Number of hours after race end before the widget title reverts to "Upcoming Race" */
+/** Number of hours after race end before the widget reverts to showing next race countdown */
 const RACE_WEEKEND_ACTIVE_HOURS = 24;
+
+/**
+ * Calculates hours since the race ended.
+ * Returns null if race hasn't completed or timing info unavailable.
+ */
+function getHoursSinceRaceEnd(
+  sessions: Array<{ session_type: string; start_time: string | null; end_time?: string | null; status: string }>
+): number | null {
+  const raceSession = sessions.find(
+    (s) => s.session_type.toLowerCase() === "race"
+  );
+
+  if (!raceSession || (raceSession.status !== "completed" && raceSession.status !== "ingested")) {
+    return null;
+  }
+
+  const now = new Date();
+  let raceEndTime: Date;
+
+  if (raceSession.end_time) {
+    raceEndTime = new Date(raceSession.end_time);
+    if (isNaN(raceEndTime.getTime())) {
+      return null;
+    }
+  } else if (raceSession.start_time) {
+    // Estimate race end as start + 2 hours
+    raceEndTime = new Date(raceSession.start_time);
+    raceEndTime.setHours(raceEndTime.getHours() + 2);
+  } else {
+    return null;
+  }
+
+  return (now.getTime() - raceEndTime.getTime()) / (1000 * 60 * 60);
+}
 
 function determineWidgetState(
   schedule: { sessions: Array<{ session_type: string; start_time: string | null; status: string }> } | null
@@ -143,29 +177,11 @@ function checkRaceWeekendActive(
 
   // For post-race, check if less than 24 hours have passed since race end
   if (widgetState === "post-race") {
-    const raceSession = sessions.find(
-      (s) => s.session_type.toLowerCase() === "race"
-    );
-
-    if (raceSession) {
-      const now = new Date();
-      // Use end_time if available, otherwise estimate as start_time + 2 hours
-      let raceEndTime: Date;
-      if (raceSession.end_time) {
-        raceEndTime = new Date(raceSession.end_time);
-        if (isNaN(raceEndTime.getTime())) {
-          return true; // Invalid date, assume still active
-        }
-      } else if (raceSession.start_time) {
-        raceEndTime = new Date(raceSession.start_time);
-        raceEndTime.setHours(raceEndTime.getHours() + 2);
-      } else {
-        return true; // No timing info, assume still active
-      }
-
-      const hoursSinceRaceEnd = (now.getTime() - raceEndTime.getTime()) / (1000 * 60 * 60);
-      return hoursSinceRaceEnd < RACE_WEEKEND_ACTIVE_HOURS;
+    const hoursSinceRaceEnd = getHoursSinceRaceEnd(sessions);
+    if (hoursSinceRaceEnd === null) {
+      return true; // No timing info, assume still active
     }
+    return hoursSinceRaceEnd < RACE_WEEKEND_ACTIVE_HOURS;
   }
 
   // Pre-weekend, race-week, off-week: not active
@@ -175,9 +191,11 @@ function checkRaceWeekendActive(
 function OffWeekState({
   daysUntil,
   nextRaceInfo,
+  message = "No Race This Week",
 }: {
   daysUntil: number;
   nextRaceInfo?: { raceName: string | null; circuitCountry: string | null; round: number } | null;
+  message?: string;
 }) {
   const flag = nextRaceInfo?.circuitCountry ? getCountryFlag(nextRaceInfo.circuitCountry) : "";
 
@@ -186,7 +204,7 @@ function OffWeekState({
       <CardContent className="py-8 sm:py-12">
         <div className="text-center">
           <div className="text-4xl mb-4">🏁</div>
-          <h3 className="font-semibold text-lg mb-2">No Race This Week</h3>
+          <h3 className="font-semibold text-lg mb-2">{message}</h3>
           <p className="text-muted text-sm mb-4">
             Next race weekend begins in{" "}
             <span className="font-bold text-ink">{daysUntil} day{daysUntil !== 1 ? "s" : ""}</span>
@@ -285,6 +303,35 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
   const widgetState = determineWidgetState(schedule);
   const nextSession = getNextSession(schedule.sessions);
 
+  // Check if we're in "expired post-race" state (>24 hours since race ended)
+  // In this state, we should show the countdown to the next race instead
+  const hoursSinceRaceEnd = getHoursSinceRaceEnd(schedule.sessions);
+  const isExpiredPostRace = widgetState === "post-race" &&
+    hoursSinceRaceEnd !== null &&
+    hoursSinceRaceEnd >= RACE_WEEKEND_ACTIVE_HOURS;
+
+  // If post-race has expired and we have next race info, show countdown to next race
+  if (isExpiredPostRace && nextRaceInfo?.fp1Date) {
+    const now = new Date();
+    const fp1Date = new Date(nextRaceInfo.fp1Date);
+    const diffMs = fp1Date.getTime() - now.getTime();
+    const daysUntil = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (daysUntil > 0) {
+      return (
+        <OffWeekState
+          daysUntil={daysUntil}
+          nextRaceInfo={{
+            raceName: nextRaceInfo.raceName,
+            circuitCountry: nextRaceInfo.circuitCountry,
+            round: nextRaceInfo.round,
+          }}
+          message="Upcoming Race"
+        />
+      );
+    }
+  }
+
   // For off-week state (>7 days until race), show simplified message
   if (widgetState === "off-week") {
     const daysUntil = getDaysUntilFP1(schedule.sessions);
@@ -308,7 +355,7 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
 
   const showCountdown = (widgetState === "pre-weekend" || widgetState === "race-week") && nextSession?.start_time;
   const showDuringWeekendCountdown = widgetState === "during-weekend" && nextSession?.start_time;
-  const showSessionGrid = widgetState === "during-weekend" || widgetState === "post-race";
+  const showSessionGrid = (widgetState === "during-weekend" || widgetState === "post-race") && !isExpiredPostRace;
   const showHistoricalData = (widgetState === "pre-weekend" || widgetState === "race-week") && history;
 
   return (

@@ -14,6 +14,9 @@ import type { NextRaceInfo } from "@/components/race-weekend/types";
 
 export const revalidate = 300; // 5 minutes ISR
 
+/** Hours after race date to consider the race weekend still "active" for display */
+const RACE_ACTIVE_HOURS_ESTIMATE = 42; // Race date + ~18h for race end + 24h window
+
 async function getHomeData() {
   try {
     const [standings, testingData, circuitsData] = await Promise.all([
@@ -27,7 +30,21 @@ async function getHomeData() {
     const circuits = circuitsData.circuits || [];
     const upcomingRace = circuits.find((c) => c.date && new Date(c.date) >= now);
     const lastRace = [...circuits].reverse().find((c) => c.date && new Date(c.date) < now);
-    const currentRound = upcomingRace?.round || lastRace?.round || 1;
+
+    // Check if we're still within the 24-hour post-race window
+    // Race typically ends ~18 hours after race date starts (e.g., race at 2pm on Sunday)
+    // We extend the window by 24 hours for post-race display
+    let isWithinPostRaceWindow = false;
+    if (lastRace?.date) {
+      const lastRaceDate = new Date(lastRace.date);
+      const hoursSinceRaceDate = (now.getTime() - lastRaceDate.getTime()) / (1000 * 60 * 60);
+      isWithinPostRaceWindow = hoursSinceRaceDate < RACE_ACTIVE_HOURS_ESTIMATE;
+    }
+
+    // If within post-race window, show the last race; otherwise show upcoming
+    const currentRound = isWithinPostRaceWindow
+      ? lastRace?.round
+      : (upcomingRace?.round || lastRace?.round || 1);
 
     // Fetch weekend data for the current/next round
     let weekendData: WeekendResponse | null = null;
@@ -39,7 +56,8 @@ async function getHomeData() {
       }
     }
 
-    // Build nextRaceInfo from circuits data as fallback
+    // Build nextRaceInfo - this should be the NEXT upcoming race
+    // When showing a completed race, nextRaceInfo should point to the race after it
     let nextRaceInfo: NextRaceInfo | null = null;
     if (upcomingRace) {
       nextRaceInfo = {
