@@ -358,14 +358,19 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
   const showSessionGrid = (widgetState === "during-weekend" || widgetState === "post-race") && !isExpiredPostRace;
   const showHistoricalData = (widgetState === "pre-weekend" || widgetState === "race-week") && history;
 
+  // Use nextRaceInfo as fallback when schedule data is missing
+  const displayRaceName = schedule.race_name || nextRaceInfo?.raceName || null;
+  const displayCircuitName = schedule.circuit_name || nextRaceInfo?.circuitName || null;
+  const displayCircuitCountry = schedule.circuit_country || nextRaceInfo?.circuitCountry || null;
+
   return (
     <Card accent>
       <CardHeader className="animate-fadeInUp animation-delay-0">
         <RaceHeader
-          raceName={schedule.race_name}
+          raceName={displayRaceName}
           round={schedule.round}
-          circuitName={schedule.circuit_name}
-          circuitCountry={schedule.circuit_country}
+          circuitName={displayCircuitName}
+          circuitCountry={displayCircuitCountry}
           isSprintWeekend={schedule.is_sprint_weekend}
           isRaceWeekendActive={checkRaceWeekendActive(widgetState, schedule.sessions)}
         />
