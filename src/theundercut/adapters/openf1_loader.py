@@ -25,6 +25,35 @@ def _fetch_sessions(year: int) -> list[dict]:
     return r.json()
 
 
+# Map our session types to OpenF1 session names
+_SESSION_NAME_MAP = {
+    "fp1": "Practice 1",
+    "fp2": "Practice 2",
+    "fp3": "Practice 3",
+    "practice_1": "Practice 1",
+    "practice_2": "Practice 2",
+    "practice_3": "Practice 3",
+    "qualifying": "Qualifying",
+    "sprint_qualifying": "Sprint Qualifying",
+    "sprint": "Sprint",
+    "sprint_race": "Sprint",
+    "race": "Race",
+    # Also support direct OpenF1 names
+    "Practice 1": "Practice 1",
+    "Practice 2": "Practice 2",
+    "Practice 3": "Practice 3",
+    "Qualifying": "Qualifying",
+    "Sprint Qualifying": "Sprint Qualifying",
+    "Sprint": "Sprint",
+    "Race": "Race",
+}
+
+
+def _normalize_session_type(session_type: str) -> str:
+    """Convert our session type to OpenF1 session name."""
+    return _SESSION_NAME_MAP.get(session_type, session_type)
+
+
 def _get_session_key(year: int, rnd: int, session_type: str = "Race") -> int | None:
     """
     Map (year, round, session_type) to OpenF1 session_key.
@@ -33,6 +62,9 @@ def _get_session_key(year: int, rnd: int, session_type: str = "Race") -> int | N
     so actual race rounds start at 2. We use meeting_key ranking to match.
     """
     sessions = _fetch_sessions(year)
+
+    # Normalize session type to OpenF1 naming
+    openf1_session_name = _normalize_session_type(session_type)
 
     # Group by meeting_key to determine round numbers
     meetings: dict[int, list[dict]] = {}
@@ -51,7 +83,7 @@ def _get_session_key(year: int, rnd: int, session_type: str = "Race") -> int | N
 
     # Find the session matching the type within this meeting
     for s in meetings[target_meeting_key]:
-        if s.get("session_name") == session_type:
+        if s.get("session_name") == openf1_session_name:
             return s.get("session_key")
 
     return None
