@@ -8,6 +8,9 @@ import { SessionGrid } from "./SessionGrid";
 import { getCountryFlag } from "@/lib/utils";
 import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo } from "./types";
 
+/** Number of hours after race end before the widget title reverts to "Upcoming Race" */
+const RACE_WEEKEND_ACTIVE_HOURS = 24;
+
 function determineWidgetState(
   schedule: { sessions: Array<{ session_type: string; start_time: string | null; status: string }> } | null
 ): WidgetState {
@@ -150,6 +153,9 @@ function checkRaceWeekendActive(
       let raceEndTime: Date;
       if (raceSession.end_time) {
         raceEndTime = new Date(raceSession.end_time);
+        if (isNaN(raceEndTime.getTime())) {
+          return true; // Invalid date, assume still active
+        }
       } else if (raceSession.start_time) {
         raceEndTime = new Date(raceSession.start_time);
         raceEndTime.setHours(raceEndTime.getHours() + 2);
@@ -158,7 +164,7 @@ function checkRaceWeekendActive(
       }
 
       const hoursSinceRaceEnd = (now.getTime() - raceEndTime.getTime()) / (1000 * 60 * 60);
-      return hoursSinceRaceEnd < 24;
+      return hoursSinceRaceEnd < RACE_WEEKEND_ACTIVE_HOURS;
     }
   }
 
