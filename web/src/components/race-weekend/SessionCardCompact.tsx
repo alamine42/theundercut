@@ -14,6 +14,8 @@ export function SessionCardCompact({ results, sessionType }: SessionCardCompactP
 
   // For qualifying, show Q3 time if available
   const isQualifying = sessionType === "qualifying" || sessionType === "sprint_qualifying";
+  // Only show podium medals for race sessions
+  const isRace = sessionType === "race" || sessionType === "sprint_race" || sessionType === "sprint";
 
   return (
     <div className="space-y-2">
@@ -22,17 +24,23 @@ export function SessionCardCompact({ results, sessionType }: SessionCardCompactP
           key={result.driver_code}
           className="flex items-center gap-2 sm:gap-3 py-1.5 sm:py-2 px-2 sm:px-3 bg-ink/5 rounded-lg"
         >
-          <span
-            className="text-base sm:text-lg flex-shrink-0"
-            role="img"
-            aria-label={`Position ${idx + 1}`}
-          >
-            {POSITION_EMOJIS[idx]}
-          </span>
+          {isRace ? (
+            <span
+              className="text-base sm:text-lg flex-shrink-0"
+              role="img"
+              aria-label={`Position ${idx + 1}`}
+            >
+              {POSITION_EMOJIS[idx]}
+            </span>
+          ) : (
+            <span className="w-5 sm:w-6 text-center font-semibold text-sm sm:text-base text-muted flex-shrink-0">
+              {idx + 1}
+            </span>
+          )}
           <span className="font-bold text-sm sm:text-base">{result.driver_code}</span>
           {result.team && (
-            <span className="text-muted hidden sm:inline">
-              <TeamWithLogo team={result.team} />
+            <span className="text-muted text-xs sm:text-sm">
+              <TeamWithLogo team={result.team} size={14} />
             </span>
           )}
           <span className="ml-auto text-xs sm:text-sm text-muted font-mono">

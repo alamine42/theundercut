@@ -9,34 +9,39 @@ import {
 } from "@/components/ui/table";
 import type { SessionCardExpandedProps } from "./types";
 
-function PositionBadge({ position }: { position: number }) {
-  if (position === 1) {
-    return (
-      <span className="position-badge position-1" title="1st Place">
-        1
-      </span>
-    );
-  }
-  if (position === 2) {
-    return (
-      <span className="position-badge position-2" title="2nd Place">
-        2
-      </span>
-    );
-  }
-  if (position === 3) {
-    return (
-      <span className="position-badge position-3" title="3rd Place">
-        3
-      </span>
-    );
+function PositionBadge({ position, showPodiumStyle }: { position: number; showPodiumStyle: boolean }) {
+  // Only show gold/silver/bronze styling for race sessions
+  if (showPodiumStyle) {
+    if (position === 1) {
+      return (
+        <span className="position-badge position-1" title="1st Place">
+          1
+        </span>
+      );
+    }
+    if (position === 2) {
+      return (
+        <span className="position-badge position-2" title="2nd Place">
+          2
+        </span>
+      );
+    }
+    if (position === 3) {
+      return (
+        <span className="position-badge position-3" title="3rd Place">
+          3
+        </span>
+      );
+    }
   }
   return <span className="font-semibold text-muted">{position}</span>;
 }
 
 export function SessionCardExpanded({ results, sessionType }: SessionCardExpandedProps) {
   const isQualifying = sessionType === "qualifying" || sessionType === "sprint_qualifying";
-  const isRace = sessionType === "race" || sessionType === "sprint_race";
+  const isRace = sessionType === "race" || sessionType === "sprint_race" || sessionType === "sprint";
+  // Only show podium (gold/silver/bronze) styling for race sessions
+  const showPodiumStyle = isRace;
 
   if (results.length === 0) {
     return (
@@ -52,7 +57,6 @@ export function SessionCardExpanded({ results, sessionType }: SessionCardExpande
             <TableRow>
               <TableHead className="w-10 text-center">P</TableHead>
               <TableHead>Driver</TableHead>
-              <TableHead className="hidden md:table-cell">Team</TableHead>
               <TableHead className="text-right text-xs">Q1</TableHead>
               <TableHead className="text-right text-xs">Q2</TableHead>
               <TableHead className="text-right text-xs">Q3</TableHead>
@@ -65,18 +69,17 @@ export function SessionCardExpanded({ results, sessionType }: SessionCardExpande
                 style={{ "--row-index": idx } as React.CSSProperties}
               >
                 <TableCell className="text-center">
-                  <PositionBadge position={result.position} />
+                  <PositionBadge position={result.position} showPodiumStyle={showPodiumStyle} />
                 </TableCell>
                 <TableCell>
-                  <span className="font-semibold">{result.driver_code}</span>
-                  {result.driver_name && (
-                    <span className="hidden lg:inline text-muted ml-2 text-xs">
-                      {result.driver_name.split(" ").pop()}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  {result.team && <TeamWithLogo team={result.team} />}
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{result.driver_code}</span>
+                    {result.team && (
+                      <span className="text-muted text-xs">
+                        <TeamWithLogo team={result.team} size={14} />
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right text-xs text-muted font-mono">
                   {result.q1_time || "-"}
@@ -105,7 +108,6 @@ export function SessionCardExpanded({ results, sessionType }: SessionCardExpande
           <TableRow>
             <TableHead className="w-10 text-center">P</TableHead>
             <TableHead>Driver</TableHead>
-            <TableHead className="hidden sm:table-cell">Team</TableHead>
             <TableHead className="text-right">Time</TableHead>
             <TableHead className="text-right hidden sm:table-cell">Gap</TableHead>
             {isRace && (
@@ -120,18 +122,17 @@ export function SessionCardExpanded({ results, sessionType }: SessionCardExpande
               style={{ "--row-index": idx } as React.CSSProperties}
             >
               <TableCell className="text-center">
-                <PositionBadge position={result.position} />
+                <PositionBadge position={result.position} showPodiumStyle={showPodiumStyle} />
               </TableCell>
               <TableCell>
-                <span className="font-semibold">{result.driver_code}</span>
-                {result.driver_name && (
-                  <span className="hidden lg:inline text-muted ml-2 text-xs">
-                    {result.driver_name.split(" ").pop()}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="hidden sm:table-cell">
-                {result.team && <TeamWithLogo team={result.team} />}
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{result.driver_code}</span>
+                  {result.team && (
+                    <span className="text-muted text-xs">
+                      <TeamWithLogo team={result.team} size={14} />
+                    </span>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-right text-xs font-mono">
                 {result.time || "-"}
