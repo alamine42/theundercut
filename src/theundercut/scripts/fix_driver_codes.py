@@ -33,9 +33,9 @@ DRIVER_MAP = {
 }
 
 
-def fix_session(season: int, rnd: int, session_type: str):
+def fix_session(season: int, rnd: int, session_type: str, debug: bool = False):
     """Fix driver codes for a specific session."""
-    print(f"Fixing driver codes for {season}-{rnd} {session_type}...")
+    print(f"Fixing driver codes for {season}-{rnd} {session_type}...", flush=True)
 
     with SessionLocal() as db:
         rows = db.query(SessionClassification).filter_by(
@@ -43,8 +43,15 @@ def fix_session(season: int, rnd: int, session_type: str):
         ).all()
 
         if not rows:
-            print(f"  No records found for {season}-{rnd} {session_type}")
+            print(f"  No records found for {season}-{rnd} {session_type}", flush=True)
             return
+
+        print(f"  Found {len(rows)} records", flush=True)
+
+        if debug:
+            for row in rows[:3]:
+                dc = row.driver_code
+                print(f"  DEBUG: P{row.position} driver_code={repr(dc)} in_map={dc in DRIVER_MAP}", flush=True)
 
         updated = 0
         for row in rows:
@@ -55,10 +62,10 @@ def fix_session(season: int, rnd: int, session_type: str):
                 row.driver_name = name
                 row.ingested_at = dt.datetime.now(dt.timezone.utc)
                 updated += 1
-                print(f"  Updated P{row.position}: {abbr} ({team})")
+                print(f"  Updated P{row.position}: {abbr} ({team})", flush=True)
 
         db.commit()
-        print(f"  Updated {updated} of {len(rows)} records")
+        print(f"  Updated {updated} of {len(rows)} records", flush=True)
 
 
 def main():
@@ -66,10 +73,11 @@ def main():
     parser.add_argument("--season", type=int, required=True, help="Season year")
     parser.add_argument("--round", type=int, required=True, help="Round number")
     parser.add_argument("--session", type=str, required=True, help="Session type (e.g., qualifying)")
+    parser.add_argument("--debug", action="store_true", help="Print debug info")
     args = parser.parse_args()
 
-    fix_session(args.season, args.round, args.session)
-    print("Done!")
+    fix_session(args.season, args.round, args.session, debug=args.debug)
+    print("Done!", flush=True)
 
 
 if __name__ == "__main__":
