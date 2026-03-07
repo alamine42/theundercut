@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-_DEFAULT_DB = "postgresql+psycopg2://theundercut:secret@localhost:5432/theundercut"
+_DEFAULT_DB = "postgresql+psycopg2://theundercut:postgres_dev_password@localhost:5432/theundercut"
 _DEFAULT_REDIS = "redis://localhost:6379/0"
 _DEFAULT_SECRET = "dev-secret-key"
 _DEFAULT_CACHE_DIR = "/data/cache"

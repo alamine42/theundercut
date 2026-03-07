@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "agentation-mcp"
+        "agentation-mcp@1.1.1"
       ]
     }
   }
