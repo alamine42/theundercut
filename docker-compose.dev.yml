@@ -10,4 +10,7 @@ services:
 
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    command: redis-server --requirepass redis_dev_password
+    environment:
+      REDIS_PASSWORD: redis_dev_password
+    ports: ["127.0.0.1:6379:6379"]
