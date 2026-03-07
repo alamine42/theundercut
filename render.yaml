@@ -65,8 +65,7 @@ services:
   - type: keyvalue
     name: theundercut-cache
     plan: free
-    ipAllowList:          # allow internal traffic; tighten later
-      - source: 0.0.0.0/0
+    ipAllowList: []       # restrict to internal Render services only
 
 databases:
   - name: theundercut-db
