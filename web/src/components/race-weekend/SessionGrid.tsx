@@ -5,7 +5,14 @@ import { SessionCard } from "./SessionCard";
 import type { SessionGridProps } from "./types";
 
 function normalizeSessionType(type: string): string {
-  return type.toLowerCase().replace(/\s+/g, "_");
+  const normalized = type.toLowerCase().replace(/\s+/g, "_");
+  // Map practice_X to fpX for results lookup
+  const sessionTypeMap: Record<string, string> = {
+    practice_1: "fp1",
+    practice_2: "fp2",
+    practice_3: "fp3",
+  };
+  return sessionTypeMap[normalized] || normalized;
 }
 
 export function SessionGrid({
