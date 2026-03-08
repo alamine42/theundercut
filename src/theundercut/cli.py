@@ -623,3 +623,38 @@ def calibration_set_active(name: str = typer.Argument(..., help="Existing profil
         typer.echo(f"❌ Calibration profile '{name}' not found in database", err=True)
         raise typer.Exit(code=2)
     typer.echo(f"✅ '{name}' is now the active calibration profile")
+
+
+@app.command()
+def fix_driver_codes(
+    season: int = typer.Argument(..., help="Season year"),
+    round: int = typer.Argument(..., help="Round number"),
+    session: str = typer.Argument(..., help="Session type (e.g., qualifying, race, fp1)"),
+):
+    """Fix numeric driver codes in session classifications using OpenF1 data."""
+    from theundercut.services.ingestion import _fix_numeric_driver_codes, DriverCodeFixResult
+    from theundercut.services.cache import invalidate_session_cache
+
+    typer.echo(f"Fixing driver codes for {season}-{round} {session}...")
+
+    with SessionLocal() as db:
+        result = _fix_numeric_driver_codes(db, season, round, session)
+        db.commit()
+
+    # Handle both int (backwards compat) and DriverCodeFixResult
+    if isinstance(result, DriverCodeFixResult):
+        if result.mapping_failed:
+            typer.echo("⚠️  Found numeric driver codes but failed to fetch OpenF1 mapping", err=True)
+            typer.echo("   Try again later or check OpenF1 API availability", err=True)
+            raise typer.Exit(code=1)
+        fixed_count = result.fixed
+    else:
+        fixed_count = result
+
+    if fixed_count > 0:
+        typer.echo(f"✅ Fixed {fixed_count} numeric driver codes")
+        # Invalidate session cache using the proper helper (also clears weekend cache)
+        invalidate_session_cache(season, round, session)
+        typer.echo(f"  Invalidated session cache for {season}-{round} {session}")
+    else:
+        typer.echo("No numeric driver codes found to fix")

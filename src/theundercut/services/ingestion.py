@@ -153,26 +153,45 @@ def _store_session_classifications(
 
     For race/sprint sessions, uses actual classification from session_results.
     For practice sessions, derives from best lap times.
+
+    Note: Driver codes are normalized upfront using OpenF1 data to ensure
+    consistent keys for the unique constraint (avoids numeric/abbreviation conflicts).
     """
     normalized_type = SESSION_TYPE_MAP.get(session_type, session_type.lower())
     is_race_or_sprint = normalized_type in ("race", "sprint_race")
     is_qualifying = "qualifying" in normalized_type
+
+    # Pre-fetch driver mapping to normalize codes upfront (prevents unique constraint issues)
+    driver_mapping = _fetch_openf1_driver_mapping(season, rnd, normalized_type)
+
+    def normalize_driver_code(code: str) -> tuple[str, str | None, str | None]:
+        """Normalize a driver code using OpenF1 mapping if numeric."""
+        code = str(code).strip().upper()
+        if code.isdigit() and code in driver_mapping:
+            mapping = driver_mapping[code]
+            return (
+                mapping.get("abbreviation", code),
+                mapping.get("name"),
+                mapping.get("team"),
+            )
+        return (code, None, None)
 
     # Prefer session results for race/sprint/qualifying if available
     if session_results is not None and not session_results.empty:
         timestamp = dt.datetime.utcnow()
 
         for _, row in session_results.iterrows():
-            driver_code = row.get("Abbreviation") or row.get("Driver")
-            if not driver_code or pd.isna(driver_code):
+            raw_driver_code = row.get("Abbreviation") or row.get("Driver")
+            if not raw_driver_code or pd.isna(raw_driver_code):
                 continue
 
-            driver_code = str(driver_code).strip().upper()
+            # Normalize driver code upfront to prevent unique constraint violations
+            driver_code, mapped_name, mapped_team = normalize_driver_code(raw_driver_code)
 
-            # Get driver name from results
+            # Get driver name from results (fallback to mapped name)
             first_name = row.get("FirstName", "")
             last_name = row.get("LastName", "")
-            driver_name = f"{first_name} {last_name}".strip() if first_name or last_name else None
+            driver_name = f"{first_name} {last_name}".strip() if first_name or last_name else mapped_name
 
             # Get position - use ClassifiedPosition or Position
             position = row.get("ClassifiedPosition") or row.get("Position")
@@ -184,10 +203,10 @@ def _store_session_classifications(
                 except (ValueError, TypeError):
                     position = None
 
-            # Get team
+            # Get team (fallback to mapped team)
             team = row.get("TeamName") or row.get("Team")
             if pd.isna(team):
-                team = None
+                team = mapped_team
 
             # Get time and gap
             time_ms = None
@@ -331,9 +350,12 @@ def _store_session_classifications(
     timestamp = dt.datetime.utcnow()
 
     for _, row in driver_stats.iterrows():
-        driver_code = row["Driver"]
-        if not driver_code or pd.isna(driver_code):
+        raw_driver_code = row["Driver"]
+        if not raw_driver_code or pd.isna(raw_driver_code):
             continue
+
+        # Normalize driver code upfront to prevent unique constraint violations
+        driver_code, mapped_name, mapped_team = normalize_driver_code(raw_driver_code)
 
         # Check if record exists (for amended tracking)
         existing = (
@@ -346,13 +368,16 @@ def _store_session_classifications(
         if existing and existing.position != row["position"]:
             amended = True
 
+        # Use mapped team if available
+        team = row.get("team") if row.get("team") != "Unknown" else mapped_team
+
         stmt = pg_insert(SessionClassification).values(
             season=season,
             round=rnd,
             session_type=normalized_type,
             driver_code=driver_code,
-            driver_name=None,  # Not available from laps
-            team=row.get("team") if row.get("team") != "Unknown" else None,
+            driver_name=mapped_name,  # Use mapped name if available
+            team=team,
             position=int(row["position"]) if pd.notna(row["position"]) else None,
             time_ms=row["best_lap_ms"] if pd.notna(row["best_lap_ms"]) else None,
             gap_ms=row["gap_ms"] if pd.notna(row["gap_ms"]) and row["position"] != 1 else None,
@@ -378,6 +403,116 @@ def _store_session_classifications(
         db.execute(stmt)
 
     logger.info("Stored %d session classifications from laps for %s-%s %s", len(driver_stats), season, rnd, normalized_type)
+
+
+def _fetch_openf1_driver_mapping(season: int, rnd: int, session_type: str) -> dict[str, dict[str, str]]:
+    """
+    Fetch driver number -> abbreviation mapping from OpenF1 API.
+
+    Returns: {driver_number: {"abbreviation": "VER", "name": "Max VERSTAPPEN", "team": "Red Bull"}}
+    """
+    try:
+        # Use the existing OpenF1 provider to get the driver mapping
+        from theundercut.adapters.openf1_loader import OpenF1Provider as OpenF1Loader
+
+        provider = OpenF1Loader(season, rnd)
+        session_key = provider._get_session_key(session_type)
+
+        if not session_key:
+            logger.warning("No OpenF1 session found for %s-%s %s", season, rnd, session_type)
+            return {}
+
+        # Use the provider's driver mapping method
+        mapping = provider._get_driver_mapping(session_key)
+
+        logger.info("Fetched %d driver mappings from OpenF1 for %s-%s %s",
+                   len(mapping), season, rnd, session_type)
+        return mapping
+
+    except Exception as e:
+        logger.warning("Failed to fetch OpenF1 driver mapping: %s", e)
+        return {}
+
+
+class DriverCodeFixResult:
+    """Result of driver code fixing operation."""
+    def __init__(self, fixed: int = 0, had_numeric: bool = False, mapping_failed: bool = False):
+        self.fixed = fixed
+        self.had_numeric = had_numeric
+        self.mapping_failed = mapping_failed
+
+
+def _fix_numeric_driver_codes(
+    db: Session,
+    season: int,
+    rnd: int,
+    session_type: str,
+) -> int | DriverCodeFixResult:
+    """
+    Post-ingestion fix: if driver_codes are numeric (e.g., "63"),
+    replace them with proper abbreviations (e.g., "RUS") using OpenF1 data.
+
+    Returns: number of records fixed (for backwards compatibility)
+             or DriverCodeFixResult with detailed status
+    """
+    normalized_type = SESSION_TYPE_MAP.get(session_type, session_type.lower())
+
+    # Check if any driver codes are numeric
+    rows = db.query(SessionClassification).filter_by(
+        season=season, round=rnd, session_type=normalized_type
+    ).all()
+
+    if not rows:
+        return 0
+
+    # Find numeric driver codes
+    numeric_codes = []
+    for row in rows:
+        if row.driver_code and row.driver_code.isdigit():
+            numeric_codes.append(row.driver_code)
+
+    if not numeric_codes:
+        logger.debug("No numeric driver codes found for %s-%s %s", season, rnd, session_type)
+        return 0
+
+    logger.info("Found %d numeric driver codes for %s-%s %s: %s",
+                len(numeric_codes), season, rnd, session_type, numeric_codes[:5])
+
+    # Fetch driver mapping from OpenF1 (use normalized type for consistent lookup)
+    driver_mapping = _fetch_openf1_driver_mapping(season, rnd, normalized_type)
+
+    if not driver_mapping:
+        logger.warning("No driver mapping available to fix numeric codes - OpenF1 API may be unavailable")
+        # Return a result object indicating mapping failed
+        return DriverCodeFixResult(fixed=0, had_numeric=True, mapping_failed=True)
+
+    # Update records
+    updated = 0
+    timestamp = dt.datetime.utcnow()
+
+    for row in rows:
+        if row.driver_code and row.driver_code.isdigit():
+            old_code = row.driver_code  # Capture before update for logging
+            mapping = driver_mapping.get(old_code)
+            if mapping:
+                abbr = mapping.get("abbreviation")
+                if abbr and abbr != old_code:
+                    row.driver_code = abbr
+                    # Also update name and team if missing
+                    if not row.driver_name and mapping.get("name"):
+                        row.driver_name = mapping.get("name")
+                    if not row.team and mapping.get("team"):
+                        row.team = mapping.get("team")
+                    row.ingested_at = timestamp
+                    updated += 1
+                    logger.debug("Fixed driver code: %s -> %s (%s)",
+                                old_code, abbr, mapping.get("name"))
+
+    if updated:
+        db.flush()
+        logger.info("Fixed %d numeric driver codes for %s-%s %s", updated, season, rnd, session_type)
+
+    return updated
 
 
 def _store_stints(db: Session, race_id: str, df: pd.DataFrame) -> None:
@@ -1433,6 +1568,16 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
             _store_session_classifications(db, season, rnd, session_type, laps, provider, session_results)
         except Exception as exc:
             logger.exception("Failed to store session classifications for %s-%s %s: %s", season, rnd, session_type, exc)
+
+        # Fix numeric driver codes automatically (e.g., "63" -> "RUS")
+        try:
+            fixed_count = _fix_numeric_driver_codes(db, season, rnd, session_type)
+            if fixed_count > 0:
+                logger.info("Automatically fixed %d numeric driver codes for %s-%s %s",
+                           fixed_count, season, rnd, session_type)
+        except Exception as exc:
+            logger.warning("Failed to fix numeric driver codes for %s-%s %s: %s",
+                          season, rnd, session_type, exc)
 
         # Variables to hold race context for strategy data
         race_row = None

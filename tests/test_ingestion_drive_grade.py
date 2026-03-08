@@ -1,10 +1,11 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
 from theundercut.services import ingestion
-from theundercut.models import DriverMetrics, Entry, StrategyEvent, PenaltyEvent, OvertakeEvent
+from theundercut.models import DriverMetrics, Entry, StrategyEvent, PenaltyEvent, OvertakeEvent, SessionClassification
+from theundercut.services.ingestion import DriverCodeFixResult
 
 
 @pytest.fixture(autouse=True)
@@ -110,3 +111,120 @@ def test_ingestion_invalidates_cache(db_session_factory, monkeypatch, patch_prov
 
     ingestion.ingest_session(2024, 1)
     assert called["args"] == (2024, 1)
+
+
+def test_fix_numeric_driver_codes(db_session_factory, monkeypatch):
+    """Test that numeric driver codes are fixed automatically."""
+    # Create session classifications with numeric driver codes
+    with db_session_factory() as session:
+        # Add records with numeric driver codes (like OpenF1 sometimes returns)
+        session.add(SessionClassification(
+            season=2024,
+            round=1,
+            session_type="qualifying",
+            driver_code="63",  # Numeric code that should become "RUS"
+            position=1,
+        ))
+        session.add(SessionClassification(
+            season=2024,
+            round=1,
+            session_type="qualifying",
+            driver_code="44",  # Numeric code that should become "HAM"
+            position=2,
+        ))
+        session.add(SessionClassification(
+            season=2024,
+            round=1,
+            session_type="qualifying",
+            driver_code="VER",  # Already correct
+            position=3,
+        ))
+        session.commit()
+
+    # Mock the OpenF1 API call
+    mock_mapping = {
+        "63": {"abbreviation": "RUS", "name": "George RUSSELL", "team": "Mercedes"},
+        "44": {"abbreviation": "HAM", "name": "Lewis HAMILTON", "team": "Mercedes"},
+        "1": {"abbreviation": "VER", "name": "Max VERSTAPPEN", "team": "Red Bull"},
+    }
+
+    with patch.object(ingestion, "_fetch_openf1_driver_mapping", return_value=mock_mapping):
+        with db_session_factory() as session:
+            fixed_count = ingestion._fix_numeric_driver_codes(
+                session, 2024, 1, "qualifying"
+            )
+            session.commit()
+
+    assert fixed_count == 2  # 63 and 44 were fixed, VER was already correct
+
+    # Verify the codes were fixed
+    with db_session_factory() as session:
+        records = session.query(SessionClassification).filter_by(
+            season=2024, round=1, session_type="qualifying"
+        ).order_by(SessionClassification.position).all()
+
+        assert records[0].driver_code == "RUS"
+        assert records[0].driver_name == "George RUSSELL"
+        assert records[0].team == "Mercedes"
+
+        assert records[1].driver_code == "HAM"
+        assert records[1].driver_name == "Lewis HAMILTON"
+        assert records[1].team == "Mercedes"
+
+        assert records[2].driver_code == "VER"  # Unchanged
+
+
+def test_fix_numeric_driver_codes_no_numeric_codes(db_session_factory, monkeypatch):
+    """Test that no changes are made when all codes are already correct."""
+    with db_session_factory() as session:
+        session.add(SessionClassification(
+            season=2024,
+            round=1,
+            session_type="qualifying",
+            driver_code="VER",
+            position=1,
+        ))
+        session.add(SessionClassification(
+            season=2024,
+            round=1,
+            session_type="qualifying",
+            driver_code="HAM",
+            position=2,
+        ))
+        session.commit()
+
+    # Should not call the API when no numeric codes exist
+    with patch.object(ingestion, "_fetch_openf1_driver_mapping") as mock_fetch:
+        with db_session_factory() as session:
+            fixed_count = ingestion._fix_numeric_driver_codes(
+                session, 2024, 1, "qualifying"
+            )
+
+        assert fixed_count == 0
+        mock_fetch.assert_not_called()
+
+
+def test_fix_numeric_driver_codes_mapping_failure(db_session_factory, monkeypatch):
+    """Test that mapping failures are surfaced, not hidden as 'nothing to fix'."""
+    with db_session_factory() as session:
+        session.add(SessionClassification(
+            season=2024,
+            round=1,
+            session_type="qualifying",
+            driver_code="63",  # Numeric code
+            position=1,
+        ))
+        session.commit()
+
+    # Mock OpenF1 API returning empty (simulating failure)
+    with patch.object(ingestion, "_fetch_openf1_driver_mapping", return_value={}):
+        with db_session_factory() as session:
+            result = ingestion._fix_numeric_driver_codes(
+                session, 2024, 1, "qualifying"
+            )
+
+        # Should return a DriverCodeFixResult indicating mapping failed
+        assert isinstance(result, DriverCodeFixResult)
+        assert result.had_numeric is True
+        assert result.mapping_failed is True
+        assert result.fixed == 0
