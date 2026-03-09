@@ -1641,10 +1641,12 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
             except Exception as exc:
                 logger.warning("Failed to compute strategy scores for %s: %s", race_id, exc)
 
-        # mark calendar row
+        # mark calendar row (use ilike for case-insensitive match since OpenF1 uses
+        # "Race", "Qualifying", etc. but callers may pass lowercase)
         ev = (
             db.query(CalendarEvent)
-            .filter_by(season=season, round=rnd, session_type=session_type)
+            .filter_by(season=season, round=rnd)
+            .filter(CalendarEvent.session_type.ilike(session_type))
             .one_or_none()
         )
         if ev:
