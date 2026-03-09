@@ -238,8 +238,8 @@ class OpenF1Provider:
         """
         Load session results from OpenF1.
 
-        For qualifying: Uses official position data from the /position endpoint.
-        For race/practice: Uses lap data with best lap time to determine position.
+        For qualifying/race/sprint: Uses official position data from the /position endpoint.
+        For practice: Uses lap data with best lap time to determine position.
         Returns DataFrame with columns matching FastF1 format.
         """
         session_key = self._get_session_key(session_type)
@@ -249,14 +249,18 @@ class OpenF1Provider:
         # Get driver mapping
         driver_mapping = self._get_driver_mapping(session_key)
 
-        # For qualifying sessions, use the official position data
+        # For qualifying, race, and sprint sessions, use the official position data
         normalized_type = _normalize_session_type(session_type)
         is_qualifying = "qualifying" in normalized_type.lower()
+        is_race = normalized_type.lower() in ("race", "sprint")
 
         if is_qualifying:
             return self._load_qualifying_results(session_key, driver_mapping)
 
-        # For race/practice, derive from lap data
+        if is_race:
+            return self._load_race_results(session_key, driver_mapping, session_type)
+
+        # For practice, derive from lap data (best lap time)
         return self._load_results_from_laps(session_key, driver_mapping, session_type)
 
     def _load_qualifying_results(self, session_key: int, driver_mapping: Dict) -> pd.DataFrame:
@@ -315,8 +319,73 @@ class OpenF1Provider:
 
         return results_df
 
+    def _load_race_results(self, session_key: int, driver_mapping: Dict, session_type: str) -> pd.DataFrame:
+        """Load race/sprint results using official position data from OpenF1."""
+        try:
+            r = httpx.get(
+                f"{_API}/position",
+                params={"session_key": session_key},
+                timeout=_TIMEOUT,
+            )
+            r.raise_for_status()
+            position_data = r.json()
+        except Exception as e:
+            logger.warning("Failed to fetch position data for race: %s", e)
+            # Fall back to lap-based positions
+            return self._load_results_from_laps(session_key, driver_mapping, session_type)
+
+        if not position_data:
+            return self._load_results_from_laps(session_key, driver_mapping, session_type)
+
+        # Get the final position for each driver (last recorded position)
+        final_positions = {}
+        for p in position_data:
+            driver_num = p.get("driver_number")
+            if driver_num is not None:
+                # Keep updating - last entry is the final position
+                final_positions[driver_num] = p.get("position")
+
+        # Load lap data for lap counts and best times
+        laps_df = self.load_laps(session_type, enrich_stints=False)
+        laps_by_driver = {}
+        times_by_driver = {}
+        if not laps_df.empty:
+            for driver_num_str in laps_df["DriverNumber"].unique():
+                driver_laps = laps_df[laps_df["DriverNumber"] == driver_num_str]
+                # Convert to int for matching with position data
+                try:
+                    driver_num_int = int(driver_num_str)
+                except (ValueError, TypeError):
+                    continue
+                laps_by_driver[driver_num_int] = len(driver_laps)
+                valid_laps = driver_laps[driver_laps["LapTime"].notna()]
+                if not valid_laps.empty:
+                    best_lap = valid_laps.loc[valid_laps["LapTime"].idxmin()]
+                    times_by_driver[driver_num_int] = best_lap["LapTime"]
+
+        # Build results
+        results = []
+        for driver_num, position in final_positions.items():
+            driver_info = driver_mapping.get(str(driver_num), {})
+            results.append({
+                "Driver": driver_num,
+                "Abbreviation": driver_info.get("abbreviation", str(driver_num)),
+                "FirstName": driver_info.get("name", "").split()[0] if driver_info.get("name") else "",
+                "LastName": " ".join(driver_info.get("name", "").split()[1:]) if driver_info.get("name") else "",
+                "TeamName": driver_info.get("team", ""),
+                "Position": position,
+                "Time": times_by_driver.get(driver_num),
+                "LapsCompleted": laps_by_driver.get(driver_num, 0),
+            })
+
+        results_df = pd.DataFrame(results)
+        if not results_df.empty:
+            results_df = results_df.sort_values(by="Position", na_position="last")
+
+        return results_df
+
     def _load_results_from_laps(self, session_key: int, driver_mapping: Dict, session_type: str) -> pd.DataFrame:
-        """Load results by deriving positions from lap times (for race/practice)."""
+        """Load results by deriving positions from lap times (for practice sessions)."""
         laps_df = self.load_laps(session_type, enrich_stints=False)
         if laps_df.empty:
             return pd.DataFrame()
