@@ -3,7 +3,6 @@
     "agentation": {
       "command": "npx",
       "args": [
-        "-y",
         "agentation-mcp@1.1.1"
       ]
     }
