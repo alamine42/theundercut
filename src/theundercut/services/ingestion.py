@@ -1512,6 +1512,39 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
     except Exception as exc:
         logger.warning("Failed to load session results for %s-%s %s: %s", season, rnd, session_type, exc)
 
+    # Check if session_results has all NaN positions (FastF1 issue when Ergast lacks data)
+    # This commonly happens for recent races. Fall back to OpenF1 for results.
+    if session_results is not None and not session_results.empty:
+        position_col = "Position" if "Position" in session_results.columns else None
+        classified_col = "ClassifiedPosition" if "ClassifiedPosition" in session_results.columns else None
+        has_valid_positions = False
+        if position_col:
+            has_valid_positions = session_results[position_col].notna().any()
+        if not has_valid_positions and classified_col:
+            has_valid_positions = (
+                session_results[classified_col].notna() &
+                (session_results[classified_col] != "")
+            ).any()
+        if not has_valid_positions:
+            logger.info(
+                "FastF1 results have no valid positions for %s-%s %s; trying OpenF1",
+                season, rnd, session_type
+            )
+            try:
+                from theundercut.adapters.openf1_loader import OpenF1Provider as OpenF1Loader
+                openf1_prov = OpenF1Loader(season, rnd)
+                session_results = openf1_prov.load_results(session_type=session_type)
+                if session_results is not None and not session_results.empty:
+                    logger.info(
+                        "OpenF1 returned %d results for %s-%s %s",
+                        len(session_results), season, rnd, session_type
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to load OpenF1 results for %s-%s %s: %s",
+                    season, rnd, session_type, exc
+                )
+
     # Load race control and weather data (for Race sessions only)
     race_control = None
     weather_data = None
