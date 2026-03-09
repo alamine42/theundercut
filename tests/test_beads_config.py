@@ -5,9 +5,6 @@ expected structure, known keys, correct types, robust parsing,
 and multi-repo configuration validation.
 """
 
-import os
-import tempfile
-
 import pytest
 import yaml
 from pathlib import Path
