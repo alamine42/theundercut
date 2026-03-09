@@ -65,7 +65,7 @@ services:
   - type: keyvalue
     name: theundercut-cache
     plan: free
-    # Access restricted to internal Render services only (default behavior)
+    ipAllowList: []       # Empty list = no external IPs allowed; only internal Render services can connect
 
 databases:
   - name: theundercut-db
