@@ -443,9 +443,27 @@ export interface WeekendMeta {
   errors: string[];
 }
 
+export type WeekendState =
+  | "pre-weekend"
+  | "race-week"
+  | "during-weekend"
+  | "post-race"
+  | "off-week";
+
+export interface WeekendTimeline {
+  state: WeekendState;
+  window_start: string | null;
+  window_end: string | null;
+  is_active: boolean;
+  next_session: RaceSession | null;
+  next_session_in_seconds: number | null;
+  current_session: RaceSession | null;
+}
+
 export interface WeekendResponse {
   schedule: RaceWeekendSchedule | null;
   history: CircuitHistoryResponse | null;
   sessions: Record<string, SessionResultsResponse | null>;
   meta: WeekendMeta;
+  timeline?: WeekendTimeline | null;
 }

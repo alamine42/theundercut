@@ -1,7 +1,7 @@
 # src/theundercut/api/v1/race.py
 import json
 import datetime as dt
-from typing import Optional
+from typing import Optional, Tuple, List
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
@@ -79,11 +79,22 @@ class WeekendMeta(BaseModel):
     errors: list[str]
 
 
+class WeekendTimeline(BaseModel):
+    state: str
+    window_start: Optional[str] = None
+    window_end: Optional[str] = None
+    is_active: bool
+    next_session: Optional[RaceSession] = None
+    next_session_in_seconds: Optional[int] = None
+    current_session: Optional[RaceSession] = None
+
+
 class WeekendResponse(BaseModel):
     schedule: Optional[RaceWeekendSchedule] = None
     history: Optional[CircuitHistory] = None
     sessions: dict[str, Optional[SessionResultsResponse]]
     meta: WeekendMeta
+    timeline: Optional[WeekendTimeline] = None
 
 
 router = APIRouter(
@@ -110,6 +121,157 @@ def _format_gap(gap_ms: Optional[float]) -> Optional[str]:
     if gap_ms is None or gap_ms == 0:
         return None
     return f"+{gap_ms / 1000:.3f}"
+
+
+def _normalize_session_name(name: str) -> str:
+    return name.lower().replace(" ", "_")
+
+
+def _event_to_session(event: CalendarEvent) -> RaceSession:
+    start = _ensure_utc(event.start_ts)
+    end = _ensure_utc(event.end_ts)
+    return RaceSession(
+        session_type=_normalize_session_name(event.session_type),
+        start_time=start.isoformat() if start else None,
+        end_time=end.isoformat() if end else None,
+        status=(event.status or "scheduled").lower(),
+    )
+
+
+def _ensure_utc(value: Optional[dt.datetime]) -> Optional[dt.datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=dt.timezone.utc)
+    return value.astimezone(dt.timezone.utc)
+
+
+def _build_timeline(events: List[CalendarEvent]) -> Optional[WeekendTimeline]:
+    if not events:
+        return None
+
+    now = dt.datetime.now(dt.timezone.utc)
+    normalized = []
+
+    for event in events:
+        start = _ensure_utc(event.start_ts)
+        default_end = start + dt.timedelta(hours=2) if start else None
+        end = _ensure_utc(event.end_ts) if event.end_ts else _ensure_utc(default_end)
+        normalized.append(
+            {
+                "session": _event_to_session(event),
+                "start": start,
+                "end": end,
+                "status": (event.status or "scheduled").lower(),
+            }
+        )
+
+    starts = [entry["start"] for entry in normalized if entry["start"] is not None]
+    first_start = min(starts) if starts else None
+    race_entry = next(
+        (entry for entry in normalized if entry["session"].session_type == "race"),
+        None,
+    )
+    fallback_end = max(
+        (
+            entry["end"]
+            for entry in normalized
+            if entry["end"] is not None
+        ),
+        default=None,
+    )
+
+    race_end = fallback_end
+    if race_entry and race_entry["end"]:
+        race_end = race_entry["end"]
+
+    window_start = first_start
+    window_end = race_end + dt.timedelta(hours=24) if race_end else None
+
+    def _is_completed(entry: dict) -> bool:
+        return entry["status"] in {"completed", "ingested"}
+
+    def _has_started(entry: dict) -> bool:
+        start = entry["start"]
+        return (
+            entry["status"] in {"live", "running"} or
+            (_is_completed(entry)) or
+            (start is not None and start <= now)
+        )
+
+    race_completed = race_entry is not None and _is_completed(race_entry)
+    any_started = any(_has_started(entry) for entry in normalized)
+
+    if race_completed:
+        if window_end and now <= window_end:
+            state = "post-race"
+        else:
+            state = "off-week"
+    elif any_started:
+        state = "during-weekend"
+    else:
+        if first_start is None:
+            state = "off-week"
+        else:
+            days_until = (first_start - now).total_seconds() / 86400
+            if days_until <= 3:
+                state = "race-week"
+            elif days_until <= 7:
+                state = "pre-weekend"
+            else:
+                state = "off-week"
+
+    is_active = (
+        window_start is not None
+        and window_end is not None
+        and window_start <= now <= window_end
+    )
+
+    next_session_entry = None
+    future_entries = [
+        entry
+        for entry in normalized
+        if entry["session"].start_time
+        and entry["start"]
+        and entry["start"] > now
+        and not _is_completed(entry)
+    ]
+    if future_entries:
+        next_session_entry = min(future_entries, key=lambda entry: entry["start"])
+
+    current_session_entry = next(
+        (
+            entry
+            for entry in normalized
+            if entry["start"]
+            and entry["end"]
+            and entry["start"] <= now <= entry["end"]
+        ),
+        None,
+    )
+    if current_session_entry is None:
+        current_session_entry = next(
+            (
+                entry
+                for entry in normalized
+                if entry["status"] in {"live", "running"}
+            ),
+            None,
+        )
+
+    next_seconds = None
+    if next_session_entry and next_session_entry["start"]:
+        next_seconds = int((next_session_entry["start"] - now).total_seconds())
+
+    return WeekendTimeline(
+        state=state,
+        window_start=window_start.isoformat() if window_start else None,
+        window_end=window_end.isoformat() if window_end else None,
+        is_active=is_active,
+        next_session=next_session_entry["session"] if next_session_entry else None,
+        next_session_in_seconds=next_seconds,
+        current_session=current_session_entry["session"] if current_session_entry else None,
+    )
 
 
 def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
@@ -383,6 +545,7 @@ def get_race_weekend(
 
     # Get schedule
     schedule = None
+    timeline = None
     try:
         events = (
             db.query(CalendarEvent)
@@ -391,6 +554,7 @@ def get_race_weekend(
             .all()
         )
         if events:
+            timeline = _build_timeline(events)
             session_types = {e.session_type.lower() for e in events}
             is_sprint = "sprint" in session_types or "sprint qualifying" in session_types
             sessions = [
@@ -488,6 +652,7 @@ def get_race_weekend(
             stale=False,
             errors=errors,
         ),
+        timeline=timeline,
     )
 
     # Cache for 5 minutes

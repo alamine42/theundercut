@@ -94,6 +94,35 @@ def seed_race_weekend(session, season=2026, rnd=1):
     return season, rnd
 
 
+def seed_completed_race_weekend(session, *, season=2026, rnd=2, hours_since_race_end=12):
+    """Seed a weekend where the race finished in the past."""
+    now = datetime.utcnow()
+    race_end = now - timedelta(hours=hours_since_race_end)
+    race_start = race_end - timedelta(hours=2)
+
+    sessions = [
+        ("fp1", now - timedelta(days=4), now - timedelta(days=4) + timedelta(hours=1), "completed"),
+        ("fp2", now - timedelta(days=3), now - timedelta(days=3) + timedelta(hours=1), "completed"),
+        ("fp3", now - timedelta(days=2), now - timedelta(days=2) + timedelta(hours=1), "completed"),
+        ("qualifying", now - timedelta(days=1), now - timedelta(days=1) + timedelta(hours=1), "ingested"),
+        ("race", race_start, race_end, "ingested"),
+    ]
+
+    for sess_type, start, end, status in sessions:
+        event = CalendarEvent(
+            season=season,
+            round=rnd,
+            session_type=sess_type,
+            start_ts=start,
+            end_ts=end,
+            status=status,
+        )
+        session.add(event)
+
+    session.commit()
+    return season, rnd
+
+
 def test_race_schedule_endpoint(session_factory, monkeypatch):
     """Test GET /api/v1/race/{season}/{round}/schedule returns schedule."""
     SessionLocal = session_factory
@@ -243,6 +272,9 @@ def test_weekend_aggregated_endpoint(session_factory, monkeypatch):
     # Check meta
     assert "meta" in body
     assert body["meta"]["stale"] is False
+    assert body["timeline"]["state"] == "during-weekend"
+    assert body["timeline"]["is_active"] is True
+    assert body["timeline"]["next_session"]["session_type"] == "race"
 
     app.dependency_overrides.clear()
 
@@ -277,5 +309,45 @@ def test_weekend_endpoint_caching(session_factory, monkeypatch):
 
     resp2 = client.get("/api/v1/race/2026/1/weekend")
     assert resp2.json()["meta"]["errors"] == ["cached"]
+
+    app.dependency_overrides.clear()
+
+
+def test_weekend_timeline_post_race(session_factory, monkeypatch):
+    """Timeline should report post-race within 24h of race end."""
+    SessionLocal = session_factory
+    db = SessionLocal()
+    seed_completed_race_weekend(db, hours_since_race_end=6)
+
+    app.dependency_overrides[get_db] = _override_dependency(SessionLocal)
+    dummy_cache = DummyRedis()
+    monkeypatch.setattr("theundercut.api.v1.race.redis_client", dummy_cache)
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/race/2026/2/weekend")
+    body = resp.json()
+
+    assert body["timeline"]["state"] == "post-race"
+    assert body["timeline"]["is_active"] is True
+
+    app.dependency_overrides.clear()
+
+
+def test_weekend_timeline_off_week_after_window(session_factory, monkeypatch):
+    """Timeline should transition to off-week once the 24h window passes."""
+    SessionLocal = session_factory
+    db = SessionLocal()
+    seed_completed_race_weekend(db, rnd=3, hours_since_race_end=36)
+
+    app.dependency_overrides[get_db] = _override_dependency(SessionLocal)
+    dummy_cache = DummyRedis()
+    monkeypatch.setattr("theundercut.api.v1.race.redis_client", dummy_cache)
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/race/2026/3/weekend")
+    body = resp.json()
+
+    assert body["timeline"]["state"] == "off-week"
+    assert body["timeline"]["is_active"] is False
 
     app.dependency_overrides.clear()

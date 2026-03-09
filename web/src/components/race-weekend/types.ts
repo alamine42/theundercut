@@ -7,6 +7,7 @@ import type {
   SessionResultsResponse,
   CircuitHistoryResponse,
   WeekendResponse,
+  WeekendTimeline,
 } from "@/types/api";
 
 export type WidgetState =
@@ -73,4 +74,12 @@ export interface SessionCardExpandedProps {
   sessionType: string;
 }
 
-export { RaceSession, SessionResult, SessionResultsResponse, RaceWeekendSchedule, CircuitHistoryResponse, WeekendResponse };
+export {
+  RaceSession,
+  SessionResult,
+  SessionResultsResponse,
+  RaceWeekendSchedule,
+  CircuitHistoryResponse,
+  WeekendResponse,
+  WeekendTimeline,
+};
