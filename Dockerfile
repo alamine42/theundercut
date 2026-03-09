@@ -27,4 +27,7 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY . .
 RUN pip install --no-cache-dir -e .
 
-CMD ["uvicorn", "theundercut.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# No default CMD - services must specify their command via Render's dockerCommand
+# API: uvicorn theundercut.api.main:app --host 0.0.0.0 --port $PORT
+# Scheduler: python -m theundercut.scheduler
+# Worker: python -m theundercut.worker
