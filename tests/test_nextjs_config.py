@@ -110,10 +110,13 @@ class TestNextConfigRewrites:
             "next.config.ts should validate the FASTAPI_URL"
         )
 
-    def test_blocks_ssrf_hosts(self, next_config_source):
-        """The config should block known SSRF targets."""
-        assert "169.254.169.254" in next_config_source, (
-            "next.config.ts should block cloud metadata SSRF endpoint"
+    def test_blocks_ssrf_hosts(self):
+        """The config should block known SSRF targets (via imported module)."""
+        validate_module = WEB_DIR / "src" / "lib" / "validate-fastapi-url.ts"
+        assert validate_module.exists(), "validate-fastapi-url.ts not found"
+        source = validate_module.read_text()
+        assert "169.254.169.254" in source, (
+            "URL validation module should block cloud metadata SSRF endpoint"
         )
 
 
