@@ -690,3 +690,21 @@ def fix_driver_codes(
         typer.echo(f"  Invalidated session cache for {season}-{round} {session}")
     else:
         typer.echo("No numeric driver codes found to fix")
+
+
+@app.command()
+def ingest(
+    season: int = typer.Argument(..., help="Season year"),
+    round: int = typer.Argument(..., help="Round number"),
+    session: str = typer.Option("Race", "--session", "-s", help="Session type (e.g., Race, Qualifying, FP1)"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force re-ingestion even if already marked as ingested"),
+):
+    """Manually trigger ingestion for a specific session."""
+    typer.echo(f"Ingesting {season}-{round} {session} (force={force})...")
+
+    try:
+        ingest_session(season, round, session_type=session, force=force)
+        typer.echo(f"✅ Ingestion complete for {season}-{round} {session}")
+    except Exception as exc:
+        typer.echo(f"❌ Ingestion failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
