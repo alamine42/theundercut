@@ -538,3 +538,32 @@ def mark_sessions_ingested(
         pass
 
     return {"updated": updated, "count": len(updated)}
+
+
+@router.post("/{season}/{round}/ingest")
+def trigger_session_ingest(
+    season: int,
+    round: int,
+    session: str = Query("Race", description="Session type to ingest (Race, Qualifying, FP1, etc.)"),
+    force: bool = Query(False, description="Force re-ingestion even if already marked as ingested"),
+):
+    """
+    Admin endpoint to manually trigger session ingestion.
+
+    Use this to re-ingest a session after code fixes or when automatic
+    ingestion failed to store data properly.
+    """
+    from theundercut.services.ingestion import ingest_session
+
+    try:
+        ingest_session(season, round, session_type=session, force=force)
+        return {
+            "status": "success",
+            "message": f"Ingested {season}-{round} {session}",
+            "force": force,
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ingestion failed: {str(exc)}"
+        )
