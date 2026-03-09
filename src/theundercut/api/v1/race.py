@@ -494,3 +494,47 @@ def get_race_weekend(
     redis_client.setex(cache_key, 300, json.dumps(response.model_dump()))
 
     return response
+
+
+# --- Admin endpoints ---
+
+@router.post("/{season}/{round}/mark-ingested")
+def mark_sessions_ingested(
+    season: int,
+    round: int,
+    session: Optional[str] = Query(None, description="Specific session to mark, or all if omitted"),
+    db: Session = Depends(get_db),
+):
+    """
+    Admin endpoint to mark calendar event(s) as ingested.
+
+    Use this when data was ingested but status wasn't updated properly.
+    """
+    from theundercut.services.cache import invalidate_race_weekend_cache
+
+    query = db.query(CalendarEvent).filter_by(season=season, round=round)
+    if session:
+        query = query.filter(CalendarEvent.session_type.ilike(session))
+
+    events = query.all()
+    if not events:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No calendar events found for {season}-{round}" + (f" {session}" if session else "")
+        )
+
+    updated = []
+    for ev in events:
+        old_status = ev.status
+        ev.status = "ingested"
+        updated.append({"session": ev.session_type, "old_status": old_status})
+
+    db.commit()
+
+    # Clear cache
+    try:
+        invalidate_race_weekend_cache(season, round)
+    except Exception:
+        pass
+
+    return {"updated": updated, "count": len(updated)}
