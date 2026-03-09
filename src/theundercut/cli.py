@@ -626,6 +626,38 @@ def calibration_set_active(name: str = typer.Argument(..., help="Existing profil
 
 
 @app.command()
+def mark_ingested(
+    season: int = typer.Argument(..., help="Season year"),
+    round: int = typer.Argument(..., help="Round number"),
+    session: str = typer.Option(None, "--session", "-s", help="Specific session (e.g., race, qualifying). If omitted, marks all sessions."),
+):
+    """Mark calendar event(s) as ingested and clear cache."""
+    from theundercut.services.cache import invalidate_race_weekend_cache
+
+    with SessionLocal() as db:
+        query = db.query(CalendarEvent).filter_by(season=season, round=round)
+        if session:
+            # Case-insensitive match for session type
+            query = query.filter(CalendarEvent.session_type.ilike(session))
+
+        events = query.all()
+        if not events:
+            typer.echo(f"No calendar events found for {season}-{round}" + (f" {session}" if session else ""))
+            raise typer.Exit(code=1)
+
+        for ev in events:
+            old_status = ev.status
+            ev.status = "ingested"
+            typer.echo(f"  {ev.session_type}: {old_status} -> ingested")
+
+        db.commit()
+
+    # Clear cache
+    invalidate_race_weekend_cache(season, round)
+    typer.echo(f"✅ Marked {len(events)} session(s) as ingested and cleared cache")
+
+
+@app.command()
 def fix_driver_codes(
     season: int = typer.Argument(..., help="Season year"),
     round: int = typer.Argument(..., help="Round number"),
