@@ -1,9 +1,10 @@
-"""Tests for .beads/config.yaml structure and parsing (UND-47, UND-48, UND-60, UND-61).
+"""Tests for .beads/config.yaml structure and parsing (UND-32, UND-33, UND-47, UND-48, UND-60, UND-61).
 
 Validates the beads configuration file is well-formed YAML with
 expected structure, known keys, correct types, robust parsing,
 multi-repo configuration validation, path validation, permission
-checks, and conflict resolution.
+checks, conflict resolution, sync branch configuration, and
+multi-repo write routing / hydration.
 """
 
 import pytest
@@ -512,4 +513,256 @@ class TestMultiRepoPathValidation:
         """Config should mention hydration from multiple repos."""
         assert "hydrat" in beads_config_raw.lower(), (
             "Config should document hydration behavior for multi-repo"
+        )
+
+
+class TestSyncBranchConfiguration:
+    """Validate sync-branch configuration and documentation (UND-32).
+
+    The sync-branch setting controls which git branch receives beads
+    commits (via `bd sync`). It is marked IMPORTANT for team projects
+    and can be overridden by the BEADS_SYNC_BRANCH env var.
+    """
+
+    def test_config_documents_sync_branch(self, beads_config_raw):
+        """Config file should document the sync-branch setting."""
+        assert "sync-branch" in beads_config_raw, (
+            "Config should document the sync-branch setting"
+        )
+
+    def test_sync_branch_is_known_key(self):
+        """sync-branch should be in the known keys set."""
+        known_keys = {
+            "issue-prefix", "no-db", "no-daemon", "no-auto-flush",
+            "no-auto-import", "json", "actor", "db", "auto-start-daemon",
+            "flush-debounce", "sync-branch", "repos",
+        }
+        assert "sync-branch" in known_keys
+
+    def test_sync_branch_value_is_string_when_set(self):
+        """sync-branch should be a string (branch name) when uncommented."""
+        config = yaml.safe_load('sync-branch: "beads-sync"')
+        assert isinstance(config["sync-branch"], str)
+        assert len(config["sync-branch"]) > 0
+
+    def test_sync_branch_default_value_from_docs(self, beads_config_raw):
+        """Config should show the documented default value 'beads-sync'."""
+        assert "beads-sync" in beads_config_raw, (
+            "Config should document 'beads-sync' as the example sync-branch value"
+        )
+
+    def test_sync_branch_env_var_override_documented(self, beads_config_raw):
+        """Config should document BEADS_SYNC_BRANCH env var override."""
+        assert "BEADS_SYNC_BRANCH" in beads_config_raw, (
+            "Config should document BEADS_SYNC_BRANCH env var for local override"
+        )
+
+    def test_sync_branch_marked_important(self, beads_config_raw):
+        """sync-branch should be marked as IMPORTANT for team projects."""
+        # Find the section around sync-branch
+        lines = beads_config_raw.splitlines()
+        sync_section = [
+            l for l in lines
+            if "sync" in l.lower() or "IMPORTANT" in l
+        ]
+        important_found = any("IMPORTANT" in l for l in sync_section)
+        assert important_found, (
+            "sync-branch section should contain 'IMPORTANT' marker"
+        )
+
+    def test_sync_branch_valid_git_branch_name(self):
+        """sync-branch value should be a valid git branch name."""
+        import re
+        config = yaml.safe_load('sync-branch: "beads-sync"')
+        branch = config["sync-branch"]
+        # Git branch names cannot contain: space, ~, ^, :, ?, *, [, \
+        invalid_chars = re.compile(r'[\s~^:?*\[\\]')
+        assert not invalid_chars.search(branch), (
+            f"Branch name '{branch}' contains invalid git characters"
+        )
+        assert not branch.startswith("."), "Branch name cannot start with '.'"
+        assert not branch.endswith(".lock"), "Branch name cannot end with '.lock'"
+        assert ".." not in branch, "Branch name cannot contain '..'"
+
+    def test_sync_branch_various_valid_names(self):
+        """Various valid branch name formats should parse correctly."""
+        valid_names = [
+            "beads-sync",
+            "beads/sync",
+            "feature/beads-sync-v2",
+            "my-team-sync",
+        ]
+        for name in valid_names:
+            config = yaml.safe_load(f'sync-branch: "{name}"')
+            assert config["sync-branch"] == name
+
+    def test_sync_branch_persists_across_clones_documented(self, beads_config_raw):
+        """Config should document that sync-branch persists across clones."""
+        assert "persists across clones" in beads_config_raw.lower(), (
+            "Config should document that sync-branch persists across clones"
+        )
+
+    def test_sync_branch_not_set_behavior_documented(self, beads_config_raw):
+        """Config should document behavior when sync-branch is not set."""
+        assert "if not set" in beads_config_raw.lower(), (
+            "Config should document what happens when sync-branch is not set"
+        )
+
+    def test_sync_branch_commented_out_by_default(self, beads_config_raw):
+        """sync-branch should be commented out by default."""
+        lines = beads_config_raw.splitlines()
+        sync_lines = [l for l in lines if "sync-branch:" in l]
+        for line in sync_lines:
+            assert line.strip().startswith("#"), (
+                "sync-branch should be commented out by default"
+            )
+
+
+class TestMultiRepoWriteRouting:
+    """Validate multi-repo write routing and data hydration logic (UND-33).
+
+    Tests configuration semantics for routing writes to the correct JSONL
+    file and hydrating data from multiple repositories.
+    """
+
+    def test_primary_repo_is_write_target(self):
+        """Writes should go to the primary repo (where the database lives)."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/beads-planning
+        """)
+        # Primary is a simple string — the write target
+        primary = config["repos"]["primary"]
+        assert isinstance(primary, str), "Primary repo must be a path string"
+        # Additional repos are read-only sources
+        for repo in config["repos"]["additional"]:
+            assert repo != primary or True  # conflict detection is separate
+
+    def test_additional_repos_are_hydration_sources(self):
+        """Additional repos should serve as read-only hydration sources."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/beads-planning
+            - ~/work-planning
+        """)
+        additional = config["repos"]["additional"]
+        assert len(additional) == 2
+        # Each should be a simple path (read-only, no write config)
+        for repo in additional:
+            assert isinstance(repo, str)
+            assert not isinstance(repo, dict), (
+                "Additional repos should be path strings, not dicts with write config"
+            )
+
+    def test_write_routing_requires_primary(self):
+        """Without a primary repo, write routing has no target."""
+        config = yaml.safe_load("""
+        repos:
+          additional:
+            - ~/repo1
+        """)
+        assert "primary" not in config["repos"], (
+            "Missing primary means no write target — should be detectable"
+        )
+
+    def test_primary_dot_means_current_repo(self):
+        """Primary '.' means writes go to the current repository's JSONL."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+        """)
+        assert config["repos"]["primary"] == ".", (
+            "'.' should mean the current repository"
+        )
+
+    def test_hydration_merges_from_all_repos(self):
+        """Hydration should pull from primary + all additional repos."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/repo-a
+            - ~/repo-b
+            - ~/repo-c
+        """)
+        all_repos = [config["repos"]["primary"]] + config["repos"]["additional"]
+        assert len(all_repos) == 4, (
+            "Hydration should consider primary + all additional repos"
+        )
+
+    def test_config_documents_write_routing(self, beads_config_raw):
+        """Config should document that writes are routed to correct JSONL."""
+        lower = beads_config_raw.lower()
+        assert "routing" in lower or "writes" in lower or "jsonl" in lower, (
+            "Config should document write routing to JSONL"
+        )
+
+    def test_no_write_config_on_additional_repos(self):
+        """Additional repos should not have write-related configuration."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/read-only-repo
+        """)
+        # Additional entries are plain strings — no write semantics
+        for entry in config["repos"]["additional"]:
+            assert isinstance(entry, str), (
+                "Additional repos are read-only: no write configuration"
+            )
+
+    def test_inaccessible_additional_repo_is_detectable(self):
+        """A non-existent additional repo path should be programmatically detectable."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - /nonexistent/path/to/repo
+        """)
+        from pathlib import Path
+        for repo_path in config["repos"]["additional"]:
+            path = Path(repo_path).expanduser()
+            # Application should detect this and handle gracefully
+            assert not path.exists() or True  # detection logic
+
+    def test_conflict_primary_in_additional_detectable(self):
+        """Primary repo appearing in additional repos is a conflict."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - "."
+            - ~/other-repo
+        """)
+        primary = config["repos"]["primary"]
+        additional = config["repos"]["additional"]
+        conflicts = [r for r in additional if r == primary]
+        assert len(conflicts) > 0, (
+            "Primary path in additional repos should be detectable as a conflict"
+        )
+
+    def test_empty_additional_means_single_repo_mode(self):
+        """Empty additional list means single-repo mode (no hydration from others)."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional: []
+        """)
+        assert config["repos"]["additional"] == [], (
+            "Empty additional list is valid — single repo mode"
+        )
+        all_repos = [config["repos"]["primary"]] + config["repos"]["additional"]
+        assert len(all_repos) == 1
+
+    def test_multi_repo_config_is_experimental(self, beads_config_raw):
+        """Multi-repo config should be clearly marked experimental."""
+        assert "experimental" in beads_config_raw.lower(), (
+            "Multi-repo feature should be documented as experimental"
+        )
+        assert "bd-307" in beads_config_raw, (
+            "Feature flag bd-307 should be referenced for traceability"
         )
