@@ -9,7 +9,6 @@ from theundercut.services.homepage import (
     get_latest_race,
     get_podium,
     get_homepage_data,
-    _get_team_for_driver,
     _get_race_name,
 )
 from theundercut.models import LapTime
@@ -55,7 +54,8 @@ class TestGetLatestRace:
             mock_result.fetchone.return_value = ("2025-12", 12, 1277)
             mock_execute.return_value = mock_result
 
-            race = get_latest_race(db_session, 2025)
+            with patch('theundercut.services.homepage._get_race_name', return_value="British Grand Prix"):
+                race = get_latest_race(db_session, 2025)
 
             assert race is not None
             assert race["race_id"] == "2025-12"
@@ -94,7 +94,12 @@ class TestGetPodium:
         ])
         db_session.commit()
 
-        podium = get_podium(db_session, race_id)
+        with patch('theundercut.services.homepage._get_driver_team_map', return_value={
+            "VER": "Red Bull",
+            "HAM": "Mercedes",
+            "LEC": "Ferrari",
+        }):
+            podium = get_podium(db_session, race_id)
 
         assert len(podium) == 3
         assert podium[0]["position"] == 1
@@ -109,40 +114,30 @@ class TestGetPodium:
         assert podium == []
 
 
-class TestGetTeamForDriver:
-    """Tests for driver-to-team mapping."""
-
-    def test_2024_driver_mapping(self):
-        """Should correctly map 2024 drivers to teams."""
-        assert _get_team_for_driver("VER", "2024-1") == "Red Bull"
-        assert _get_team_for_driver("HAM", "2024-1") == "Mercedes"
-        assert _get_team_for_driver("LEC", "2024-1") == "Ferrari"
-        assert _get_team_for_driver("NOR", "2024-1") == "McLaren"
-
-    def test_2025_driver_mapping(self):
-        """Should correctly map 2025 drivers to teams."""
-        assert _get_team_for_driver("VER", "2025-1") == "Red Bull"
-        assert _get_team_for_driver("HAM", "2025-1") == "Ferrari"  # Changed teams
-        assert _get_team_for_driver("ANT", "2025-1") == "Mercedes"  # New driver
-        assert _get_team_for_driver("LAW", "2025-1") == "Red Bull"  # Promoted
-
-    def test_unknown_driver(self):
-        """Should return 'Unknown' for unmapped drivers."""
-        assert _get_team_for_driver("XXX", "2024-1") == "Unknown"
-
-
 class TestGetRaceName:
     """Tests for race name lookup."""
 
     def test_known_race_names(self, db_session):
         """Should return correct race names for known rounds."""
-        assert _get_race_name(db_session, 2024, 1) == "Bahrain Grand Prix"
-        assert _get_race_name(db_session, 2024, 12) == "British Grand Prix"
-        assert _get_race_name(db_session, 2025, 1) == "Australian Grand Prix"
+        mock_query = MagicMock()
+        mock_chain = mock_query.return_value
+        mock_chain.join.return_value = mock_chain
+        mock_chain.filter.return_value = mock_chain
+        mock_chain.first.return_value = MagicMock(slug="british-grand-prix")
+
+        with patch.object(db_session, "query", return_value=mock_chain):
+            assert _get_race_name(db_session, 2024, 12) == "British Grand Prix"
 
     def test_unknown_round_fallback(self, db_session):
         """Should return 'Round X' for unknown rounds."""
-        assert _get_race_name(db_session, 2024, 99) == "Round 99"
+        mock_query = MagicMock()
+        mock_chain = mock_query.return_value
+        mock_chain.join.return_value = mock_chain
+        mock_chain.filter.return_value = mock_chain
+        mock_chain.first.return_value = None
+
+        with patch.object(db_session, "query", return_value=mock_chain):
+            assert _get_race_name(db_session, 2024, 99) == "Round 99"
 
 
 class TestGetHomepageData:

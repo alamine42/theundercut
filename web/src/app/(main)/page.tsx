@@ -6,68 +6,54 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TeamWithLogo } from "@/components/ui/team-logo";
 import { SeasonResultsTable } from "@/components/season-results-table";
 import { RaceWeekendWidget } from "@/components/race-weekend";
-import { fetchStandings, fetchTestingEvents, fetchCircuits, fetchWeekendData } from "@/lib/api";
+import { fetchStandings, fetchTestingEvents, fetchWeekendData } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
-import type { TestingEvent, WeekendResponse, Circuit } from "@/types/api";
+import type { TestingEvent, WeekendResponse } from "@/types/api";
 import type { NextRaceInfo } from "@/components/race-weekend/types";
 
 export const revalidate = 300; // 5 minutes ISR
 
-/** Hours after race date to consider the race weekend still "active" for display */
-const RACE_ACTIVE_HOURS_ESTIMATE = 42; // Race date + ~18h for race end + 24h window
+function buildNextRaceInfo(weekend: WeekendResponse | null): NextRaceInfo | null {
+  if (!weekend?.schedule) return null;
+  const firstSession = weekend.schedule.sessions?.find((session) => session.start_time) ?? null;
+  return {
+    raceName: weekend.schedule.race_name || null,
+    circuitName: weekend.schedule.circuit_name || null,
+    circuitCountry: weekend.schedule.circuit_country || null,
+    fp1Date: firstSession?.start_time ?? null,
+    round: weekend.schedule.round,
+  };
+}
 
 async function getHomeData() {
   try {
-    const [standings, testingData, circuitsData] = await Promise.all([
+    const [standings, testingData] = await Promise.all([
       fetchStandings(DEFAULT_SEASON).catch(() => null),
       fetchTestingEvents(DEFAULT_SEASON).catch(() => ({ events: [] })),
-      fetchCircuits(DEFAULT_SEASON).catch(() => ({ circuits: [] })),
     ]);
 
-    // Determine the next/current race round
-    const now = new Date();
-    const circuits = circuitsData.circuits || [];
-    const upcomingRace = circuits.find((c) => c.date && new Date(c.date) >= now);
-    const lastRace = [...circuits].reverse().find((c) => c.date && new Date(c.date) < now);
+    const racesCompleted = standings?.races_completed ?? 0;
+    const lastRound = racesCompleted > 0 ? racesCompleted : null;
+    const nextRound = Math.max(1, racesCompleted + 1);
 
-    // Check if we're still within the 24-hour post-race window
-    // Race typically ends ~18 hours after race date starts (e.g., race at 2pm on Sunday)
-    // We extend the window by 24 hours for post-race display
-    let isWithinPostRaceWindow = false;
-    if (lastRace?.date) {
-      const lastRaceDate = new Date(lastRace.date);
-      const hoursSinceRaceDate = (now.getTime() - lastRaceDate.getTime()) / (1000 * 60 * 60);
-      isWithinPostRaceWindow = hoursSinceRaceDate < RACE_ACTIVE_HOURS_ESTIMATE;
-    }
+    const [lastWeekend, nextWeekend] = await Promise.all([
+      lastRound ? fetchWeekendData(DEFAULT_SEASON, lastRound).catch(() => null) : Promise.resolve<WeekendResponse | null>(null),
+      fetchWeekendData(DEFAULT_SEASON, nextRound).catch(() => null),
+    ]);
 
-    // If within post-race window, show the last race; otherwise show upcoming
-    const currentRound = isWithinPostRaceWindow
-      ? lastRace?.round
-      : (upcomingRace?.round || lastRace?.round || 1);
-
-    // Fetch weekend data for the current/next round
     let weekendData: WeekendResponse | null = null;
-    if (currentRound) {
-      try {
-        weekendData = await fetchWeekendData(DEFAULT_SEASON, currentRound);
-      } catch {
-        // Weekend data fetch failed, continue without it
-      }
+    if (lastWeekend && lastWeekend.timeline && lastWeekend.timeline.state !== "off-week") {
+      weekendData = lastWeekend;
+    } else if (nextWeekend) {
+      weekendData = nextWeekend;
+    } else {
+      weekendData = lastWeekend;
     }
 
-    // Build nextRaceInfo - this should be the NEXT upcoming race
-    // When showing a completed race, nextRaceInfo should point to the race after it
-    let nextRaceInfo: NextRaceInfo | null = null;
-    if (upcomingRace) {
-      nextRaceInfo = {
-        raceName: upcomingRace.race_name || null,
-        circuitName: upcomingRace.name || null,
-        circuitCountry: upcomingRace.country || null,
-        fp1Date: upcomingRace.date || null, // Using race date as approximation for FP1
-        round: upcomingRace.round || 1,
-      };
-    }
+    const nextRaceInfo =
+      buildNextRaceInfo(nextWeekend) ??
+      (weekendData && weekendData.timeline?.state !== "off-week" ? buildNextRaceInfo(weekendData) : null);
 
     return {
       standings,

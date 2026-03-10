@@ -28,6 +28,33 @@ function fetchOptions(revalidate?: number): RequestInit {
   };
 }
 
+type QueryParam = string | number | boolean | Array<string | number | boolean> | null | undefined;
+
+async function apiFetch<T>(
+  path: string,
+  options?: { query?: Record<string, QueryParam>; revalidate?: number }
+): Promise<T> {
+  const url = new URL(`${BASE_URL}${path}`, getBaseUrl());
+  const params = options?.query ?? {};
+  Object.entries(params).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((val) => {
+        if (val !== undefined && val !== null) {
+          url.searchParams.append(key, String(val));
+        }
+      });
+    } else if (value !== undefined && value !== null) {
+      url.searchParams.append(key, String(value));
+    }
+  });
+
+  const res = await fetch(url.toString(), fetchOptions(options?.revalidate));
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${path}: ${res.status}`);
+  }
+  return res.json();
+}
+
 // =============================================================================
 // Analytics API
 // =============================================================================
@@ -37,19 +64,9 @@ export async function fetchAnalytics(
   round: number,
   drivers?: string[]
 ): Promise<AnalyticsResponse> {
-  const url = new URL(`${BASE_URL}/analytics/${season}/${round}`, getBaseUrl());
-
-  if (drivers && drivers.length > 0) {
-    drivers.forEach((d) => url.searchParams.append("drivers", d));
-  }
-
-  const res = await fetch(url.toString(), fetchOptions());
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch analytics: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<AnalyticsResponse>(`/analytics/${season}/${round}`, {
+    query: drivers && drivers.length > 0 ? { drivers } : undefined,
+  });
 }
 
 // =============================================================================
@@ -59,16 +76,7 @@ export async function fetchAnalytics(
 export async function fetchStandings(
   season: number
 ): Promise<StandingsResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/standings/${season}`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch standings: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<StandingsResponse>(`/standings/${season}`);
 }
 
 // =============================================================================
@@ -80,19 +88,9 @@ export async function fetchLaps(
   round: number,
   drivers?: string[]
 ): Promise<SimpleLapData[]> {
-  const url = new URL(`${BASE_URL}/race/${season}/${round}/laps`, getBaseUrl());
-
-  if (drivers && drivers.length > 0) {
-    drivers.forEach((d) => url.searchParams.append("drivers", d));
-  }
-
-  const res = await fetch(url.toString(), fetchOptions());
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch laps: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<SimpleLapData[]>(`/race/${season}/${round}/laps`, {
+    query: drivers && drivers.length > 0 ? { drivers } : undefined,
+  });
 }
 
 // =============================================================================
@@ -100,16 +98,7 @@ export async function fetchLaps(
 // =============================================================================
 
 export async function fetchHomepage(): Promise<HomepageResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/homepage`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch homepage: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<HomepageResponse>(`/homepage`);
 }
 
 // =============================================================================
@@ -119,47 +108,20 @@ export async function fetchHomepage(): Promise<HomepageResponse> {
 export async function fetchCircuits(
   season: number
 ): Promise<CircuitsResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/circuits/${season}`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch circuits: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<CircuitsResponse>(`/circuits/${season}`);
 }
 
 export async function fetchCircuitDetail(
   season: number,
   circuitId: string
 ): Promise<CircuitDetailResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/circuits/${season}/${circuitId}`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch circuit detail: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<CircuitDetailResponse>(`/circuits/${season}/${circuitId}`);
 }
 
 export async function fetchCircuitTrends(
   circuitId: string
 ): Promise<CircuitTrendsResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/circuits/trends/${circuitId}`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch circuit trends: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<CircuitTrendsResponse>(`/circuits/trends/${circuitId}`);
 }
 
 // =============================================================================
@@ -169,16 +131,7 @@ export async function fetchCircuitTrends(
 export async function fetchTestingEvents(
   season: number
 ): Promise<TestingEventsResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/testing/${season}`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch testing events: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<TestingEventsResponse>(`/testing/${season}`);
 }
 
 export async function fetchTestingDay(
@@ -187,25 +140,14 @@ export async function fetchTestingDay(
   day: number,
   options?: { drivers?: string[]; includeLaps?: boolean }
 ): Promise<TestingDayResponse> {
-  const url = new URL(
-    `${getBaseUrl()}${BASE_URL}/testing/${season}/${eventId}/${day}`,
-    getBaseUrl() || "http://localhost"
-  );
-
-  if (options?.drivers) {
-    options.drivers.forEach((d) => url.searchParams.append("drivers", d));
+  const query: Record<string, QueryParam> = {};
+  if (options?.drivers && options.drivers.length > 0) {
+    query.drivers = options.drivers;
   }
   if (options?.includeLaps) {
-    url.searchParams.set("include_laps", "true");
+    query.include_laps = "true";
   }
-
-  const res = await fetch(url.toString(), fetchOptions());
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch testing day: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<TestingDayResponse>(`/testing/${season}/${eventId}/${day}`, { query });
 }
 
 export async function fetchTestingLaps(
@@ -333,14 +275,5 @@ export async function fetchWeekendData(
   season: number,
   round: number
 ): Promise<WeekendResponse> {
-  const res = await fetch(
-    `${getBaseUrl()}${BASE_URL}/race/${season}/${round}/weekend`,
-    fetchOptions()
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch weekend data: ${res.status}`);
-  }
-
-  return res.json();
+  return apiFetch<WeekendResponse>(`/race/${season}/${round}/weekend`);
 }

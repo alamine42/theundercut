@@ -274,6 +274,34 @@ def _build_timeline(events: List[CalendarEvent]) -> Optional[WeekendTimeline]:
     )
 
 
+def _load_schedule(db: Session, season: int, round_num: int) -> Tuple[List[CalendarEvent], Optional[RaceWeekendSchedule], Optional[WeekendTimeline]]:
+    events = (
+        db.query(CalendarEvent)
+        .filter_by(season=season, round=round_num)
+        .order_by(CalendarEvent.start_ts)
+        .all()
+    )
+    if not events:
+        return [], None, None
+
+    session_types = {event.session_type.lower() for event in events}
+    is_sprint = "sprint" in session_types or "sprint qualifying" in session_types or "ss" in session_types
+    sessions = [_event_to_session(event) for event in events]
+    circuit_info = _get_circuit_info(season, round_num, db)
+    schedule = RaceWeekendSchedule(
+        season=season,
+        round=round_num,
+        race_name=circuit_info.get("race_name"),
+        circuit_id=circuit_info.get("circuit_id"),
+        circuit_name=circuit_info.get("circuit_name"),
+        circuit_country=circuit_info.get("circuit_country"),
+        is_sprint_weekend=is_sprint,
+        sessions=sessions,
+    )
+    timeline = _build_timeline(events)
+    return events, schedule, timeline
+
+
 def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
     """Get circuit info from Race and Circuit tables."""
     # Try to get from Race table with Circuit join
@@ -380,47 +408,12 @@ def get_race_schedule(
     if cached:
         return json.loads(cached)
 
-    # Query calendar events for this race
-    events = (
-        db.query(CalendarEvent)
-        .filter_by(season=season, round=round)
-        .order_by(CalendarEvent.start_ts)
-        .all()
-    )
-
-    if not events:
+    events, schedule, _ = _load_schedule(db, season, round)
+    if not events or schedule is None:
         raise HTTPException(status_code=404, detail=f"No schedule found for {season} round {round}")
 
-    # Determine if sprint weekend
-    session_types = {e.session_type.lower() for e in events}
-    is_sprint = "sprint" in session_types or "sprint qualifying" in session_types or "ss" in session_types
-
-    sessions = []
-    for event in events:
-        sessions.append(RaceSession(
-            session_type=event.session_type.lower().replace(" ", "_"),
-            start_time=event.start_ts.isoformat() if event.start_ts else None,
-            end_time=event.end_ts.isoformat() if event.end_ts else None,
-            status=event.status or "scheduled",
-        ))
-
-    circuit_info = _get_circuit_info(season, round, db)
-
-    result = RaceWeekendSchedule(
-        season=season,
-        round=round,
-        race_name=circuit_info.get("race_name"),
-        circuit_id=circuit_info.get("circuit_id"),
-        circuit_name=circuit_info.get("circuit_name"),
-        circuit_country=circuit_info.get("circuit_country"),
-        is_sprint_weekend=is_sprint,
-        sessions=sessions,
-    )
-
-    # Cache for 5 minutes
-    redis_client.setex(cache_key, 300, json.dumps(result.model_dump()))
-
-    return result
+    redis_client.setex(cache_key, 300, json.dumps(schedule.model_dump()))
+    return schedule
 
 
 @router.get("/{season}/{round}/session/{session_type}/results", response_model=SessionResultsResponse)
@@ -547,36 +540,9 @@ def get_race_weekend(
     schedule = None
     timeline = None
     try:
-        events = (
-            db.query(CalendarEvent)
-            .filter_by(season=season, round=round)
-            .order_by(CalendarEvent.start_ts)
-            .all()
-        )
-        if events:
-            timeline = _build_timeline(events)
-            session_types = {e.session_type.lower() for e in events}
-            is_sprint = "sprint" in session_types or "sprint qualifying" in session_types
-            sessions = [
-                RaceSession(
-                    session_type=e.session_type.lower().replace(" ", "_"),
-                    start_time=e.start_ts.isoformat() if e.start_ts else None,
-                    end_time=e.end_ts.isoformat() if e.end_ts else None,
-                    status=e.status or "scheduled",
-                )
-                for e in events
-            ]
-            circuit_info = _get_circuit_info(season, round, db)
-            schedule = RaceWeekendSchedule(
-                season=season,
-                round=round,
-                race_name=circuit_info.get("race_name"),
-                circuit_id=circuit_info.get("circuit_id"),
-                circuit_name=circuit_info.get("circuit_name"),
-                circuit_country=circuit_info.get("circuit_country"),
-                is_sprint_weekend=is_sprint,
-                sessions=sessions,
-            )
+        events, schedule, timeline = _load_schedule(db, season, round)
+        if not events:
+            schedule = None
     except Exception as e:
         errors.append(f"schedule: {str(e)}")
 

@@ -6,9 +6,11 @@ podium finishers, and standings summary.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from theundercut.models import Race, Season, Entry, Driver, Team
 
 
 def get_current_season(db: Session) -> int:
@@ -78,62 +80,47 @@ def get_latest_race(db: Session, season: int) -> Optional[Dict[str, Any]]:
 
 
 def _get_race_name(db: Session, season: int, round_num: int) -> str:
-    """Get human-readable race name for a round."""
-    # Map of known race names by meeting_key or round
-    # This is a simplified approach - could be enhanced with a proper mapping table
-    race_names = {
-        # 2024 season
-        (2024, 1): "Bahrain Grand Prix",
-        (2024, 2): "Saudi Arabian Grand Prix",
-        (2024, 3): "Australian Grand Prix",
-        (2024, 4): "Japanese Grand Prix",
-        (2024, 5): "Chinese Grand Prix",
-        (2024, 6): "Miami Grand Prix",
-        (2024, 7): "Emilia Romagna Grand Prix",
-        (2024, 8): "Monaco Grand Prix",
-        (2024, 9): "Canadian Grand Prix",
-        (2024, 10): "Spanish Grand Prix",
-        (2024, 11): "Austrian Grand Prix",
-        (2024, 12): "British Grand Prix",
-        (2024, 13): "Hungarian Grand Prix",
-        (2024, 14): "Belgian Grand Prix",
-        (2024, 15): "Dutch Grand Prix",
-        (2024, 16): "Italian Grand Prix",
-        (2024, 17): "Azerbaijan Grand Prix",
-        (2024, 18): "Singapore Grand Prix",
-        (2024, 19): "United States Grand Prix",
-        (2024, 20): "Mexico City Grand Prix",
-        (2024, 21): "São Paulo Grand Prix",
-        (2024, 22): "Las Vegas Grand Prix",
-        (2024, 23): "Qatar Grand Prix",
-        (2024, 24): "Abu Dhabi Grand Prix",
-        # 2025 season
-        (2025, 1): "Australian Grand Prix",
-        (2025, 2): "Chinese Grand Prix",
-        (2025, 3): "Japanese Grand Prix",
-        (2025, 4): "Bahrain Grand Prix",
-        (2025, 5): "Saudi Arabian Grand Prix",
-        (2025, 6): "Miami Grand Prix",
-        (2025, 7): "Emilia Romagna Grand Prix",
-        (2025, 8): "Monaco Grand Prix",
-        (2025, 9): "Spanish Grand Prix",
-        (2025, 10): "Canadian Grand Prix",
-        (2025, 11): "Austrian Grand Prix",
-        (2025, 12): "British Grand Prix",
-        (2025, 13): "Belgian Grand Prix",
-        (2025, 14): "Hungarian Grand Prix",
-        (2025, 15): "Dutch Grand Prix",
-        (2025, 16): "Italian Grand Prix",
-        (2025, 17): "Azerbaijan Grand Prix",
-        (2025, 18): "Singapore Grand Prix",
-        (2025, 19): "United States Grand Prix",
-        (2025, 20): "Mexico City Grand Prix",
-        (2025, 21): "São Paulo Grand Prix",
-        (2025, 22): "Las Vegas Grand Prix",
-        (2025, 23): "Qatar Grand Prix",
-        (2025, 24): "Abu Dhabi Grand Prix",
-    }
-    return race_names.get((season, round_num), f"Round {round_num}")
+    """Get human-readable race name for a round from the database."""
+    race = (
+        db.query(Race)
+        .join(Season, Race.season_id == Season.id)
+        .filter(Season.year == season, Race.round_number == round_num)
+        .first()
+    )
+    if race and race.slug:
+        return race.slug.replace("-", " ").title()
+    return f"Round {round_num}"
+
+
+def _parse_race_id(race_id: str) -> Tuple[int, int]:
+    season_str, round_str = race_id.split("-", maxsplit=1)
+    return int(season_str), int(round_str)
+
+
+def _get_driver_team_map(db: Session, race_id: str) -> Dict[str, str]:
+    """Return mapping of driver codes to team names for a given race."""
+    try:
+        season_value, round_value = _parse_race_id(race_id)
+    except ValueError:
+        return {}
+
+    race = (
+        db.query(Race)
+        .join(Season, Race.season_id == Season.id)
+        .filter(Season.year == season_value, Race.round_number == round_value)
+        .first()
+    )
+    if not race:
+        return {}
+
+    rows = (
+        db.query(Driver.code, Team.name)
+        .join(Entry, Entry.driver_id == Driver.id)
+        .join(Team, Entry.team_id == Team.id)
+        .filter(Entry.race_id == race.id)
+        .all()
+    )
+    return {code: team or "Unknown" for code, team in rows}
 
 
 def get_podium(db: Session, race_id: str) -> List[Dict[str, Any]]:
@@ -171,11 +158,11 @@ def get_podium(db: Session, race_id: str) -> List[Dict[str, Any]]:
     """), {"race_id": race_id})
 
     rows = result.fetchall()
-
+    team_map = _get_driver_team_map(db, race_id)
     podium = []
     for i, row in enumerate(rows):
         driver_code = row[0]
-        team = _get_team_for_driver(driver_code, race_id)
+        team = team_map.get(driver_code, "Unknown")
         podium.append({
             "position": i + 1,
             "driver": driver_code,
@@ -183,43 +170,6 @@ def get_podium(db: Session, race_id: str) -> List[Dict[str, Any]]:
         })
 
     return podium
-
-
-def _get_team_for_driver(driver_code: str, race_id: str) -> str:
-    """Map driver code to team name."""
-    # Extract season from race_id
-    season = int(race_id.split("-")[0])
-
-    # Team mappings by season
-    teams_2024 = {
-        "VER": "Red Bull", "PER": "Red Bull",
-        "HAM": "Mercedes", "RUS": "Mercedes",
-        "LEC": "Ferrari", "SAI": "Ferrari", "BEA": "Ferrari",
-        "NOR": "McLaren", "PIA": "McLaren",
-        "ALO": "Aston Martin", "STR": "Aston Martin",
-        "OCO": "Alpine", "GAS": "Alpine",
-        "TSU": "RB", "RIC": "RB", "LAW": "RB",
-        "BOT": "Sauber", "ZHO": "Sauber",
-        "MAG": "Haas", "HUL": "Haas",
-        "ALB": "Williams", "SAR": "Williams", "COL": "Williams",
-    }
-
-    teams_2025 = {
-        "VER": "Red Bull", "LAW": "Red Bull",
-        "RUS": "Mercedes", "ANT": "Mercedes",
-        "LEC": "Ferrari", "HAM": "Ferrari",
-        "NOR": "McLaren", "PIA": "McLaren",
-        "ALO": "Aston Martin", "STR": "Aston Martin",
-        "GAS": "Alpine", "DOO": "Alpine",
-        "TSU": "RB", "HAD": "RB",
-        "BOR": "Sauber", "HUL": "Sauber",
-        "BEA": "Haas", "OCO": "Haas",
-        "ALB": "Williams", "SAI": "Williams", "COL": "Williams",
-    }
-
-    if season >= 2025:
-        return teams_2025.get(driver_code, "Unknown")
-    return teams_2024.get(driver_code, "Unknown")
 
 
 def get_homepage_data(db: Session) -> Dict[str, Any]:

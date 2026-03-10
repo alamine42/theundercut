@@ -6,7 +6,7 @@ import { RaceCountdown } from "./RaceCountdown";
 import { HistoricalData } from "./HistoricalData";
 import { SessionGrid } from "./SessionGrid";
 import { getCountryFlag } from "@/lib/utils";
-import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo, WeekendTimeline } from "./types";
+import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo } from "./types";
 
 /** Number of hours after race end before the widget reverts to showing next race countdown */
 const RACE_WEEKEND_ACTIVE_HOURS = 24;
@@ -171,6 +171,16 @@ function getDaysUntilFP1(
   const diffMs = fp1Date.getTime() - now.getTime();
   const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
+  return days > 0 ? days : null;
+}
+
+function getDaysUntilDate(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const now = new Date();
+  const target = new Date(dateStr);
+  if (Number.isNaN(target.getTime())) return null;
+  const diffMs = target.getTime() - now.getTime();
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   return days > 0 ? days : null;
 }
 
@@ -356,25 +366,24 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
 
   // For off-week state (>7 days until race), show simplified message
   const offWeekDays = (() => {
-    if (timeline?.next_session?.start_time) {
-      const now = new Date();
-      const nextStart = new Date(timeline.next_session.start_time);
-      const diffMs = nextStart.getTime() - now.getTime();
-      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      if (days > 0) return days;
+    const nextRaceDate = nextRaceInfo?.fp1Date ?? timeline?.next_session?.start_time ?? null;
+    const daysFromNextInfo = getDaysUntilDate(nextRaceDate);
+    if (daysFromNextInfo) {
+      return daysFromNextInfo;
     }
     return getDaysUntilFP1(schedule.sessions);
   })();
 
   if (widgetState === "off-week" && offWeekDays && offWeekDays > 0) {
+    const info = nextRaceInfo ?? {
+      raceName: schedule.race_name,
+      circuitCountry: schedule.circuit_country,
+      round: schedule.round,
+    };
     return (
       <OffWeekState
         daysUntil={offWeekDays}
-        nextRaceInfo={{
-          raceName: schedule.race_name,
-          circuitCountry: schedule.circuit_country,
-          round: schedule.round,
-        }}
+        nextRaceInfo={info}
       />
     );
   }
