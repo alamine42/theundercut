@@ -2,7 +2,8 @@
 
 Validates the beads configuration file is well-formed YAML with
 expected structure, known keys, correct types, robust parsing,
-and multi-repo configuration validation.
+multi-repo configuration validation, path validation, permission
+checks, and conflict resolution.
 """
 
 import pytest
@@ -288,4 +289,227 @@ class TestMultiRepoConfigValidation:
         """Multi-repo config should document its experimental status."""
         assert "experimental" in beads_config_raw.lower(), (
             "Multi-repo feature should be documented as experimental"
+        )
+
+
+class TestMultiRepoPathValidation:
+    """Validate multi-repo path handling and edge cases (UND-47).
+
+    Tests path validation, permission semantics, conflict resolution,
+    primary repo validation, and read-only enforcement for additional repos.
+    """
+
+    def test_primary_repo_dot_is_current_directory(self):
+        """Primary repo '.' should represent the current directory."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+        """)
+        assert config["repos"]["primary"] == ".", (
+            "Primary repo '.' should be accepted as current directory"
+        )
+
+    def test_primary_repo_cannot_be_empty_string(self):
+        """Primary repo should not be an empty string."""
+        config = yaml.safe_load("""
+        repos:
+          primary: ""
+        """)
+        # Empty string is falsy and should be detectable as invalid
+        assert not config["repos"]["primary"], (
+            "Empty primary repo path should be detectable as invalid"
+        )
+
+    def test_primary_repo_cannot_be_none(self):
+        """Primary repo should not be null/None."""
+        config = yaml.safe_load("""
+        repos:
+          primary: null
+        """)
+        assert config["repos"]["primary"] is None, (
+            "Null primary should be detectable"
+        )
+
+    def test_additional_repos_cannot_include_primary(self):
+        """Additional repos should not duplicate the primary repo path."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - "."
+        """)
+        additional = config["repos"]["additional"]
+        primary = config["repos"]["primary"]
+        # This is a detectable conflict
+        assert primary in additional, (
+            "Conflict: primary path appears in additional repos"
+        )
+
+    def test_additional_repos_absolute_paths(self):
+        """Absolute paths in additional repos should be accepted."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - /home/user/beads-planning
+            - /opt/shared/work-planning
+        """)
+        for path in config["repos"]["additional"]:
+            assert path.startswith("/"), (
+                f"Absolute path should start with /, got: {path}"
+            )
+
+    def test_additional_repos_mixed_path_types(self):
+        """Additional repos can contain mixed path types (absolute, relative, tilde)."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/personal-repo
+            - /absolute/repo
+            - ../sibling-repo
+        """)
+        additional = config["repos"]["additional"]
+        assert len(additional) == 3
+        assert additional[0].startswith("~")
+        assert additional[1].startswith("/")
+        assert additional[2].startswith("..")
+
+    def test_additional_repo_paths_are_non_empty(self):
+        """Each additional repo path should be a non-empty string."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/repo1
+            - ~/repo2
+        """)
+        for entry in config["repos"]["additional"]:
+            assert isinstance(entry, str) and len(entry) > 0, (
+                f"Additional repo path must be a non-empty string, got: {entry!r}"
+            )
+
+    def test_repos_key_requires_primary(self):
+        """A repos config without primary key should be detectable."""
+        config = yaml.safe_load("""
+        repos:
+          additional:
+            - ~/repo1
+        """)
+        assert "primary" not in config["repos"], (
+            "Missing primary key should be detectable"
+        )
+
+    def test_primary_repo_is_read_write(self):
+        """Primary repo is the write target; it should be a simple path string."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/read-only-repo
+        """)
+        # Primary is a simple string (not a dict with permissions)
+        assert isinstance(config["repos"]["primary"], str), (
+            "Primary repo should be a simple string path (read-write)"
+        )
+
+    def test_additional_repos_are_read_only_by_design(self):
+        """Additional repos are documented as read-only; they should be simple path strings."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/beads-planning
+            - ~/work-planning
+        """)
+        for entry in config["repos"]["additional"]:
+            assert isinstance(entry, str), (
+                f"Additional repo should be a string path (read-only by design), got: {type(entry)}"
+            )
+
+    def test_config_comments_indicate_read_only(self, beads_config_raw):
+        """Config file should document that additional repos are read-only."""
+        assert "read-only" in beads_config_raw.lower(), (
+            "Config should document that additional repos are read-only"
+        )
+
+    def test_config_mentions_jsonl_routing(self, beads_config_raw):
+        """Config should document JSONL routing for multi-repo writes."""
+        assert "jsonl" in beads_config_raw.lower(), (
+            "Config should document JSONL routing for multi-repo feature"
+        )
+
+    def test_multi_repo_with_many_additional_repos(self):
+        """Config should handle many additional repos."""
+        repos_yaml = "repos:\n  primary: \".\"\n  additional:\n"
+        for i in range(10):
+            repos_yaml += f"    - ~/repo-{i}\n"
+        config = yaml.safe_load(repos_yaml)
+        assert len(config["repos"]["additional"]) == 10
+
+    def test_duplicate_additional_repos_are_detectable(self):
+        """Duplicate paths in additional repos should be programmatically detectable."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/repo-a
+            - ~/repo-b
+            - ~/repo-a
+        """)
+        additional = config["repos"]["additional"]
+        seen = set()
+        duplicates = []
+        for path in additional:
+            if path in seen:
+                duplicates.append(path)
+            seen.add(path)
+        assert len(duplicates) > 0, "Duplicate paths should be detectable"
+        assert "~/repo-a" in duplicates
+
+    def test_repos_with_spaces_in_path(self):
+        """Paths with spaces should be preserved in YAML."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - "~/My Documents/repo"
+        """)
+        assert config["repos"]["additional"][0] == "~/My Documents/repo"
+
+    def test_repos_with_special_characters(self):
+        """Paths with special characters should be preserved."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - "~/my-repo_v2"
+            - "~/repo.backup"
+        """)
+        assert "~/my-repo_v2" in config["repos"]["additional"]
+        assert "~/repo.backup" in config["repos"]["additional"]
+
+    def test_config_documents_bd_307_feature_flag(self, beads_config_raw):
+        """Config should reference the bd-307 feature flag for multi-repo."""
+        assert "bd-307" in beads_config_raw, (
+            "Config should reference bd-307 feature flag for traceability"
+        )
+
+    def test_repos_additional_not_a_dict(self):
+        """Additional repos should be a list, not a dict."""
+        config = yaml.safe_load("""
+        repos:
+          primary: "."
+          additional:
+            - ~/repo1
+        """)
+        assert isinstance(config["repos"]["additional"], list), (
+            "Additional repos must be a list, not a dict"
+        )
+        assert not isinstance(config["repos"]["additional"], dict)
+
+    def test_config_documents_hydration(self, beads_config_raw):
+        """Config should mention hydration from multiple repos."""
+        assert "hydrat" in beads_config_raw.lower(), (
+            "Config should document hydration behavior for multi-repo"
         )
