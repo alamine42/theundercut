@@ -34,6 +34,7 @@ class Settings:
     fastf1_cache_dir: Path
     stripe_secret_key: Optional[str]
     stripe_webhook_secret: Optional[str]
+    admin_api_key: Optional[str]
 
 
 @lru_cache(maxsize=1)
@@ -52,6 +53,7 @@ def get_settings() -> Settings:
         fastf1_cache_dir=cache_path,
         stripe_secret_key=_env("STRIPE_SECRET_KEY", None),
         stripe_webhook_secret=_env("STRIPE_WEBHOOK_SECRET", None),
+        admin_api_key=_env("ADMIN_API_KEY", None),
     )
 
 

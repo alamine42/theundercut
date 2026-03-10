@@ -467,3 +467,64 @@ export interface WeekendResponse {
   meta: WeekendMeta;
   timeline?: WeekendTimeline | null;
 }
+
+// =============================================================================
+// Circuit Characteristics Data
+// =============================================================================
+
+export interface CircuitCharacteristics {
+  effective_year: number;
+  full_throttle_pct: number | null;
+  full_throttle_score: number | null;
+  average_speed_kph: number | null;
+  average_speed_score: number | null;
+  track_length_km: number | null;
+  tire_degradation_score: number | null;
+  tire_degradation_label: string | null;
+  track_abrasion_score: number | null;
+  track_abrasion_label: string | null;
+  corners_slow: number | null;
+  corners_medium: number | null;
+  corners_fast: number | null;
+  downforce_score: number | null;
+  downforce_label: string | null;
+  overtaking_difficulty_score: number | null;
+  overtaking_difficulty_label: string | null;
+  drs_zones: number | null;
+  circuit_type: "Street" | "Permanent" | "Hybrid" | null;
+  data_completeness: "complete" | "partial" | "unknown";
+  last_updated: string | null;
+}
+
+export interface CircuitWithCharacteristics {
+  id: number;
+  name: string;
+  country: string;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  characteristics: CircuitCharacteristics | null;
+}
+
+export interface CircuitsCharacteristicsResponse {
+  circuits: CircuitWithCharacteristics[];
+  total: number;
+}
+
+export interface CircuitCharacteristicsRanking {
+  rank: number;
+  circuit_id: number;
+  circuit_name: string;
+  country: string;
+  value: number;
+}
+
+export interface CircuitsRankingResponse {
+  field: string;
+  order: "asc" | "desc";
+  rankings: CircuitCharacteristicsRanking[];
+}
+
+export interface CircuitsCompareResponse {
+  circuits: CircuitWithCharacteristics[];
+}

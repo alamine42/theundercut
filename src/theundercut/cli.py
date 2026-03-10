@@ -708,3 +708,145 @@ def ingest(
     except Exception as exc:
         typer.echo(f"❌ Ingestion failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+
+
+# =============================================================================
+# Circuit Characteristics CLI
+# =============================================================================
+
+@app.command("seed-circuits")
+def seed_circuits(
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing characteristics"),
+    data_file: Path = typer.Option(
+        Path("data/circuit_characteristics.json"),
+        "--data-file",
+        help="Path to circuit characteristics JSON file",
+    ),
+):
+    """
+    Seed circuit characteristics from JSON data file.
+
+    The data file should contain characteristics for each circuit keyed by circuit name.
+    """
+    from datetime import datetime, timezone as tz
+    from theundercut.models import Circuit, CircuitCharacteristics
+    from theundercut.adapters.redis_cache import redis_client
+
+    if not data_file.exists():
+        typer.echo(f"❌ Data file not found: {data_file}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"▶️  Loading circuit characteristics from {data_file}...")
+
+    try:
+        data = json.loads(data_file.read_text())
+    except json.JSONDecodeError as exc:
+        typer.echo(f"❌ Invalid JSON in data file: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    with SessionLocal() as db:
+        circuits = {c.name.lower(): c for c in db.query(Circuit).all()}
+        created = 0
+        updated = 0
+        skipped = 0
+
+        for circuit_key, char_data in data.items():
+            # Find matching circuit
+            circuit_name = char_data.get("circuit_name", circuit_key).lower()
+            circuit = circuits.get(circuit_name)
+
+            if not circuit:
+                # Try to match by partial name
+                for name, c in circuits.items():
+                    if circuit_key.lower() in name or name in circuit_key.lower():
+                        circuit = c
+                        break
+
+            if not circuit:
+                typer.echo(f"  ⚠️  Circuit not found: {circuit_key}")
+                skipped += 1
+                continue
+
+            effective_year = char_data.get("effective_year", 2024)
+            characteristics = char_data.get("characteristics", char_data)
+
+            # Check if exists
+            existing = db.query(CircuitCharacteristics).filter(
+                CircuitCharacteristics.circuit_id == circuit.id,
+                CircuitCharacteristics.effective_year == effective_year
+            ).first()
+
+            if existing and not force:
+                typer.echo(f"  ℹ️  {circuit.name} ({effective_year}): already exists, skipping")
+                skipped += 1
+                continue
+
+            if existing:
+                char = existing
+                updated += 1
+            else:
+                char = CircuitCharacteristics(
+                    circuit_id=circuit.id,
+                    effective_year=effective_year
+                )
+                db.add(char)
+                created += 1
+
+            # Update fields
+            char.full_throttle_pct = characteristics.get("full_throttle_pct")
+            char.full_throttle_score = characteristics.get("full_throttle_score")
+            char.average_speed_kph = characteristics.get("average_speed_kph")
+            char.average_speed_score = characteristics.get("average_speed_score")
+            char.track_length_km = characteristics.get("track_length_km")
+
+            tire_deg = characteristics.get("tire_degradation", {})
+            if isinstance(tire_deg, dict):
+                char.tire_degradation_score = tire_deg.get("score")
+                char.tire_degradation_label = tire_deg.get("label")
+            else:
+                char.tire_degradation_score = tire_deg
+
+            abrasion = characteristics.get("track_abrasion", {})
+            if isinstance(abrasion, dict):
+                char.track_abrasion_score = abrasion.get("score")
+                char.track_abrasion_label = abrasion.get("label")
+            else:
+                char.track_abrasion_score = abrasion
+
+            corners = characteristics.get("corners", {})
+            if isinstance(corners, dict):
+                char.corners_slow = corners.get("slow")
+                char.corners_medium = corners.get("medium")
+                char.corners_fast = corners.get("fast")
+
+            downforce = characteristics.get("downforce", {})
+            if isinstance(downforce, dict):
+                char.downforce_score = downforce.get("score")
+                char.downforce_label = downforce.get("label")
+            else:
+                char.downforce_score = downforce
+
+            overtaking = characteristics.get("overtaking_difficulty", characteristics.get("overtaking", {}))
+            if isinstance(overtaking, dict):
+                char.overtaking_difficulty_score = overtaking.get("score")
+                char.overtaking_difficulty_label = overtaking.get("label")
+            else:
+                char.overtaking_difficulty_score = overtaking
+
+            char.drs_zones = characteristics.get("drs_zones")
+            char.circuit_type = characteristics.get("circuit_type")
+            char.data_completeness = characteristics.get("data_completeness", "complete")
+            char.last_updated = datetime.now(tz.utc)
+
+            typer.echo(f"  ✓ {circuit.name} ({effective_year})")
+
+        db.commit()
+
+        # Clear cache
+        typer.echo("  Clearing circuit caches...")
+        for key in redis_client.scan_iter("circuit_chars:*"):
+            redis_client.delete(key)
+        for key in redis_client.scan_iter("circuits_chars:*"):
+            redis_client.delete(key)
+
+    typer.echo(f"✅ Seeding complete: {created} created, {updated} updated, {skipped} skipped")

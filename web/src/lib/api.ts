@@ -14,6 +14,10 @@ import type {
   SessionResultsResponse,
   CircuitHistoryResponse,
   WeekendResponse,
+  CircuitsCharacteristicsResponse,
+  CircuitWithCharacteristics,
+  CircuitsRankingResponse,
+  CircuitsCompareResponse,
 } from "@/types/api";
 
 const BASE_URL = API_CONFIG.baseUrl;
@@ -276,4 +280,40 @@ export async function fetchWeekendData(
   round: number
 ): Promise<WeekendResponse> {
   return apiFetch<WeekendResponse>(`/race/${season}/${round}/weekend`);
+}
+
+// =============================================================================
+// Circuit Characteristics API
+// =============================================================================
+
+export async function fetchCircuitsCharacteristics(): Promise<CircuitsCharacteristicsResponse> {
+  return apiFetch<CircuitsCharacteristicsResponse>(`/circuits/characteristics`);
+}
+
+export async function fetchCircuitCharacteristics(
+  circuitId: number,
+  year?: number
+): Promise<CircuitWithCharacteristics> {
+  return apiFetch<CircuitWithCharacteristics>(
+    `/circuits/characteristics/${circuitId}`,
+    { query: year ? { year } : undefined }
+  );
+}
+
+export async function fetchCircuitsCompare(
+  ids: number[]
+): Promise<CircuitsCompareResponse> {
+  return apiFetch<CircuitsCompareResponse>(`/circuits/characteristics/compare`, {
+    query: { ids: ids.join(",") },
+  });
+}
+
+export async function fetchCircuitsRanking(
+  field: string,
+  order: "asc" | "desc" = "desc",
+  limit?: number
+): Promise<CircuitsRankingResponse> {
+  return apiFetch<CircuitsRankingResponse>(`/circuits/characteristics/rank`, {
+    query: { by: field, order, limit },
+  });
 }

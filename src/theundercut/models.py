@@ -486,3 +486,58 @@ class LapPosition(Base):
     position        = Column(Integer, nullable=False)    # Race position at end of lap
     gap_to_leader_ms = Column(Integer)                   # Gap to P1 in milliseconds
     gap_to_ahead_ms  = Column(Integer)                   # Gap to car ahead
+
+
+# --- Circuit Characteristics tables -----------------------------------------------
+
+class CircuitCharacteristics(Base):
+    """Track/circuit characteristics for comparison and analysis.
+
+    Stores performance, tire, aerodynamic, and racing characteristics per circuit.
+    Supports layout versioning via effective_year for circuits that change layouts.
+    """
+    __tablename__ = "circuit_characteristics"
+    __table_args__ = (
+        UniqueConstraint("circuit_id", "effective_year", name="uq_circuit_characteristics"),
+        Index("ix_circuit_chars_circuit_year", "circuit_id", "effective_year"),
+        {"schema": "core"},
+    )
+
+    id = Column(Integer, primary_key=True)
+    circuit_id = Column(Integer, ForeignKey("core.circuits.id"), nullable=False)
+    effective_year = Column(Integer, nullable=False, default=2024)
+
+    # Performance characteristics
+    full_throttle_pct = Column(Float)                    # e.g., 72.5 for 72.5%
+    full_throttle_score = Column(Integer)                # 1-10 scale
+    average_speed_kph = Column(Float)                    # e.g., 238.5 km/h
+    average_speed_score = Column(Integer)                # 1-10 scale
+    track_length_km = Column(Float)                      # Track length in km
+
+    # Tire characteristics
+    tire_degradation_score = Column(Integer)             # 1-10 scale
+    tire_degradation_label = Column(String(20))          # Low/Medium/High/Very High
+    track_abrasion_score = Column(Integer)               # 1-10 scale
+    track_abrasion_label = Column(String(20))            # Low/Medium/High
+
+    # Corner profile
+    corners_slow = Column(Integer)                       # <100 kph
+    corners_medium = Column(Integer)                     # 100-180 kph
+    corners_fast = Column(Integer)                       # >180 kph
+
+    # Aerodynamic requirements
+    downforce_score = Column(Integer)                    # 1-10 scale
+    downforce_label = Column(String(20))                 # Low/Medium/High
+
+    # Racing characteristics
+    overtaking_difficulty_score = Column(Integer)        # 1-10 (10 = hardest)
+    overtaking_difficulty_label = Column(String(20))     # Easy/Medium/Hard
+    drs_zones = Column(Integer)                          # Count of DRS zones
+    circuit_type = Column(String(20))                    # Street/Permanent/Hybrid
+
+    # Metadata
+    data_completeness = Column(String(20), default="unknown")  # complete/partial/unknown
+    last_updated = Column(DateTime(timezone=True))
+
+    # Relationship
+    circuit = relationship("Circuit", backref="characteristics")

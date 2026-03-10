@@ -33,11 +33,22 @@ export default async function CircuitsPage() {
     <>
       <Hero>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div>
-            <HeroTitle>Circuits</HeroTitle>
-            <HeroSubtitle>
-              Explore circuit analytics, lap records, and historical performance
-            </HeroSubtitle>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <HeroTitle>Circuits</HeroTitle>
+              <HeroSubtitle>
+                Explore circuit analytics, lap records, and historical performance
+              </HeroSubtitle>
+            </div>
+            <Link
+              href="/circuits/characteristics"
+              className="inline-flex items-center border-2 border-ink bg-paper px-4 py-2 font-semibold transition-colors hover:bg-ink hover:text-paper"
+            >
+              Track Characteristics
+              <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
 
           <HeroStats>
