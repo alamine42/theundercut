@@ -102,7 +102,7 @@ export function CircuitRankingClient() {
           throw new Error("Failed to fetch rankings");
         }
         const data: RankingResponse = await res.json();
-        setRankings(data.rankings);
+        setRankings(data.rankings || []);
       } catch (e) {
         setError(e instanceof Error ? e.message : "An error occurred");
       } finally {

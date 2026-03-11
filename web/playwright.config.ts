@@ -22,5 +22,8 @@ export default defineConfig({
     url: process.env.TEST_BASE_URL || "http://localhost:4000",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: {
+      FASTAPI_URL: process.env.FASTAPI_URL || "http://localhost:8000",
+    },
   },
 });
