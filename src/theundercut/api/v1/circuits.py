@@ -455,6 +455,460 @@ def _fetch_all_circuit_results_parallel(circuit_ids: List[str]) -> Dict[str, Lis
 
     return results
 
+# Pydantic models for circuit characteristics
+
+class CharacteristicsUpdate(BaseModel):
+    """Request model for updating circuit characteristics."""
+    effective_year: Optional[int] = None
+    full_throttle_pct: Optional[float] = None
+    full_throttle_score: Optional[int] = Field(None, ge=1, le=10)
+    average_speed_kph: Optional[float] = None
+    average_speed_score: Optional[int] = Field(None, ge=1, le=10)
+    track_length_km: Optional[float] = None
+    tire_degradation_score: Optional[int] = Field(None, ge=1, le=10)
+    tire_degradation_label: Optional[str] = None
+    track_abrasion_score: Optional[int] = Field(None, ge=1, le=10)
+    track_abrasion_label: Optional[str] = None
+    corners_slow: Optional[int] = None
+    corners_medium: Optional[int] = None
+    corners_fast: Optional[int] = None
+    downforce_score: Optional[int] = Field(None, ge=1, le=10)
+    downforce_label: Optional[str] = None
+    overtaking_difficulty_score: Optional[int] = Field(None, ge=1, le=10)
+    overtaking_difficulty_label: Optional[str] = None
+    drs_zones: Optional[int] = None
+    circuit_type: Optional[str] = None
+    data_completeness: Optional[str] = None
+
+    @validator('tire_degradation_label', 'track_abrasion_label', 'downforce_label', 'overtaking_difficulty_label')
+    def validate_labels(cls, v):
+        if v is not None:
+            valid = ['Low', 'Medium', 'High', 'Very High', 'Medium-High', 'Medium-Low']
+            if v not in valid:
+                raise ValueError(f'Label must be one of: {valid}')
+        return v
+
+    @validator('circuit_type')
+    def validate_circuit_type(cls, v):
+        if v is not None and v not in ['Street', 'Permanent', 'Hybrid']:
+            raise ValueError('circuit_type must be Street, Permanent, or Hybrid')
+        return v
+
+    @validator('data_completeness')
+    def validate_completeness(cls, v):
+        if v is not None and v not in ['complete', 'partial', 'unknown']:
+            raise ValueError('data_completeness must be complete, partial, or unknown')
+        return v
+
+
+def _format_characteristics(char: CircuitCharacteristics) -> Dict[str, Any]:
+    """Format characteristics for API response."""
+    corners_total = None
+    if char.corners_slow is not None or char.corners_medium is not None or char.corners_fast is not None:
+        corners_total = (char.corners_slow or 0) + (char.corners_medium or 0) + (char.corners_fast or 0)
+
+    return {
+        "effective_year": char.effective_year,
+        "data_completeness": char.data_completeness,
+        "last_updated": char.last_updated.isoformat() if char.last_updated else None,
+        "full_throttle": {
+            "value": char.full_throttle_pct,
+            "score": char.full_throttle_score
+        } if char.full_throttle_pct is not None or char.full_throttle_score is not None else None,
+        "average_speed": {
+            "value": char.average_speed_kph,
+            "score": char.average_speed_score
+        } if char.average_speed_kph is not None or char.average_speed_score is not None else None,
+        "track_length_km": char.track_length_km,
+        "tire_degradation": {
+            "score": char.tire_degradation_score,
+            "label": char.tire_degradation_label
+        } if char.tire_degradation_score is not None else None,
+        "track_abrasion": {
+            "score": char.track_abrasion_score,
+            "label": char.track_abrasion_label
+        } if char.track_abrasion_score is not None else None,
+        "corners": {
+            "slow": char.corners_slow,
+            "medium": char.corners_medium,
+            "fast": char.corners_fast,
+            "total": corners_total
+        },
+        "downforce": {
+            "score": char.downforce_score,
+            "label": char.downforce_label
+        } if char.downforce_score is not None else None,
+        "overtaking": {
+            "score": char.overtaking_difficulty_score,
+            "label": char.overtaking_difficulty_label
+        } if char.overtaking_difficulty_score is not None else None,
+        "drs_zones": char.drs_zones,
+        "circuit_type": char.circuit_type
+    }
+
+
+def _format_circuit_with_characteristics(circuit: Circuit, char: Optional[CircuitCharacteristics]) -> Dict[str, Any]:
+    """Format circuit with characteristics for API response."""
+    return {
+        "id": circuit.id,
+        "name": circuit.name,
+        "country": circuit.country,
+        "latitude": circuit.latitude,
+        "longitude": circuit.longitude,
+        "characteristics": _format_characteristics(char) if char else None
+    }
+
+
+def _bust_circuit_cache(circuit_id: int):
+    """Invalidate all caches related to a circuit."""
+    try:
+        # Delete specific circuit caches
+        for key in redis_client.scan_iter(f"circuit_chars:{circuit_id}:*"):
+            redis_client.delete(key)
+        # Delete list cache
+        redis_client.delete("circuits_chars:list")
+        # Delete comparison caches that might include this circuit
+        for key in redis_client.scan_iter("circuits_chars:compare:*"):
+            redis_client.delete(key)
+        # Delete all ranking caches
+        for key in redis_client.scan_iter("circuits_chars:rank:*"):
+            redis_client.delete(key)
+        logger.info(f"Busted circuit cache for circuit_id={circuit_id}")
+    except Exception as e:
+        logger.warning(f"Failed to bust circuit cache: {e}")
+
+
+def _verify_admin_key(x_admin_key: Optional[str] = Header(None)) -> str:
+    """Verify admin API key from header."""
+    settings = get_settings()
+    if not settings.admin_api_key:
+        raise HTTPException(status_code=500, detail="Admin API key not configured")
+    if not x_admin_key:
+        raise HTTPException(status_code=401, detail="X-Admin-Key header required")
+    if x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=401, detail="Invalid admin API key")
+    return x_admin_key
+
+
+@router.get("/characteristics")
+def list_circuits_with_characteristics(
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    List all circuits with their characteristics.
+
+    Returns all circuits from the database with their current characteristics.
+    """
+    cache_key = "circuits_chars:list"
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error for circuits characteristics list: {e}")
+
+    # Query all circuits with their latest characteristics
+    circuits = db.query(Circuit).all()
+
+    result = []
+    for circuit in circuits:
+        # Get the most recent characteristics for this circuit
+        char = db.query(CircuitCharacteristics).filter(
+            CircuitCharacteristics.circuit_id == circuit.id
+        ).order_by(desc(CircuitCharacteristics.effective_year)).first()
+
+        result.append(_format_circuit_with_characteristics(circuit, char))
+
+    payload = {
+        "circuits": result,
+        "total": len(result)
+    }
+
+    try:
+        redis_client.setex(cache_key, 3600, json.dumps(payload))  # 1 hour TTL
+    except Exception as e:
+        logger.warning(f"Redis write error: {e}")
+
+    return payload
+
+
+@router.get("/characteristics/compare")
+def compare_circuits(
+    ids: str = Query(..., description="Comma-separated circuit IDs (2-5)"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Compare characteristics of 2-5 circuits side-by-side.
+    """
+    circuit_ids = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+
+    if len(circuit_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 circuit IDs required")
+    if len(circuit_ids) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 circuits for comparison")
+
+    # Sort IDs for consistent cache key
+    sorted_ids = sorted(circuit_ids)
+    cache_key = f"circuits_chars:compare:{','.join(map(str, sorted_ids))}"
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error: {e}")
+
+    circuits_data = []
+    for cid in circuit_ids:
+        circuit = db.query(Circuit).filter(Circuit.id == cid).first()
+        if not circuit:
+            raise HTTPException(status_code=404, detail=f"Circuit {cid} not found")
+
+        char = db.query(CircuitCharacteristics).filter(
+            CircuitCharacteristics.circuit_id == cid
+        ).order_by(desc(CircuitCharacteristics.effective_year)).first()
+
+        circuits_data.append({
+            "circuit": circuit,
+            "characteristics": char
+        })
+
+    # Build comparison highlights
+    comparison = {}
+
+    # Find highest full throttle
+    full_throttle_scores = [(c["circuit"].id, c["characteristics"].full_throttle_score)
+                            for c in circuits_data
+                            if c["characteristics"] and c["characteristics"].full_throttle_score]
+    if full_throttle_scores:
+        best = max(full_throttle_scores, key=lambda x: x[1])
+        comparison["highest_full_throttle"] = {"circuit_id": best[0], "score": best[1]}
+
+    # Find easiest overtaking
+    overtaking_scores = [(c["circuit"].id, c["characteristics"].overtaking_difficulty_score)
+                         for c in circuits_data
+                         if c["characteristics"] and c["characteristics"].overtaking_difficulty_score]
+    if overtaking_scores:
+        easiest = min(overtaking_scores, key=lambda x: x[1])
+        comparison["easiest_overtaking"] = {"circuit_id": easiest[0], "score": easiest[1]}
+
+    # Find most corners
+    corner_totals = []
+    for c in circuits_data:
+        if c["characteristics"]:
+            char = c["characteristics"]
+            if char.corners_slow is not None or char.corners_medium is not None or char.corners_fast is not None:
+                total = (char.corners_slow or 0) + (char.corners_medium or 0) + (char.corners_fast or 0)
+                corner_totals.append((c["circuit"].id, total))
+    if corner_totals:
+        most = max(corner_totals, key=lambda x: x[1])
+        comparison["most_corners"] = {"circuit_id": most[0], "total": most[1]}
+
+    # Find highest downforce
+    downforce_scores = [(c["circuit"].id, c["characteristics"].downforce_score)
+                        for c in circuits_data
+                        if c["characteristics"] and c["characteristics"].downforce_score]
+    if downforce_scores:
+        highest = max(downforce_scores, key=lambda x: x[1])
+        comparison["highest_downforce"] = {"circuit_id": highest[0], "score": highest[1]}
+
+    payload = {
+        "circuits": [_format_circuit_with_characteristics(c["circuit"], c["characteristics"])
+                    for c in circuits_data],
+        "comparison": comparison
+    }
+
+    try:
+        redis_client.setex(cache_key, 3600, json.dumps(payload))  # 1 hour TTL
+    except Exception as e:
+        logger.warning(f"Redis write error: {e}")
+
+    return payload
+
+
+
+
+@router.get("/characteristics/rank")
+def rank_circuits(
+    by: str = Query(..., description="Field to rank by (e.g., full_throttle_score, downforce_score)"),
+    order: str = Query("desc", description="Sort order: asc or desc"),
+    limit: int = Query(24, ge=1, le=50, description="Number of results to return"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Rank circuits by a specific characteristic.
+
+    Circuits with null values for the ranked field are excluded.
+    """
+    valid_fields = [
+        "full_throttle_score", "average_speed_score", "tire_degradation_score",
+        "track_abrasion_score", "downforce_score", "overtaking_difficulty_score",
+        "drs_zones", "track_length_km"
+    ]
+    if by not in valid_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid ranking field. Must be one of: {valid_fields}"
+        )
+
+    if order not in ["asc", "desc"]:
+        raise HTTPException(status_code=400, detail="Order must be 'asc' or 'desc'")
+
+    cache_key = f"circuits_chars:rank:{by}:{order}:{limit}"
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error: {e}")
+
+    # Get the column to rank by
+    rank_column = getattr(CircuitCharacteristics, by)
+
+    # Query characteristics with non-null values for the ranked field
+    query = db.query(CircuitCharacteristics, Circuit).join(
+        Circuit, CircuitCharacteristics.circuit_id == Circuit.id
+    ).filter(rank_column.isnot(None))
+
+    # Apply ordering
+    if order == "desc":
+        query = query.order_by(desc(rank_column))
+    else:
+        query = query.order_by(rank_column)
+
+    results = query.limit(limit).all()
+
+    ranking = []
+    for i, (char, circuit) in enumerate(results, 1):
+        value = getattr(char, by)
+        ranking.append({
+            "rank": i,
+            "circuit_id": circuit.id,
+            "name": circuit.name,
+            "country": circuit.country,
+            "value": value,
+            "effective_year": char.effective_year
+        })
+
+    payload = {
+        "ranking": ranking,
+        "ranked_by": by,
+        "order": order,
+        "total": len(ranking)
+    }
+
+    try:
+        redis_client.setex(cache_key, 3600, json.dumps(payload))  # 1 hour TTL
+    except Exception as e:
+        logger.warning(f"Redis write error: {e}")
+
+    return payload
+
+
+
+
+@router.get("/characteristics/{circuit_id}")
+def get_circuit_characteristics(
+    circuit_id: int,
+    year: Optional[int] = Query(None, description="Get characteristics for specific layout year"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Get characteristics for a specific circuit.
+
+    Optionally specify a year to get historical layout characteristics.
+    """
+    cache_key = f"circuit_chars:{circuit_id}:{year or 'latest'}"
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error: {e}")
+
+    circuit = db.query(Circuit).filter(Circuit.id == circuit_id).first()
+    if not circuit:
+        raise HTTPException(status_code=404, detail="Circuit not found")
+
+    # Get characteristics for specified year or most recent
+    query = db.query(CircuitCharacteristics).filter(
+        CircuitCharacteristics.circuit_id == circuit_id
+    )
+    if year:
+        query = query.filter(CircuitCharacteristics.effective_year == year)
+    else:
+        query = query.order_by(desc(CircuitCharacteristics.effective_year))
+
+    char = query.first()
+
+    payload = _format_circuit_with_characteristics(circuit, char)
+
+    try:
+        redis_client.setex(cache_key, 86400, json.dumps(payload))  # 24 hour TTL
+    except Exception as e:
+        logger.warning(f"Redis write error: {e}")
+
+    return payload
+
+
+@router.put("/characteristics/{circuit_id}")
+def update_circuit_characteristics(
+    circuit_id: int,
+    update: CharacteristicsUpdate,
+    db: Session = Depends(get_db),
+    admin_key: str = Depends(_verify_admin_key),
+) -> Dict[str, Any]:
+    """
+    Update characteristics for a circuit (admin only).
+
+    Requires X-Admin-Key header with valid admin API key.
+    """
+    circuit = db.query(Circuit).filter(Circuit.id == circuit_id).first()
+    if not circuit:
+        raise HTTPException(status_code=404, detail="Circuit not found")
+
+    effective_year = update.effective_year or datetime.now(timezone.utc).year
+
+    # Find existing characteristics for this circuit and year
+    char = db.query(CircuitCharacteristics).filter(
+        CircuitCharacteristics.circuit_id == circuit_id,
+        CircuitCharacteristics.effective_year == effective_year
+    ).first()
+
+    if not char:
+        # Create new record
+        char = CircuitCharacteristics(
+            circuit_id=circuit_id,
+            effective_year=effective_year
+        )
+        db.add(char)
+
+    # Update fields from request
+    update_data = update.dict(exclude_unset=True, exclude_none=True)
+    for field, value in update_data.items():
+        if field != 'effective_year':  # Don't update effective_year as it's part of the key
+            setattr(char, field, value)
+
+    char.last_updated = datetime.now(timezone.utc)
+
+    try:
+        db.commit()
+        db.refresh(char)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update circuit characteristics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update characteristics")
+
+    # Log the update for audit
+    logger.info(f"Circuit {circuit_id} characteristics updated by admin for year {effective_year}")
+
+    # Bust cache
+    _bust_circuit_cache(circuit_id)
+
+    return _format_circuit_with_characteristics(circuit, char)
+
+
+
+
 
 @router.get("/{season}")
 def get_circuits(season: int) -> Dict[str, Any]:
@@ -897,450 +1351,3 @@ def get_circuit_history(
 
 
 # --- Circuit Characteristics Endpoints -------------------------------------------
-
-# Pydantic models for circuit characteristics
-
-class CharacteristicsUpdate(BaseModel):
-    """Request model for updating circuit characteristics."""
-    effective_year: Optional[int] = None
-    full_throttle_pct: Optional[float] = None
-    full_throttle_score: Optional[int] = Field(None, ge=1, le=10)
-    average_speed_kph: Optional[float] = None
-    average_speed_score: Optional[int] = Field(None, ge=1, le=10)
-    track_length_km: Optional[float] = None
-    tire_degradation_score: Optional[int] = Field(None, ge=1, le=10)
-    tire_degradation_label: Optional[str] = None
-    track_abrasion_score: Optional[int] = Field(None, ge=1, le=10)
-    track_abrasion_label: Optional[str] = None
-    corners_slow: Optional[int] = None
-    corners_medium: Optional[int] = None
-    corners_fast: Optional[int] = None
-    downforce_score: Optional[int] = Field(None, ge=1, le=10)
-    downforce_label: Optional[str] = None
-    overtaking_difficulty_score: Optional[int] = Field(None, ge=1, le=10)
-    overtaking_difficulty_label: Optional[str] = None
-    drs_zones: Optional[int] = None
-    circuit_type: Optional[str] = None
-    data_completeness: Optional[str] = None
-
-    @validator('tire_degradation_label', 'track_abrasion_label', 'downforce_label', 'overtaking_difficulty_label')
-    def validate_labels(cls, v):
-        if v is not None:
-            valid = ['Low', 'Medium', 'High', 'Very High', 'Medium-High', 'Medium-Low']
-            if v not in valid:
-                raise ValueError(f'Label must be one of: {valid}')
-        return v
-
-    @validator('circuit_type')
-    def validate_circuit_type(cls, v):
-        if v is not None and v not in ['Street', 'Permanent', 'Hybrid']:
-            raise ValueError('circuit_type must be Street, Permanent, or Hybrid')
-        return v
-
-    @validator('data_completeness')
-    def validate_completeness(cls, v):
-        if v is not None and v not in ['complete', 'partial', 'unknown']:
-            raise ValueError('data_completeness must be complete, partial, or unknown')
-        return v
-
-
-def _format_characteristics(char: CircuitCharacteristics) -> Dict[str, Any]:
-    """Format characteristics for API response."""
-    corners_total = None
-    if char.corners_slow is not None or char.corners_medium is not None or char.corners_fast is not None:
-        corners_total = (char.corners_slow or 0) + (char.corners_medium or 0) + (char.corners_fast or 0)
-
-    return {
-        "effective_year": char.effective_year,
-        "data_completeness": char.data_completeness,
-        "last_updated": char.last_updated.isoformat() if char.last_updated else None,
-        "full_throttle": {
-            "value": char.full_throttle_pct,
-            "score": char.full_throttle_score
-        } if char.full_throttle_pct is not None or char.full_throttle_score is not None else None,
-        "average_speed": {
-            "value": char.average_speed_kph,
-            "score": char.average_speed_score
-        } if char.average_speed_kph is not None or char.average_speed_score is not None else None,
-        "track_length_km": char.track_length_km,
-        "tire_degradation": {
-            "score": char.tire_degradation_score,
-            "label": char.tire_degradation_label
-        } if char.tire_degradation_score is not None else None,
-        "track_abrasion": {
-            "score": char.track_abrasion_score,
-            "label": char.track_abrasion_label
-        } if char.track_abrasion_score is not None else None,
-        "corners": {
-            "slow": char.corners_slow,
-            "medium": char.corners_medium,
-            "fast": char.corners_fast,
-            "total": corners_total
-        },
-        "downforce": {
-            "score": char.downforce_score,
-            "label": char.downforce_label
-        } if char.downforce_score is not None else None,
-        "overtaking": {
-            "score": char.overtaking_difficulty_score,
-            "label": char.overtaking_difficulty_label
-        } if char.overtaking_difficulty_score is not None else None,
-        "drs_zones": char.drs_zones,
-        "circuit_type": char.circuit_type
-    }
-
-
-def _format_circuit_with_characteristics(circuit: Circuit, char: Optional[CircuitCharacteristics]) -> Dict[str, Any]:
-    """Format circuit with characteristics for API response."""
-    return {
-        "id": circuit.id,
-        "name": circuit.name,
-        "country": circuit.country,
-        "latitude": circuit.latitude,
-        "longitude": circuit.longitude,
-        "characteristics": _format_characteristics(char) if char else None
-    }
-
-
-def _bust_circuit_cache(circuit_id: int):
-    """Invalidate all caches related to a circuit."""
-    try:
-        # Delete specific circuit caches
-        for key in redis_client.scan_iter(f"circuit_chars:{circuit_id}:*"):
-            redis_client.delete(key)
-        # Delete list cache
-        redis_client.delete("circuits_chars:list")
-        # Delete comparison caches that might include this circuit
-        for key in redis_client.scan_iter("circuits_chars:compare:*"):
-            redis_client.delete(key)
-        # Delete all ranking caches
-        for key in redis_client.scan_iter("circuits_chars:rank:*"):
-            redis_client.delete(key)
-        logger.info(f"Busted circuit cache for circuit_id={circuit_id}")
-    except Exception as e:
-        logger.warning(f"Failed to bust circuit cache: {e}")
-
-
-def _verify_admin_key(x_admin_key: Optional[str] = Header(None)) -> str:
-    """Verify admin API key from header."""
-    settings = get_settings()
-    if not settings.admin_api_key:
-        raise HTTPException(status_code=500, detail="Admin API key not configured")
-    if not x_admin_key:
-        raise HTTPException(status_code=401, detail="X-Admin-Key header required")
-    if x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=401, detail="Invalid admin API key")
-    return x_admin_key
-
-
-@router.get("/characteristics")
-def list_circuits_with_characteristics(
-    db: Session = Depends(get_db),
-) -> Dict[str, Any]:
-    """
-    List all circuits with their characteristics.
-
-    Returns all circuits from the database with their current characteristics.
-    """
-    cache_key = "circuits_chars:list"
-    try:
-        cached = redis_client.get(cache_key)
-        if cached:
-            return json.loads(cached)
-    except Exception as e:
-        logger.warning(f"Redis error for circuits characteristics list: {e}")
-
-    # Query all circuits with their latest characteristics
-    circuits = db.query(Circuit).all()
-
-    result = []
-    for circuit in circuits:
-        # Get the most recent characteristics for this circuit
-        char = db.query(CircuitCharacteristics).filter(
-            CircuitCharacteristics.circuit_id == circuit.id
-        ).order_by(desc(CircuitCharacteristics.effective_year)).first()
-
-        result.append(_format_circuit_with_characteristics(circuit, char))
-
-    payload = {
-        "circuits": result,
-        "total": len(result)
-    }
-
-    try:
-        redis_client.setex(cache_key, 3600, json.dumps(payload))  # 1 hour TTL
-    except Exception as e:
-        logger.warning(f"Redis write error: {e}")
-
-    return payload
-
-
-@router.get("/characteristics/{circuit_id}")
-def get_circuit_characteristics(
-    circuit_id: int,
-    year: Optional[int] = Query(None, description="Get characteristics for specific layout year"),
-    db: Session = Depends(get_db),
-) -> Dict[str, Any]:
-    """
-    Get characteristics for a specific circuit.
-
-    Optionally specify a year to get historical layout characteristics.
-    """
-    cache_key = f"circuit_chars:{circuit_id}:{year or 'latest'}"
-    try:
-        cached = redis_client.get(cache_key)
-        if cached:
-            return json.loads(cached)
-    except Exception as e:
-        logger.warning(f"Redis error: {e}")
-
-    circuit = db.query(Circuit).filter(Circuit.id == circuit_id).first()
-    if not circuit:
-        raise HTTPException(status_code=404, detail="Circuit not found")
-
-    # Get characteristics for specified year or most recent
-    query = db.query(CircuitCharacteristics).filter(
-        CircuitCharacteristics.circuit_id == circuit_id
-    )
-    if year:
-        query = query.filter(CircuitCharacteristics.effective_year == year)
-    else:
-        query = query.order_by(desc(CircuitCharacteristics.effective_year))
-
-    char = query.first()
-
-    payload = _format_circuit_with_characteristics(circuit, char)
-
-    try:
-        redis_client.setex(cache_key, 86400, json.dumps(payload))  # 24 hour TTL
-    except Exception as e:
-        logger.warning(f"Redis write error: {e}")
-
-    return payload
-
-
-@router.get("/characteristics/compare")
-def compare_circuits(
-    ids: str = Query(..., description="Comma-separated circuit IDs (2-5)"),
-    db: Session = Depends(get_db),
-) -> Dict[str, Any]:
-    """
-    Compare characteristics of 2-5 circuits side-by-side.
-    """
-    circuit_ids = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
-
-    if len(circuit_ids) < 2:
-        raise HTTPException(status_code=400, detail="At least 2 circuit IDs required")
-    if len(circuit_ids) > 5:
-        raise HTTPException(status_code=400, detail="Maximum 5 circuits for comparison")
-
-    # Sort IDs for consistent cache key
-    sorted_ids = sorted(circuit_ids)
-    cache_key = f"circuits_chars:compare:{','.join(map(str, sorted_ids))}"
-    try:
-        cached = redis_client.get(cache_key)
-        if cached:
-            return json.loads(cached)
-    except Exception as e:
-        logger.warning(f"Redis error: {e}")
-
-    circuits_data = []
-    for cid in circuit_ids:
-        circuit = db.query(Circuit).filter(Circuit.id == cid).first()
-        if not circuit:
-            raise HTTPException(status_code=404, detail=f"Circuit {cid} not found")
-
-        char = db.query(CircuitCharacteristics).filter(
-            CircuitCharacteristics.circuit_id == cid
-        ).order_by(desc(CircuitCharacteristics.effective_year)).first()
-
-        circuits_data.append({
-            "circuit": circuit,
-            "characteristics": char
-        })
-
-    # Build comparison highlights
-    comparison = {}
-
-    # Find highest full throttle
-    full_throttle_scores = [(c["circuit"].id, c["characteristics"].full_throttle_score)
-                            for c in circuits_data
-                            if c["characteristics"] and c["characteristics"].full_throttle_score]
-    if full_throttle_scores:
-        best = max(full_throttle_scores, key=lambda x: x[1])
-        comparison["highest_full_throttle"] = {"circuit_id": best[0], "score": best[1]}
-
-    # Find easiest overtaking
-    overtaking_scores = [(c["circuit"].id, c["characteristics"].overtaking_difficulty_score)
-                         for c in circuits_data
-                         if c["characteristics"] and c["characteristics"].overtaking_difficulty_score]
-    if overtaking_scores:
-        easiest = min(overtaking_scores, key=lambda x: x[1])
-        comparison["easiest_overtaking"] = {"circuit_id": easiest[0], "score": easiest[1]}
-
-    # Find most corners
-    corner_totals = []
-    for c in circuits_data:
-        if c["characteristics"]:
-            char = c["characteristics"]
-            if char.corners_slow is not None or char.corners_medium is not None or char.corners_fast is not None:
-                total = (char.corners_slow or 0) + (char.corners_medium or 0) + (char.corners_fast or 0)
-                corner_totals.append((c["circuit"].id, total))
-    if corner_totals:
-        most = max(corner_totals, key=lambda x: x[1])
-        comparison["most_corners"] = {"circuit_id": most[0], "total": most[1]}
-
-    # Find highest downforce
-    downforce_scores = [(c["circuit"].id, c["characteristics"].downforce_score)
-                        for c in circuits_data
-                        if c["characteristics"] and c["characteristics"].downforce_score]
-    if downforce_scores:
-        highest = max(downforce_scores, key=lambda x: x[1])
-        comparison["highest_downforce"] = {"circuit_id": highest[0], "score": highest[1]}
-
-    payload = {
-        "circuits": [_format_circuit_with_characteristics(c["circuit"], c["characteristics"])
-                    for c in circuits_data],
-        "comparison": comparison
-    }
-
-    try:
-        redis_client.setex(cache_key, 3600, json.dumps(payload))  # 1 hour TTL
-    except Exception as e:
-        logger.warning(f"Redis write error: {e}")
-
-    return payload
-
-
-@router.get("/characteristics/rank")
-def rank_circuits(
-    by: str = Query(..., description="Field to rank by (e.g., full_throttle_score, downforce_score)"),
-    order: str = Query("desc", description="Sort order: asc or desc"),
-    limit: int = Query(24, ge=1, le=50, description="Number of results to return"),
-    db: Session = Depends(get_db),
-) -> Dict[str, Any]:
-    """
-    Rank circuits by a specific characteristic.
-
-    Circuits with null values for the ranked field are excluded.
-    """
-    valid_fields = [
-        "full_throttle_score", "average_speed_score", "tire_degradation_score",
-        "track_abrasion_score", "downforce_score", "overtaking_difficulty_score",
-        "drs_zones", "track_length_km"
-    ]
-    if by not in valid_fields:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid ranking field. Must be one of: {valid_fields}"
-        )
-
-    if order not in ["asc", "desc"]:
-        raise HTTPException(status_code=400, detail="Order must be 'asc' or 'desc'")
-
-    cache_key = f"circuits_chars:rank:{by}:{order}:{limit}"
-    try:
-        cached = redis_client.get(cache_key)
-        if cached:
-            return json.loads(cached)
-    except Exception as e:
-        logger.warning(f"Redis error: {e}")
-
-    # Get the column to rank by
-    rank_column = getattr(CircuitCharacteristics, by)
-
-    # Query characteristics with non-null values for the ranked field
-    query = db.query(CircuitCharacteristics, Circuit).join(
-        Circuit, CircuitCharacteristics.circuit_id == Circuit.id
-    ).filter(rank_column.isnot(None))
-
-    # Apply ordering
-    if order == "desc":
-        query = query.order_by(desc(rank_column))
-    else:
-        query = query.order_by(rank_column)
-
-    results = query.limit(limit).all()
-
-    ranking = []
-    for i, (char, circuit) in enumerate(results, 1):
-        value = getattr(char, by)
-        ranking.append({
-            "rank": i,
-            "circuit_id": circuit.id,
-            "name": circuit.name,
-            "country": circuit.country,
-            "value": value,
-            "effective_year": char.effective_year
-        })
-
-    payload = {
-        "ranking": ranking,
-        "ranked_by": by,
-        "order": order,
-        "total": len(ranking)
-    }
-
-    try:
-        redis_client.setex(cache_key, 3600, json.dumps(payload))  # 1 hour TTL
-    except Exception as e:
-        logger.warning(f"Redis write error: {e}")
-
-    return payload
-
-
-@router.put("/characteristics/{circuit_id}")
-def update_circuit_characteristics(
-    circuit_id: int,
-    update: CharacteristicsUpdate,
-    db: Session = Depends(get_db),
-    admin_key: str = Depends(_verify_admin_key),
-) -> Dict[str, Any]:
-    """
-    Update characteristics for a circuit (admin only).
-
-    Requires X-Admin-Key header with valid admin API key.
-    """
-    circuit = db.query(Circuit).filter(Circuit.id == circuit_id).first()
-    if not circuit:
-        raise HTTPException(status_code=404, detail="Circuit not found")
-
-    effective_year = update.effective_year or datetime.now(timezone.utc).year
-
-    # Find existing characteristics for this circuit and year
-    char = db.query(CircuitCharacteristics).filter(
-        CircuitCharacteristics.circuit_id == circuit_id,
-        CircuitCharacteristics.effective_year == effective_year
-    ).first()
-
-    if not char:
-        # Create new record
-        char = CircuitCharacteristics(
-            circuit_id=circuit_id,
-            effective_year=effective_year
-        )
-        db.add(char)
-
-    # Update fields from request
-    update_data = update.dict(exclude_unset=True, exclude_none=True)
-    for field, value in update_data.items():
-        if field != 'effective_year':  # Don't update effective_year as it's part of the key
-            setattr(char, field, value)
-
-    char.last_updated = datetime.now(timezone.utc)
-
-    try:
-        db.commit()
-        db.refresh(char)
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update circuit characteristics: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update characteristics")
-
-    # Log the update for audit
-    logger.info(f"Circuit {circuit_id} characteristics updated by admin for year {effective_year}")
-
-    # Bust cache
-    _bust_circuit_cache(circuit_id)
-
-    return _format_circuit_with_characteristics(circuit, char)
