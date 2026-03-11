@@ -2,6 +2,11 @@
 # This file configures default behavior for all bd commands in this repository
 # All settings can also be set via environment variables (BD_* prefix)
 # or overridden with command-line flags
+#
+# ⚠️  SECURITY WARNING: Do NOT store actual API keys, passwords, or credentials
+# in this file. This file is tracked in version control. Use 'bd config set'
+# to store secrets in the local database (which is gitignored), or use
+# environment variables for sensitive values.
 
 # Issue prefix for this repository (used by bd init)
 # If not set, bd init will auto-detect from directory name
