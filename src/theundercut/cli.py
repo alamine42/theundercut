@@ -763,9 +763,17 @@ def seed_circuits(
                         break
 
             if not circuit:
-                typer.echo(f"  ⚠️  Circuit not found: {circuit_key}")
-                skipped += 1
-                continue
+                # Create the circuit if it doesn't exist
+                circuit_full_name = char_data.get("circuit_name", circuit_key)
+                country = char_data.get("country")
+                typer.echo(f"  ➕ Creating circuit: {circuit_full_name}")
+                circuit = Circuit(
+                    name=circuit_full_name,
+                    country=country,
+                )
+                db.add(circuit)
+                db.flush()  # Get the ID
+                circuits[circuit_full_name.lower()] = circuit
 
             effective_year = char_data.get("effective_year", 2024)
             characteristics = char_data.get("characteristics", char_data)
