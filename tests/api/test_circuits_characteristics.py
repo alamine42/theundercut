@@ -8,22 +8,30 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 from theundercut.api.main import app
+from theundercut.adapters.db import get_db
 from theundercut.models import Circuit, CircuitCharacteristics
-
-
-@pytest.fixture
-def client():
-    """Create test client."""
-    return TestClient(app)
 
 
 @pytest.fixture
 def mock_db_session():
     """Create a mock database session."""
-    with patch("theundercut.api.v1.circuits.get_db") as mock:
-        session = MagicMock()
-        mock.return_value = session
-        yield session
+    session = MagicMock()
+    return session
+
+
+@pytest.fixture
+def client(mock_db_session):
+    """Create test client with mocked database."""
+    def override_get_db():
+        try:
+            yield mock_db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
