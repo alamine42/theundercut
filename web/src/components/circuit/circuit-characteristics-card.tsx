@@ -52,13 +52,13 @@ export function CircuitCharacteristicsCard({
           <div className="space-y-1">
             <StatRow
               label="Full Throttle"
-              subLabel={chars.full_throttle_pct ? `${chars.full_throttle_pct}%` : undefined}
-              value={<ScoreIndicator score={chars.full_throttle_score} size="sm" />}
+              subLabel={chars.full_throttle?.value ? `${chars.full_throttle.value}%` : undefined}
+              value={<ScoreIndicator score={chars.full_throttle?.score ?? null} size="sm" />}
             />
             <StatRow
               label="Average Speed"
-              subLabel={chars.average_speed_kph ? `${chars.average_speed_kph} km/h` : undefined}
-              value={<ScoreIndicator score={chars.average_speed_score} size="sm" />}
+              subLabel={chars.average_speed?.value ? `${chars.average_speed.value} km/h` : undefined}
+              value={<ScoreIndicator score={chars.average_speed?.score ?? null} size="sm" />}
             />
             <StatRow
               label="Track Length"
@@ -83,8 +83,8 @@ export function CircuitCharacteristicsCard({
               label="Tire Degradation"
               value={
                 <ScoreIndicator
-                  score={chars.tire_degradation_score}
-                  label={chars.tire_degradation_label}
+                  score={chars.tire_degradation?.score ?? null}
+                  label={chars.tire_degradation?.label ?? null}
                   showLabel
                   size="sm"
                 />
@@ -94,8 +94,8 @@ export function CircuitCharacteristicsCard({
               label="Track Abrasion"
               value={
                 <ScoreIndicator
-                  score={chars.track_abrasion_score}
-                  label={chars.track_abrasion_label}
+                  score={chars.track_abrasion?.score ?? null}
+                  label={chars.track_abrasion?.label ?? null}
                   showLabel
                   size="sm"
                 />
@@ -126,8 +126,8 @@ export function CircuitCharacteristicsCard({
               label="Slow Corners"
               subLabel="<100 km/h"
               value={
-                chars.corners_slow !== null ? (
-                  <span className="font-mono font-medium text-amber-600">{chars.corners_slow}</span>
+                chars.corners?.slow !== null && chars.corners?.slow !== undefined ? (
+                  <span className="font-mono font-medium text-amber-600">{chars.corners.slow}</span>
                 ) : (
                   <span className="text-muted">--</span>
                 )
@@ -137,8 +137,8 @@ export function CircuitCharacteristicsCard({
               label="Medium Corners"
               subLabel="100-170 km/h"
               value={
-                chars.corners_medium !== null ? (
-                  <span className="font-mono font-medium text-orange-600">{chars.corners_medium}</span>
+                chars.corners?.medium !== null && chars.corners?.medium !== undefined ? (
+                  <span className="font-mono font-medium text-orange-600">{chars.corners.medium}</span>
                 ) : (
                   <span className="text-muted">--</span>
                 )
@@ -148,8 +148,8 @@ export function CircuitCharacteristicsCard({
               label="Fast Corners"
               subLabel=">170 km/h"
               value={
-                chars.corners_fast !== null ? (
-                  <span className="font-mono font-medium text-red-600">{chars.corners_fast}</span>
+                chars.corners?.fast !== null && chars.corners?.fast !== undefined ? (
+                  <span className="font-mono font-medium text-red-600">{chars.corners.fast}</span>
                 ) : (
                   <span className="text-muted">--</span>
                 )
@@ -158,12 +158,8 @@ export function CircuitCharacteristicsCard({
             <StatRow
               label="Total Corners"
               value={
-                chars.corners_slow !== null &&
-                chars.corners_medium !== null &&
-                chars.corners_fast !== null ? (
-                  <span className="font-mono font-medium">
-                    {chars.corners_slow + chars.corners_medium + chars.corners_fast}
-                  </span>
+                chars.corners?.total !== null && chars.corners?.total !== undefined ? (
+                  <span className="font-mono font-medium">{chars.corners.total}</span>
                 ) : (
                   <span className="text-muted">--</span>
                 )
@@ -182,8 +178,8 @@ export function CircuitCharacteristicsCard({
               label="Downforce Level"
               value={
                 <ScoreIndicator
-                  score={chars.downforce_score}
-                  label={chars.downforce_label}
+                  score={chars.downforce?.score ?? null}
+                  label={chars.downforce?.label ?? null}
                   showLabel
                   size="sm"
                 />
@@ -193,8 +189,8 @@ export function CircuitCharacteristicsCard({
               label="Overtaking Difficulty"
               value={
                 <ScoreIndicator
-                  score={chars.overtaking_difficulty_score}
-                  label={chars.overtaking_difficulty_label}
+                  score={chars.overtaking?.score ?? null}
+                  label={chars.overtaking?.label ?? null}
                   showLabel
                   size="sm"
                 />
@@ -259,22 +255,22 @@ export function CircuitCharacteristicsSummary({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {chars.full_throttle_score && (
+      {chars.full_throttle?.score && (
         <div className="flex items-center gap-1 text-xs">
           <span className="text-muted">Throttle:</span>
-          <ScoreBadge score={chars.full_throttle_score} />
+          <ScoreBadge score={chars.full_throttle.score} />
         </div>
       )}
-      {chars.tire_degradation_score && (
+      {chars.tire_degradation?.score && (
         <div className="flex items-center gap-1 text-xs">
           <span className="text-muted">Tire:</span>
-          <ScoreBadge score={chars.tire_degradation_score} />
+          <ScoreBadge score={chars.tire_degradation.score} />
         </div>
       )}
-      {chars.overtaking_difficulty_score && (
+      {chars.overtaking?.score && (
         <div className="flex items-center gap-1 text-xs">
           <span className="text-muted">Overtake:</span>
-          <ScoreBadge score={chars.overtaking_difficulty_score} />
+          <ScoreBadge score={chars.overtaking.score} />
         </div>
       )}
       {chars.circuit_type && (

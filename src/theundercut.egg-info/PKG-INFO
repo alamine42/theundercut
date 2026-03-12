@@ -18,3 +18,4 @@ Requires-Dist: pydantic>=2.7
 Requires-Dist: typer[all]>=0.12
 Provides-Extra: dev
 Requires-Dist: pytest>=8.1; extra == "dev"
+Requires-Dist: pyyaml>=6.0; extra == "dev"

@@ -472,28 +472,37 @@ export interface WeekendResponse {
 // Circuit Characteristics Data
 // =============================================================================
 
+export interface ScoreWithValue {
+  value: number | null;
+  score: number | null;
+}
+
+export interface ScoreWithLabel {
+  score: number | null;
+  label: string | null;
+}
+
+export interface CornersData {
+  slow: number | null;
+  medium: number | null;
+  fast: number | null;
+  total: number | null;
+}
+
 export interface CircuitCharacteristics {
   effective_year: number;
-  full_throttle_pct: number | null;
-  full_throttle_score: number | null;
-  average_speed_kph: number | null;
-  average_speed_score: number | null;
-  track_length_km: number | null;
-  tire_degradation_score: number | null;
-  tire_degradation_label: string | null;
-  track_abrasion_score: number | null;
-  track_abrasion_label: string | null;
-  corners_slow: number | null;
-  corners_medium: number | null;
-  corners_fast: number | null;
-  downforce_score: number | null;
-  downforce_label: string | null;
-  overtaking_difficulty_score: number | null;
-  overtaking_difficulty_label: string | null;
-  drs_zones: number | null;
-  circuit_type: "Street" | "Permanent" | "Hybrid" | null;
   data_completeness: "complete" | "partial" | "unknown";
   last_updated: string | null;
+  full_throttle: ScoreWithValue | null;
+  average_speed: ScoreWithValue | null;
+  track_length_km: number | null;
+  tire_degradation: ScoreWithLabel | null;
+  track_abrasion: ScoreWithLabel | null;
+  corners: CornersData | null;
+  downforce: ScoreWithLabel | null;
+  overtaking: ScoreWithLabel | null;
+  drs_zones: number | null;
+  circuit_type: "Street" | "Permanent" | "Hybrid" | null;
 }
 
 export interface CircuitWithCharacteristics {

@@ -20,34 +20,31 @@ const COMPARE_COLORS = [
   "#0891b2", // cyan
 ];
 
-type CharacteristicKey = keyof CircuitCharacteristics;
-
 interface ComparisonRow {
-  key: CharacteristicKey;
   label: string;
-  format: (value: number | string | null) => string;
+  getValue: (chars: CircuitCharacteristics | null) => number | string | null | undefined;
   type: "score" | "number" | "text";
 }
 
 const COMPARISON_ROWS: ComparisonRow[] = [
-  { key: "circuit_type", label: "Circuit Type", format: (v) => v?.toString() || "--", type: "text" },
-  { key: "track_length_km", label: "Track Length", format: (v) => v ? `${v} km` : "--", type: "number" },
-  { key: "full_throttle_pct", label: "Full Throttle %", format: (v) => v ? `${v}%` : "--", type: "number" },
-  { key: "full_throttle_score", label: "Full Throttle Score", format: (v) => v?.toString() || "--", type: "score" },
-  { key: "average_speed_kph", label: "Avg Speed", format: (v) => v ? `${v} km/h` : "--", type: "number" },
-  { key: "average_speed_score", label: "Speed Score", format: (v) => v?.toString() || "--", type: "score" },
-  { key: "tire_degradation_score", label: "Tire Degradation", format: (v) => v?.toString() || "--", type: "score" },
-  { key: "tire_degradation_label", label: "Tire Deg Level", format: (v) => v?.toString() || "--", type: "text" },
-  { key: "track_abrasion_score", label: "Track Abrasion", format: (v) => v?.toString() || "--", type: "score" },
-  { key: "track_abrasion_label", label: "Abrasion Level", format: (v) => v?.toString() || "--", type: "text" },
-  { key: "downforce_score", label: "Downforce", format: (v) => v?.toString() || "--", type: "score" },
-  { key: "downforce_label", label: "Downforce Level", format: (v) => v?.toString() || "--", type: "text" },
-  { key: "overtaking_difficulty_score", label: "Overtaking", format: (v) => v?.toString() || "--", type: "score" },
-  { key: "overtaking_difficulty_label", label: "Overtake Level", format: (v) => v?.toString() || "--", type: "text" },
-  { key: "corners_slow", label: "Slow Corners", format: (v) => v?.toString() || "--", type: "number" },
-  { key: "corners_medium", label: "Medium Corners", format: (v) => v?.toString() || "--", type: "number" },
-  { key: "corners_fast", label: "Fast Corners", format: (v) => v?.toString() || "--", type: "number" },
-  { key: "drs_zones", label: "DRS Zones", format: (v) => v?.toString() || "--", type: "number" },
+  { label: "Circuit Type", getValue: (c) => c?.circuit_type, type: "text" },
+  { label: "Track Length", getValue: (c) => c?.track_length_km ? `${c.track_length_km} km` : null, type: "number" },
+  { label: "Full Throttle %", getValue: (c) => c?.full_throttle?.value ? `${c.full_throttle.value}%` : null, type: "number" },
+  { label: "Full Throttle Score", getValue: (c) => c?.full_throttle?.score, type: "score" },
+  { label: "Avg Speed", getValue: (c) => c?.average_speed?.value ? `${c.average_speed.value} km/h` : null, type: "number" },
+  { label: "Speed Score", getValue: (c) => c?.average_speed?.score, type: "score" },
+  { label: "Tire Degradation", getValue: (c) => c?.tire_degradation?.score, type: "score" },
+  { label: "Tire Deg Level", getValue: (c) => c?.tire_degradation?.label, type: "text" },
+  { label: "Track Abrasion", getValue: (c) => c?.track_abrasion?.score, type: "score" },
+  { label: "Abrasion Level", getValue: (c) => c?.track_abrasion?.label, type: "text" },
+  { label: "Downforce", getValue: (c) => c?.downforce?.score, type: "score" },
+  { label: "Downforce Level", getValue: (c) => c?.downforce?.label, type: "text" },
+  { label: "Overtaking", getValue: (c) => c?.overtaking?.score, type: "score" },
+  { label: "Overtake Level", getValue: (c) => c?.overtaking?.label, type: "text" },
+  { label: "Slow Corners", getValue: (c) => c?.corners?.slow, type: "number" },
+  { label: "Medium Corners", getValue: (c) => c?.corners?.medium, type: "number" },
+  { label: "Fast Corners", getValue: (c) => c?.corners?.fast, type: "number" },
+  { label: "DRS Zones", getValue: (c) => c?.drs_zones, type: "number" },
 ];
 
 export function CircuitCompareClient({ circuits }: CircuitCompareClientProps) {
@@ -157,23 +154,22 @@ export function CircuitCompareClient({ circuits }: CircuitCompareClientProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-light">
-                  {COMPARISON_ROWS.map((row) => (
-                    <tr key={row.key} className="hover:bg-gray-50 transition-colors">
+                  {COMPARISON_ROWS.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 text-sm font-medium sticky left-0 bg-paper">
                         {row.label}
                       </td>
                       {selectedCircuits.map((circuit) => {
-                        const chars = circuit.characteristics;
-                        const value = chars ? chars[row.key] : null;
+                        const value = row.getValue(circuit.characteristics);
 
                         return (
                           <td key={circuit.id} className="px-4 py-3 text-center text-sm">
                             {row.type === "score" && typeof value === "number" ? (
                               <ScoreBadge score={value} />
-                            ) : row.type === "number" ? (
-                              <span className="font-mono">{row.format(value as number | null)}</span>
                             ) : (
-                              <span>{row.format(value as string | null)}</span>
+                              <span className={row.type === "number" ? "font-mono" : ""}>
+                                {value ?? "--"}
+                              </span>
                             )}
                           </td>
                         );

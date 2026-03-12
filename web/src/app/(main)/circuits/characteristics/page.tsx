@@ -118,16 +118,16 @@ export default async function CircuitCharacteristicsPage() {
                           {chars?.track_length_km ? `${chars.track_length_km} km` : "--"}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                          <ScoreBadge score={chars?.full_throttle_score ?? null} />
+                          <ScoreBadge score={chars?.full_throttle?.score ?? null} />
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                          <ScoreBadge score={chars?.tire_degradation_score ?? null} />
+                          <ScoreBadge score={chars?.tire_degradation?.score ?? null} />
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                          <ScoreBadge score={chars?.downforce_score ?? null} />
+                          <ScoreBadge score={chars?.downforce?.score ?? null} />
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                          <ScoreBadge score={chars?.overtaking_difficulty_score ?? null} />
+                          <ScoreBadge score={chars?.overtaking?.score ?? null} />
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center text-sm font-mono">
                           {chars?.drs_zones ?? "--"}

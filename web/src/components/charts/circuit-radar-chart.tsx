@@ -27,30 +27,28 @@ interface CircuitRadarChartProps {
   height?: number;
 }
 
-const CHARACTERISTIC_LABELS: Record<string, { short: string; full: string }> = {
-  full_throttle_score: { short: "Throttle", full: "Full Throttle %" },
-  average_speed_score: { short: "Speed", full: "Average Speed" },
-  tire_degradation_score: { short: "Tire Deg", full: "Tire Degradation" },
-  track_abrasion_score: { short: "Abrasion", full: "Track Abrasion" },
-  downforce_score: { short: "DF", full: "Downforce Level" },
-  overtaking_difficulty_score: { short: "Overtake", full: "Overtaking Difficulty" },
-};
+interface CharacteristicField {
+  key: string;
+  short: string;
+  full: string;
+  getValue: (chars: CircuitCharacteristics) => number | null;
+}
+
+const CHARACTERISTIC_FIELDS: CharacteristicField[] = [
+  { key: "full_throttle", short: "Throttle", full: "Full Throttle %", getValue: (c) => c.full_throttle?.score ?? null },
+  { key: "average_speed", short: "Speed", full: "Average Speed", getValue: (c) => c.average_speed?.score ?? null },
+  { key: "tire_degradation", short: "Tire Deg", full: "Tire Degradation", getValue: (c) => c.tire_degradation?.score ?? null },
+  { key: "track_abrasion", short: "Abrasion", full: "Track Abrasion", getValue: (c) => c.track_abrasion?.score ?? null },
+  { key: "downforce", short: "DF", full: "Downforce Level", getValue: (c) => c.downforce?.score ?? null },
+  { key: "overtaking", short: "Overtake", full: "Overtaking Difficulty", getValue: (c) => c.overtaking?.score ?? null },
+];
 
 function transformToRadarData(chars: CircuitCharacteristics): RadarDataPoint[] {
-  const fields = [
-    "full_throttle_score",
-    "average_speed_score",
-    "tire_degradation_score",
-    "track_abrasion_score",
-    "downforce_score",
-    "overtaking_difficulty_score",
-  ] as const;
-
-  return fields
+  return CHARACTERISTIC_FIELDS
     .map((field) => ({
-      name: CHARACTERISTIC_LABELS[field].short,
-      fullName: CHARACTERISTIC_LABELS[field].full,
-      value: chars[field] ?? 0,
+      name: field.short,
+      fullName: field.full,
+      value: field.getValue(chars) ?? 0,
     }))
     .filter((d) => d.value > 0);
 }
@@ -162,22 +160,13 @@ export function CircuitCompareRadarChart({
   }
 
   // Build combined data
-  const fields = [
-    "full_throttle_score",
-    "average_speed_score",
-    "tire_degradation_score",
-    "track_abrasion_score",
-    "downforce_score",
-    "overtaking_difficulty_score",
-  ] as const;
-
-  const data = fields.map((field) => {
+  const data = CHARACTERISTIC_FIELDS.map((field) => {
     const point: Record<string, string | number> = {
-      name: CHARACTERISTIC_LABELS[field].short,
-      fullName: CHARACTERISTIC_LABELS[field].full,
+      name: field.short,
+      fullName: field.full,
     };
     circuits.forEach((circuit) => {
-      point[circuit.name] = circuit.characteristics[field] ?? 0;
+      point[circuit.name] = field.getValue(circuit.characteristics) ?? 0;
     });
     return point;
   });
