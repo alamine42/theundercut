@@ -858,3 +858,73 @@ def seed_circuits(
             redis_client.delete(key)
 
     typer.echo(f"✅ Seeding complete: {created} created, {updated} updated, {skipped} skipped")
+
+
+@app.command("cleanup-circuits")
+def cleanup_circuits(
+    dry_run: bool = typer.Option(True, "--dry-run/--execute", help="Preview changes without deleting"),
+):
+    """
+    Remove orphaned circuits (placeholder entries with no characteristics).
+
+    Removes circuits that:
+    - Have no characteristics data
+    - Have generic placeholder names like "Round 1", "Round 2", etc.
+    - Have no associated race data
+
+    Use --execute to actually delete. Default is dry-run mode.
+    """
+    import re
+    from theundercut.models import Circuit, CircuitCharacteristics, Race
+    from theundercut.adapters.redis_cache import redis_client
+
+    # Pattern for placeholder names
+    placeholder_pattern = re.compile(r"^Round \d+$", re.IGNORECASE)
+
+    with SessionLocal() as db:
+        # Find all circuits
+        all_circuits = db.query(Circuit).all()
+        orphans = []
+
+        for circuit in all_circuits:
+            # Check if it has characteristics
+            has_chars = db.query(CircuitCharacteristics).filter(
+                CircuitCharacteristics.circuit_id == circuit.id
+            ).first() is not None
+
+            # Check if it has any races
+            has_races = db.query(Race).filter(
+                Race.circuit_id == circuit.id
+            ).first() is not None
+
+            # Check if it's a placeholder name
+            is_placeholder = placeholder_pattern.match(circuit.name) is not None
+
+            # Mark as orphan if: no characteristics AND (placeholder name OR no country)
+            if not has_chars and (is_placeholder or circuit.country is None):
+                # But skip if it has races
+                if has_races:
+                    typer.echo(f"  ⚠️  {circuit.name} (id={circuit.id}): has races, keeping")
+                    continue
+                orphans.append(circuit)
+
+        if not orphans:
+            typer.echo("✅ No orphaned circuits found")
+            return
+
+        typer.echo(f"Found {len(orphans)} orphaned circuit(s):")
+        for circuit in orphans:
+            typer.echo(f"  - {circuit.name} (id={circuit.id}, country={circuit.country})")
+
+        if dry_run:
+            typer.echo("\n⚠️  Dry run mode. Use --execute to delete these circuits.")
+        else:
+            for circuit in orphans:
+                db.delete(circuit)
+            db.commit()
+
+            # Clear cache
+            for key in redis_client.scan_iter("circuit*"):
+                redis_client.delete(key)
+
+            typer.echo(f"\n✅ Deleted {len(orphans)} orphaned circuit(s)")
