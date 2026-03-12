@@ -537,3 +537,17 @@ export interface CircuitsRankingResponse {
 export interface CircuitsCompareResponse {
   circuits: CircuitWithCharacteristics[];
 }
+
+// Notable characteristic ranking for a circuit
+export interface NotableCharacteristic {
+  field: string;
+  rank: number;
+  value: number;
+  isTop: boolean; // true = top ranked (fastest, highest), false = bottom ranked
+}
+
+// Rankings data per circuit for UI display
+export interface CircuitRankingsData {
+  // Map of circuit name -> list of notable rankings
+  rankings: Map<string, NotableCharacteristic[]>;
+}

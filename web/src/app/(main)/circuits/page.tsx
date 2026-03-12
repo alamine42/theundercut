@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
-import { fetchCircuits } from "@/lib/api";
+import { fetchCircuits, fetchCircuitsCharacteristics, fetchAllCircuitRankings } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
+import { NotableCharacteristicsBadges } from "@/components/circuit/notable-characteristics";
+import { ScoreBadge } from "@/components/ui/score-indicator";
+import type { CircuitsCharacteristicsResponse } from "@/types/api";
 
 export const revalidate = 300; // 5 minutes ISR
 
@@ -15,6 +18,7 @@ export const metadata = {
 export default async function CircuitsPage() {
   const season = DEFAULT_SEASON;
 
+  // Fetch circuits data (required)
   let circuitsData;
   try {
     circuitsData = await fetchCircuits(season);
@@ -22,7 +26,25 @@ export default async function CircuitsPage() {
     notFound();
   }
 
+  // Fetch characteristics and rankings data (optional, graceful degradation)
+  let characteristicsData: CircuitsCharacteristicsResponse | null = null;
+  let rankingsData: Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>> = new Map();
+
+  try {
+    [characteristicsData, rankingsData] = await Promise.all([
+      fetchCircuitsCharacteristics(),
+      fetchAllCircuitRankings(),
+    ]);
+  } catch {
+    // Characteristics data is optional - continue without it
+  }
+
   const { circuits } = circuitsData;
+
+  // Create a map of circuit name -> characteristics for quick lookup
+  const characteristicsMap = new Map(
+    characteristicsData?.circuits.map(c => [c.name, c]) ?? []
+  );
 
   // Count upcoming vs completed races
   const now = new Date();
@@ -40,15 +62,17 @@ export default async function CircuitsPage() {
                 Explore circuit analytics, lap records, and historical performance
               </HeroSubtitle>
             </div>
-            <Link
-              href="/circuits/characteristics"
-              className="inline-flex items-center border-2 border-ink bg-paper px-4 py-2 font-semibold transition-colors hover:bg-ink hover:text-paper"
-            >
-              Track Characteristics
-              <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/circuits/characteristics"
+                className="inline-flex items-center border-2 border-ink bg-paper px-4 py-2 font-semibold transition-colors hover:bg-ink hover:text-paper"
+              >
+                Track Characteristics
+                <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
           </div>
 
           <HeroStats>
@@ -65,6 +89,7 @@ export default async function CircuitsPage() {
             {circuits.map((circuit) => {
               const raceDate = circuit.date ? new Date(circuit.date) : null;
               const isPastRace = raceDate && raceDate < new Date();
+              const rankings = rankingsData.get(circuit.name) || [];
 
               return (
                 <Link
@@ -123,6 +148,13 @@ export default async function CircuitsPage() {
                             </p>
                           )}
                         </div>
+
+                        {/* Notable characteristics badges */}
+                        {rankings.length > 0 && (
+                          <div className="mt-2">
+                            <NotableCharacteristicsBadges rankings={rankings} maxBadges={3} />
+                          </div>
+                        )}
 
                         {/* Stats row - compelling data */}
                         {circuit.preview && (circuit.preview.dominant_driver || circuit.preview.last_winner) && (
@@ -207,6 +239,112 @@ export default async function CircuitsPage() {
           {circuits.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted">No circuits found for the current season</p>
+            </div>
+          )}
+
+          {/* Circuit Characteristics Table - only show if data is available */}
+          {characteristicsData && characteristicsData.circuits.length > 0 && (
+            <div className="mt-12">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold tracking-tight">Track Characteristics</h2>
+                <div className="flex gap-4">
+                  <Link
+                    href="/circuits/characteristics/compare"
+                    className="inline-flex items-center text-sm text-accent hover:underline"
+                  >
+                    Compare Circuits
+                    <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                    </svg>
+                  </Link>
+                  <Link
+                    href="/circuits/characteristics/rank"
+                    className="inline-flex items-center text-sm text-accent hover:underline"
+                  >
+                    View Rankings
+                    <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+
+              <article className="border-2 border-ink bg-paper">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-ink text-paper">
+                      <tr>
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap">
+                          Circuit
+                        </th>
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">
+                          Type
+                        </th>
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">
+                          Throttle
+                        </th>
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">
+                          Tire Deg
+                        </th>
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">
+                          Downforce
+                        </th>
+                        <th className="px-3 sm:px-6 py-3 text-center text-xs font-semibold uppercase tracking-wide whitespace-nowrap">
+                          Overtake
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-light">
+                      {characteristicsData.circuits.slice(0, 12).map((charCircuit) => {
+                        const chars = charCircuit.characteristics;
+                        return (
+                          <tr key={charCircuit.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-3 sm:px-6 py-3 sm:py-4">
+                              <div>
+                                <p className="font-semibold text-sm">{charCircuit.name}</p>
+                                <p className="text-xs text-muted">
+                                  {getCountryFlag(charCircuit.country)} {charCircuit.country}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                              {chars?.circuit_type ? (
+                                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-gray-100">
+                                  {chars.circuit_type}
+                                </span>
+                              ) : (
+                                <span className="text-muted">--</span>
+                              )}
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                              <ScoreBadge score={chars?.full_throttle?.score ?? null} />
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                              <ScoreBadge score={chars?.tire_degradation?.score ?? null} />
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                              <ScoreBadge score={chars?.downforce?.score ?? null} />
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                              <ScoreBadge score={chars?.overtaking?.score ?? null} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {characteristicsData.circuits.length > 12 && (
+                  <div className="px-4 py-3 border-t border-border-light text-center">
+                    <Link
+                      href="/circuits/characteristics"
+                      className="text-sm text-accent hover:underline"
+                    >
+                      View all {characteristicsData.circuits.length} circuits
+                    </Link>
+                  </div>
+                )}
+              </article>
             </div>
           )}
         </div>

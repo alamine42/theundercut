@@ -317,3 +317,61 @@ export async function fetchCircuitsRanking(
     query: { by: field, order, limit },
   });
 }
+
+// Characteristic fields with their display info
+const CHARACTERISTIC_FIELDS = [
+  { field: "full_throttle", label: "Full Throttle", highIsNotable: true },
+  { field: "average_speed", label: "Fastest", highIsNotable: true },
+  { field: "tire_degradation", label: "High Tire Deg", highIsNotable: true },
+  { field: "track_abrasion", label: "High Abrasion", highIsNotable: true },
+  { field: "downforce", label: "High Downforce", highIsNotable: true },
+  { field: "overtaking", label: "Easy Overtaking", highIsNotable: true },
+] as const;
+
+// Compute notable rankings for all circuits
+export async function fetchAllCircuitRankings(): Promise<Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>>> {
+  // Fetch rankings for each characteristic (top and bottom 8)
+  const rankingPromises = CHARACTERISTIC_FIELDS.flatMap(({ field, label, highIsNotable }) => [
+    // Top 8 (high values)
+    fetchCircuitsRanking(field, "desc", 8).then(res => ({
+      rankings: res.rankings,
+      label: highIsNotable ? label : label.replace("High", "Low"),
+      isTop: highIsNotable,
+    })),
+    // Bottom 8 (low values) - only for some metrics where low is notable
+    fetchCircuitsRanking(field, "asc", 8).then(res => ({
+      rankings: res.rankings,
+      label: highIsNotable ? label.replace("High", "Low").replace("Easy", "Hard").replace("Fastest", "Slowest").replace("Full Throttle", "Low Throttle") : label,
+      isTop: !highIsNotable,
+    })),
+  ]);
+
+  const results = await Promise.all(rankingPromises);
+
+  // Build map of circuit name -> notable rankings
+  const circuitRankings = new Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>>();
+
+  results.forEach(({ rankings, label, isTop }) => {
+    rankings.forEach(r => {
+      const existing = circuitRankings.get(r.circuit_name) || [];
+      existing.push({
+        field: label,
+        label,
+        rank: r.rank,
+        value: r.value,
+        isTop,
+      });
+      circuitRankings.set(r.circuit_name, existing);
+    });
+  });
+
+  // Sort each circuit's rankings by rank (best first) and limit to top 3
+  circuitRankings.forEach((rankings, name) => {
+    const sorted = rankings
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, 3);
+    circuitRankings.set(name, sorted);
+  });
+
+  return circuitRankings;
+}

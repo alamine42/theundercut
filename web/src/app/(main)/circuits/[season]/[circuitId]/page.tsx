@@ -3,8 +3,10 @@ import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { CircuitStrategyChart } from "@/components/charts/circuit-strategy-chart";
 import { TeamWithLogo } from "@/components/ui/team-logo";
-import { fetchCircuitDetail } from "@/lib/api";
+import { fetchCircuitDetail, fetchCircuitsCharacteristics } from "@/lib/api";
 import { getCountryFlag } from "@/lib/utils";
+import { CircuitInfoWidget } from "@/components/circuit/circuit-info-widget";
+import type { CircuitCharacteristics } from "@/types/api";
 
 export const revalidate = 300; // 5 minutes ISR
 
@@ -28,11 +30,23 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
     notFound();
   }
 
+  // Fetch circuit detail (required)
   let data;
   try {
     data = await fetchCircuitDetail(season, circuitId);
   } catch {
     notFound();
+  }
+
+  // Fetch characteristics data (optional, graceful degradation)
+  let circuitCharacteristics: CircuitCharacteristics | null = null;
+  try {
+    const characteristicsData = await fetchCircuitsCharacteristics();
+    circuitCharacteristics = characteristicsData.circuits.find(
+      c => c.name === data.circuit.name
+    )?.characteristics ?? null;
+  } catch {
+    // Characteristics data is optional - continue without it
   }
 
   const { circuit, race_info, lap_records, historical_winners, driver_stats, team_stats, strategy_patterns } = data;
@@ -83,38 +97,13 @@ export default async function CircuitDetailPage({ params }: CircuitDetailPagePro
 
       <section className="py-8 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-12">
-          {/* Lap Records */}
-          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-            <article className="border-2 border-ink bg-paper p-4 sm:p-6">
-              <h2 className="relative mb-4 text-lg font-semibold tracking-tight before:absolute before:-left-6 before:top-0 before:h-full before:w-1 before:bg-accent">
-                All-Time Lap Record
-              </h2>
-              {lap_records.all_time_fastest ? (
-                <div className="space-y-2">
-                  <p className="text-2xl sm:text-3xl font-bold font-mono">{lap_records.all_time_fastest.time}</p>
-                  <p className="text-muted">
-                    {lap_records.all_time_fastest.driver} &middot; {lap_records.all_time_fastest.year}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-muted">No data available</p>
-              )}
-            </article>
-
-            <article className="border-2 border-ink bg-paper p-4 sm:p-6">
-              <h2 className="relative mb-4 text-lg font-semibold tracking-tight before:absolute before:-left-6 before:top-0 before:h-full before:w-1 before:bg-accent">
-                {season} Fastest Lap
-              </h2>
-              {lap_records.season_fastest ? (
-                <div className="space-y-2">
-                  <p className="text-2xl sm:text-3xl font-bold font-mono">{lap_records.season_fastest.time}</p>
-                  <p className="text-muted">{lap_records.season_fastest.driver}</p>
-                </div>
-              ) : (
-                <p className="text-muted">No data available</p>
-              )}
-            </article>
-          </div>
+          {/* Circuit Info Widget - Characteristics + Lap Records */}
+          <CircuitInfoWidget
+            characteristics={circuitCharacteristics}
+            allTimeLapRecord={lap_records.all_time_fastest}
+            seasonFastestLap={lap_records.season_fastest}
+            season={season}
+          />
 
           {/* Race Info Card */}
           {race_info && (
