@@ -26,17 +26,22 @@ export default async function CircuitsPage() {
     notFound();
   }
 
-  // Fetch characteristics and rankings data (optional, graceful degradation)
+  // Fetch characteristics and rankings data independently (optional, graceful degradation)
   let characteristicsData: CircuitsCharacteristicsResponse | null = null;
   let rankingsData: Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>> = new Map();
 
+  // Fetch characteristics (for table)
   try {
-    [characteristicsData, rankingsData] = await Promise.all([
-      fetchCircuitsCharacteristics(),
-      fetchAllCircuitRankings(),
-    ]);
+    characteristicsData = await fetchCircuitsCharacteristics();
   } catch {
     // Characteristics data is optional - continue without it
+  }
+
+  // Fetch rankings (for badges) - separate try/catch so characteristics still work if this fails
+  try {
+    rankingsData = await fetchAllCircuitRankings();
+  } catch {
+    // Rankings data is optional - continue without it
   }
 
   const { circuits } = circuitsData;

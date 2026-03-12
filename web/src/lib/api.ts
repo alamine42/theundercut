@@ -319,13 +319,14 @@ export async function fetchCircuitsRanking(
 }
 
 // Characteristic fields with their display info
+// Note: API expects field names with _score suffix
 const CHARACTERISTIC_FIELDS = [
-  { field: "full_throttle", label: "Full Throttle", highIsNotable: true },
-  { field: "average_speed", label: "Fastest", highIsNotable: true },
-  { field: "tire_degradation", label: "High Tire Deg", highIsNotable: true },
-  { field: "track_abrasion", label: "High Abrasion", highIsNotable: true },
-  { field: "downforce", label: "High Downforce", highIsNotable: true },
-  { field: "overtaking", label: "Easy Overtaking", highIsNotable: true },
+  { field: "full_throttle_score", label: "Full Throttle", highIsNotable: true },
+  { field: "average_speed_score", label: "Fastest", highIsNotable: true },
+  { field: "tire_degradation_score", label: "High Tire Deg", highIsNotable: true },
+  { field: "track_abrasion_score", label: "High Abrasion", highIsNotable: true },
+  { field: "downforce_score", label: "High Downforce", highIsNotable: true },
+  { field: "overtaking_difficulty_score", label: "Easy Overtaking", highIsNotable: true },
 ] as const;
 
 // Compute notable rankings for all circuits
