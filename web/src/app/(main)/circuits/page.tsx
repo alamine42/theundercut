@@ -68,15 +68,15 @@ export default async function CircuitsPage() {
               </HeroSubtitle>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link
-                href="/circuits/characteristics"
+              <a
+                href="#characteristics"
                 className="inline-flex items-center border-2 border-ink bg-paper px-4 py-2 font-semibold transition-colors hover:bg-ink hover:text-paper"
               >
                 Track Characteristics
                 <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                 </svg>
-              </Link>
+              </a>
             </div>
           </div>
 
@@ -251,7 +251,7 @@ export default async function CircuitsPage() {
 
           {/* Circuit Characteristics Table - only show if data is available */}
           {characteristicsData && characteristicsData.circuits.length > 0 && (
-            <div className="mt-12">
+            <div id="characteristics" className="mt-12 scroll-mt-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold tracking-tight">Track Characteristics</h2>
                 <div className="flex gap-4">
