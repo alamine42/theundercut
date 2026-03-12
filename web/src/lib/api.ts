@@ -335,13 +335,13 @@ export async function fetchAllCircuitRankings(): Promise<Map<string, Array<{ fie
   const rankingPromises = CHARACTERISTIC_FIELDS.flatMap(({ field, label, highIsNotable }) => [
     // Top 8 (high values)
     fetchCircuitsRanking(field, "desc", 8).then(res => ({
-      rankings: res.rankings,
+      ranking: res.ranking,
       label: highIsNotable ? label : label.replace("High", "Low"),
       isTop: highIsNotable,
     })),
     // Bottom 8 (low values) - only for some metrics where low is notable
     fetchCircuitsRanking(field, "asc", 8).then(res => ({
-      rankings: res.rankings,
+      ranking: res.ranking,
       label: highIsNotable ? label.replace("High", "Low").replace("Easy", "Hard").replace("Fastest", "Slowest").replace("Full Throttle", "Low Throttle") : label,
       isTop: !highIsNotable,
     })),
@@ -352,9 +352,9 @@ export async function fetchAllCircuitRankings(): Promise<Map<string, Array<{ fie
   // Build map of circuit name -> notable rankings
   const circuitRankings = new Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>>();
 
-  results.forEach(({ rankings, label, isTop }) => {
-    rankings.forEach(r => {
-      const existing = circuitRankings.get(r.circuit_name) || [];
+  results.forEach(({ ranking, label, isTop }) => {
+    ranking.forEach(r => {
+      const existing = circuitRankings.get(r.name) || [];
       existing.push({
         field: label,
         label,
@@ -362,7 +362,7 @@ export async function fetchAllCircuitRankings(): Promise<Map<string, Array<{ fie
         value: r.value,
         isTop,
       });
-      circuitRankings.set(r.circuit_name, existing);
+      circuitRankings.set(r.name, existing);
     });
   });
 

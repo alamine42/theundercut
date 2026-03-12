@@ -523,15 +523,17 @@ export interface CircuitsCharacteristicsResponse {
 export interface CircuitCharacteristicsRanking {
   rank: number;
   circuit_id: number;
-  circuit_name: string;
-  country: string;
+  name: string;
+  country: string | null;
   value: number;
+  effective_year: number;
 }
 
 export interface CircuitsRankingResponse {
-  field: string;
+  ranked_by: string;
   order: "asc" | "desc";
-  rankings: CircuitCharacteristicsRanking[];
+  ranking: CircuitCharacteristicsRanking[];
+  total: number;
 }
 
 export interface CircuitsCompareResponse {
