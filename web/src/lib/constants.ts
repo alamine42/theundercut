@@ -249,6 +249,15 @@ export function getJolpicaIdFromCircuitName(circuitName: string): string | null 
   return CIRCUIT_NAME_TO_JOLPICA_ID[circuitName] || null;
 }
 
+// Reverse mapping: Jolpica ID -> Database circuit name
+export const JOLPICA_ID_TO_CIRCUIT_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(CIRCUIT_NAME_TO_JOLPICA_ID).map(([name, id]) => [id, name])
+);
+
+export function getCircuitNameFromJolpicaId(jolpicaId: string): string | null {
+  return JOLPICA_ID_TO_CIRCUIT_NAME[jolpicaId] || null;
+}
+
 // Round to Circuit ID mapping by season
 const ROUND_TO_CIRCUIT: Record<string, string> = {
   // 2024 season

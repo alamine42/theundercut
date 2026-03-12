@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Hero, HeroTitle, HeroSubtitle, HeroStat, HeroStats } from "@/components/ui/hero";
 import { fetchCircuits, fetchCircuitsCharacteristics, fetchAllCircuitRankings } from "@/lib/api";
-import { DEFAULT_SEASON } from "@/lib/constants";
+import { DEFAULT_SEASON, getCircuitNameFromJolpicaId } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
 import { NotableCharacteristicsBadges } from "@/components/circuit/notable-characteristics";
 import { ScoreBadge } from "@/components/ui/score-indicator";
@@ -94,7 +94,9 @@ export default async function CircuitsPage() {
             {circuits.map((circuit) => {
               const raceDate = circuit.date ? new Date(circuit.date) : null;
               const isPastRace = raceDate && raceDate < new Date();
-              const rankings = rankingsData.get(circuit.name) || [];
+              // Look up rankings using database circuit name (mapped from Jolpica ID)
+              const dbCircuitName = getCircuitNameFromJolpicaId(circuit.circuit_id);
+              const rankings = dbCircuitName ? (rankingsData.get(dbCircuitName) || []) : [];
 
               return (
                 <Link
