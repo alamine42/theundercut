@@ -217,32 +217,34 @@ export function getCircuitShortname(circuitId: string): string {
   return CIRCUIT_SHORTNAMES[circuitId] || circuitId;
 }
 
-// Reverse mapping: Circuit full name -> Jolpica API ID
+// Reverse mapping: Circuit full name (from database) -> Jolpica API ID
+// Names must match exactly what the characteristics/rankings API returns
 export const CIRCUIT_NAME_TO_JOLPICA_ID: Record<string, string> = {
   "Albert Park Circuit": "albert_park",
-  "Circuit of the Americas": "americas",
+  "Circuit of The Americas": "americas",
   "Bahrain International Circuit": "bahrain",
   "Baku City Circuit": "baku",
   "Circuit de Barcelona-Catalunya": "catalunya",
   "Hungaroring": "hungaroring",
   "Autodromo Enzo e Dino Ferrari": "imola",
-  "Autodromo José Carlos Pace": "interlagos",
+  "Autodromo Jose Carlos Pace": "interlagos",
   "Jeddah Corniche Circuit": "jeddah",
-  "Losail International Circuit": "losail",
+  "Lusail International Circuit": "losail",
   "Marina Bay Street Circuit": "marina_bay",
   "Miami International Autodrome": "miami",
   "Circuit de Monaco": "monaco",
-  "Autodromo Nazionale Monza": "monza",
+  "Autodromo Nazionale di Monza": "monza",
   "Red Bull Ring": "red_bull_ring",
-  "Autódromo Hermanos Rodríguez": "rodriguez",
+  "Autodromo Hermanos Rodriguez": "rodriguez",
   "Shanghai International Circuit": "shanghai",
   "Silverstone Circuit": "silverstone",
   "Circuit de Spa-Francorchamps": "spa",
   "Suzuka International Racing Course": "suzuka",
-  "Las Vegas Strip Circuit": "vegas",
-  "Circuit Gilles-Villeneuve": "villeneuve",
+  "Las Vegas Street Circuit": "vegas",
+  "Circuit Gilles Villeneuve": "villeneuve",
   "Yas Marina Circuit": "yas_marina",
   "Circuit Zandvoort": "zandvoort",
+  "Madrid Circuit": "madring",
 };
 
 export function getJolpicaIdFromCircuitName(circuitName: string): string | null {
