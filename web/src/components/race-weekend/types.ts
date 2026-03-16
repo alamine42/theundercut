@@ -29,6 +29,7 @@ export interface RaceWeekendWidgetProps {
   weekendData: WeekendResponse | null;
   nextRaceInfo?: NextRaceInfo | null;
   error?: string | null;
+  liveUpdate?: boolean;
 }
 
 export interface RaceHeaderProps {

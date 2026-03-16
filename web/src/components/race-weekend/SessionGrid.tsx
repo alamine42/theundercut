@@ -3,17 +3,7 @@
 import { useState } from "react";
 import { SessionCard } from "./SessionCard";
 import type { SessionGridProps } from "./types";
-
-function normalizeSessionType(type: string): string {
-  const normalized = type.toLowerCase().replace(/\s+/g, "_");
-  // Map practice_X to fpX for results lookup
-  const sessionTypeMap: Record<string, string> = {
-    practice_1: "fp1",
-    practice_2: "fp2",
-    practice_3: "fp3",
-  };
-  return sessionTypeMap[normalized] || normalized;
-}
+import { normalizeSessionType } from "./utils";
 
 export function SessionGrid({
   sessions,

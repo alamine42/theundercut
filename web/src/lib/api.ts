@@ -279,7 +279,9 @@ export async function fetchWeekendData(
   season: number,
   round: number
 ): Promise<WeekendResponse> {
-  return apiFetch<WeekendResponse>(`/race/${season}/${round}/weekend`);
+  return apiFetch<WeekendResponse>(`/race/${season}/${round}/weekend`, {
+    revalidate: 5,
+  });
 }
 
 // =============================================================================

@@ -3,6 +3,7 @@
 import { SessionCardCompact } from "./SessionCardCompact";
 import { SessionCardExpanded } from "./SessionCardExpanded";
 import type { SessionCardProps, RaceSession } from "./types";
+import { hasSessionEnded } from "./utils";
 
 const SESSION_LABELS: Record<string, string> = {
   fp1: "Free Practice 1",
@@ -82,21 +83,16 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 function StatusBadge({
   status,
   startTime,
-  endTime,
-  hasResults
+  hasResults,
+  sessionEnded,
 }: {
   status: RaceSession["status"];
   startTime: string | null;
-  endTime: string | null;
   hasResults: boolean;
+  sessionEnded: boolean;
 }) {
   const isCompleted = status === "completed" || status === "ingested";
   const isLive = status === "live" || status === "running";
-
-  // Check if session has ended based on time
-  const now = new Date();
-  const sessionEnded = endTime ? new Date(endTime) < now :
-    (startTime ? new Date(startTime).getTime() + (2 * 60 * 60 * 1000) < now.getTime() : false);
 
   if (isLive) {
     return (
@@ -144,10 +140,7 @@ export function SessionCard({
   const hasResults = results && results.results.length > 0;
   const sessionTypeClass = getSessionTypeClass(session.session_type);
 
-  // Check if session has ended based on time
-  const now = new Date();
-  const sessionEnded = session.end_time ? new Date(session.end_time) < now :
-    (session.start_time ? new Date(session.start_time).getTime() + (2 * 60 * 60 * 1000) < now.getTime() : false);
+  const sessionEnded = hasSessionEnded(session);
 
   // Session is expandable if it has results OR if it's done (to show pending message)
   const isExpandable = hasResults || sessionEnded;
@@ -181,8 +174,8 @@ export function SessionCard({
           <StatusBadge
             status={session.status}
             startTime={session.start_time}
-            endTime={session.end_time}
             hasResults={!!hasResults}
+            sessionEnded={sessionEnded}
           />
           {isExpandable && (
             <ChevronIcon expanded={isExpanded} />

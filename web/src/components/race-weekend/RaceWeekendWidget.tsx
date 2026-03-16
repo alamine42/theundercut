@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,10 +9,12 @@ import { RaceCountdown } from "./RaceCountdown";
 import { HistoricalData } from "./HistoricalData";
 import { SessionGrid } from "./SessionGrid";
 import { getCountryFlag } from "@/lib/utils";
-import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo } from "./types";
+import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo, WeekendResponse } from "./types";
+import { hasMissingSessionResults } from "./utils";
 
 /** Number of hours after race end before the widget reverts to showing next race countdown */
 const RACE_WEEKEND_ACTIVE_HOURS = 24;
+const LIVE_REFRESH_INTERVAL_MS = 60 * 1000;
 
 const TIMELINE_STATE_MAP: Record<string, WidgetState> = {
   "pre-weekend": "pre-weekend",
@@ -22,6 +27,15 @@ const TIMELINE_STATE_MAP: Record<string, WidgetState> = {
 function mapTimelineState(state?: string | null): WidgetState | null {
   if (!state) return null;
   return TIMELINE_STATE_MAP[state] ?? null;
+}
+
+async function fetchLatestWeekendData(season: number, round: number): Promise<WeekendResponse | null> {
+  const url = `/api/v1/race/${season}/${round}/weekend?t=${Date.now()}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to refresh weekend data (${res.status})`);
+  }
+  return res.json();
 }
 
 /**
@@ -56,6 +70,34 @@ function getHoursSinceRaceEnd(
   }
 
   return (now.getTime() - raceEndTime.getTime()) / (1000 * 60 * 60);
+}
+
+function shouldContinuePolling(data: WeekendResponse | null): boolean {
+  if (!data?.schedule) {
+    return false;
+  }
+
+  const normalizedState = mapTimelineState(data.timeline?.state) ?? determineWidgetState(data.schedule);
+
+  if (normalizedState === "during-weekend") {
+    return true;
+  }
+
+  if (normalizedState === "post-race") {
+    if (data.timeline?.window_end) {
+      const windowEnd = new Date(data.timeline.window_end);
+      if (Number.isNaN(windowEnd.getTime()) || windowEnd > new Date()) {
+        return true;
+      }
+    } else {
+      const hoursSince = getHoursSinceRaceEnd(data.schedule.sessions);
+      if (hoursSince === null || hoursSince < RACE_WEEKEND_ACTIVE_HOURS) {
+        return true;
+      }
+    }
+  }
+
+  return hasMissingSessionResults(data);
 }
 
 function determineWidgetState(
@@ -313,16 +355,87 @@ function ErrorState({ error }: { error: string }) {
   );
 }
 
-export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeekendWidgetProps) {
+export function RaceWeekendWidget({
+  weekendData,
+  nextRaceInfo,
+  error,
+  liveUpdate = true,
+}: RaceWeekendWidgetProps) {
+  const [liveWeekendData, setLiveWeekendData] = useState<WeekendResponse | null>(weekendData);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLiveWeekendData(weekendData);
+  }, [weekendData]);
+
+  const targetSeason = weekendData?.schedule?.season ?? null;
+  const targetRound = weekendData?.schedule?.round ?? null;
+  const shouldPollInitially = liveUpdate && shouldContinuePolling(weekendData);
+
+  useEffect(() => {
+    if (!liveUpdate) return;
+    if (!targetSeason || !targetRound) return;
+
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    async function refresh() {
+      try {
+        setIsRefreshing(true);
+        const latest = await fetchLatestWeekendData(targetSeason, targetRound);
+        if (cancelled || !latest) return;
+        setLiveWeekendData(latest);
+        setRefreshError(null);
+
+        if (shouldContinuePolling(latest)) {
+          if (interval === null) {
+            interval = setInterval(refresh, LIVE_REFRESH_INTERVAL_MS);
+          }
+        } else if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to refresh weekend data", err);
+          setRefreshError("Live data refresh failed");
+          if (interval === null && shouldPollInitially) {
+            interval = setInterval(refresh, LIVE_REFRESH_INTERVAL_MS);
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setIsRefreshing(false);
+        }
+      }
+    }
+
+    refresh();
+
+    if (shouldPollInitially && interval === null) {
+      interval = setInterval(refresh, LIVE_REFRESH_INTERVAL_MS);
+    }
+
+    return () => {
+      cancelled = true;
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [liveUpdate, targetSeason, targetRound, shouldPollInitially]);
+
   if (error) {
     return <ErrorState error={error} />;
   }
 
-  if (!weekendData || !weekendData.schedule) {
+  const currentWeekendData = liveWeekendData ?? weekendData;
+
+  if (!currentWeekendData || !currentWeekendData.schedule) {
     return <EmptyState nextRaceInfo={nextRaceInfo} />;
   }
 
-  const { schedule, history, sessions: sessionResults, meta, timeline } = weekendData;
+  const { schedule, history, sessions: sessionResults, meta, timeline } = currentWeekendData;
   const serverState = mapTimelineState(timeline?.state);
   const widgetState = serverState ?? determineWidgetState(schedule);
   const nextSessionFromTimeline = timeline?.next_session ?? null;
@@ -418,6 +531,18 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
       </CardHeader>
 
       <CardContent>
+        {liveUpdate && (
+          <div className="flex justify-end text-[11px] text-muted mb-2">
+            <span className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full ${isRefreshing ? "bg-emerald-500 animate-pulse" : "bg-gray-400/70"}`}
+                aria-hidden="true"
+              />
+              Live data
+            </span>
+          </div>
+        )}
+
         {isStale && <StaleDataBanner lastUpdated={lastUpdated} />}
 
         {/* Show countdown for pre-weekend or during-weekend states */}
@@ -457,6 +582,12 @@ export function RaceWeekendWidget({ weekendData, nextRaceInfo, error }: RaceWeek
             history={history}
             circuitName={schedule.circuit_name}
           />
+        )}
+
+        {liveUpdate && refreshError && (
+          <p className="mt-4 text-xs text-red-600">
+            Live update failed. Showing cached data.
+          </p>
         )}
 
         {/* Errors from individual sections */}

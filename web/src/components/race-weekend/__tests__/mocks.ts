@@ -89,7 +89,7 @@ export const mockSprintQualifyingResults: SessionResultsResponse = {
 export const mockSprintResults: SessionResultsResponse = {
   season: 2026,
   round: 1,
-  session_type: "sprint",
+  session_type: "sprint_race",
   results: [
     { position: 1, driver_code: "VER", driver_name: "Max Verstappen", team: "Red Bull", time: "25:45.123", gap: null, laps: 19 },
     { position: 2, driver_code: "NOR", driver_name: "Lando Norris", team: "McLaren", time: "25:48.456", gap: "+3.333", laps: 19 },
@@ -197,7 +197,7 @@ export function createMockWeekendResponse(
   // Add sprint-specific session slots if sprint weekend
   if (isSprint) {
     sessionResults.sprint_qualifying = null;
-    sessionResults.sprint = null;
+    sessionResults.sprint_race = null;
   } else {
     sessionResults.fp2 = null;
     sessionResults.fp3 = null;
@@ -213,7 +213,7 @@ export function createMockWeekendResponse(
     sessionResults.fp1 = mockFP1Results;
     if (isSprint) {
       sessionResults.sprint_qualifying = mockSprintQualifyingResults;
-      sessionResults.sprint = mockSprintResults;
+      sessionResults.sprint_race = mockSprintResults;
     } else {
       sessionResults.fp2 = { ...mockFP1Results, session_type: "fp2" };
       sessionResults.fp3 = { ...mockFP1Results, session_type: "fp3" };
