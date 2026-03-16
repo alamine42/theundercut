@@ -97,9 +97,9 @@ SESSION_TYPE_MAP = {
 }
 
 CALENDAR_SESSION_ALIAS_MAP = {
-    "fp1": ["fp1", "practice_1", "practice 1"],
-    "fp2": ["fp2", "practice_2", "practice 2"],
-    "fp3": ["fp3", "practice_3", "practice 3"],
+    "fp1": ["fp1", "practice_1", "practice 1", "free practice 1", "free_practice_1"],
+    "fp2": ["fp2", "practice_2", "practice 2", "free practice 2", "free_practice_2"],
+    "fp3": ["fp3", "practice_3", "practice 3", "free practice 3", "free_practice_3"],
     "qualifying": ["qualifying", "qualifying_session"],
     "race": ["race", "grand_prix"],
     "sprint_race": ["sprint", "sprint_race", "sprint race"],
