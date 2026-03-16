@@ -10,6 +10,7 @@ from collections.abc import Iterable as IterableType
 
 import pandas as pd
 import sqlalchemy as sa
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -94,6 +95,47 @@ SESSION_TYPE_MAP = {
     "Race": "race",
     "R": "race",
 }
+
+CALENDAR_SESSION_ALIAS_MAP = {
+    "fp1": ["fp1", "practice_1", "practice 1"],
+    "fp2": ["fp2", "practice_2", "practice 2"],
+    "fp3": ["fp3", "practice_3", "practice 3"],
+    "qualifying": ["qualifying", "qualifying_session"],
+    "race": ["race", "grand_prix"],
+    "sprint_race": ["sprint", "sprint_race", "sprint race"],
+    "sprint_qualifying": [
+        "sprint_qualifying",
+        "sprint qualifying",
+        "sprint_shootout",
+        "sprint shootout",
+    ],
+}
+
+
+def _calendar_session_aliases(session_type: str) -> list[str]:
+    """
+    Return the set of calendar session_type variants that should map to the provided session label.
+
+    CalendarEvent rows historically mix values like "practice_1", "FP1" or "sprint qualifying".
+    This helper normalizes the lookup to avoid substring ILIKE queries that can match multiple sessions.
+    """
+    normalized = SESSION_TYPE_MAP.get(session_type, session_type.lower())
+    aliases = CALENDAR_SESSION_ALIAS_MAP.get(normalized, [normalized])
+    normalized_aliases: list[str] = []
+    for alias in aliases:
+        slug = alias.strip().lower()
+        if not slug:
+            continue
+        normalized_aliases.append(slug)
+        underscored = slug.replace(" ", "_")
+        if underscored != slug:
+            normalized_aliases.append(underscored)
+    # Preserve order while deduplicating
+    seen = []
+    for value in normalized_aliases:
+        if value not in seen:
+            seen.append(value)
+    return seen or [normalized]
 
 
 def _store_laps(db: Session, race_id: str, df: pd.DataFrame) -> None:
@@ -1568,14 +1610,16 @@ def ingest_session(season: int, rnd: int, session_type: str = "Race", force: boo
     race_id = f"{season}-{rnd}"
     normalized_session = SESSION_TYPE_MAP.get(session_type, session_type.lower())
     weekend_payload, grade_source = _try_fetch_drivegrade_weekend(season, rnd)
+    calendar_aliases = _calendar_session_aliases(session_type)
 
     # Check if this specific session has already been ingested (by CalendarEvent status)
     with SessionLocal() as db:
         event = (
             db.query(CalendarEvent)
             .filter_by(season=season, round=rnd)
-            .filter(CalendarEvent.session_type.ilike(f"%{session_type}%"))
-            .one_or_none()
+            .filter(func.lower(CalendarEvent.session_type).in_(calendar_aliases))
+            .order_by(CalendarEvent.start_ts)
+            .first()
         )
         session_already_ingested = event and event.status == "ingested"
 

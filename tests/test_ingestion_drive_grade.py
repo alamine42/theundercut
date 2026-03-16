@@ -1,10 +1,19 @@
+import datetime as dt
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
 from theundercut.services import ingestion
-from theundercut.models import DriverMetrics, Entry, StrategyEvent, PenaltyEvent, OvertakeEvent, SessionClassification
+from theundercut.models import (
+    CalendarEvent,
+    DriverMetrics,
+    Entry,
+    StrategyEvent,
+    PenaltyEvent,
+    OvertakeEvent,
+    SessionClassification,
+)
 from theundercut.services.ingestion import DriverCodeFixResult
 
 
@@ -228,3 +237,38 @@ def test_fix_numeric_driver_codes_mapping_failure(db_session_factory, monkeypatc
         assert result.had_numeric is True
         assert result.mapping_failed is True
         assert result.fixed == 0
+
+
+def test_ingest_session_handles_overlapping_calendar_names(db_session_factory, monkeypatch, patch_provider):
+    """Ensure sprint vs sprint qualifying lookups don't collide when querying CalendarEvent."""
+    monkeypatch.setattr(ingestion, "SessionLocal", db_session_factory)
+
+    with db_session_factory() as session:
+        session.add(CalendarEvent(
+            season=2024,
+            round=1,
+            session_type="sprint",
+            status="scheduled",
+            start_ts=dt.datetime(2024, 3, 15, 12, 0, tzinfo=dt.timezone.utc),
+        ))
+        session.add(CalendarEvent(
+            season=2024,
+            round=1,
+            session_type="sprint_qualifying",
+            status="scheduled",
+            start_ts=dt.datetime(2024, 3, 15, 8, 0, tzinfo=dt.timezone.utc),
+        ))
+        session.commit()
+
+    ingestion.ingest_session(2024, 1, session_type="Sprint")
+
+    with db_session_factory() as session:
+        sprint_event = session.query(CalendarEvent).filter_by(
+            season=2024, round=1, session_type="sprint"
+        ).one()
+        sq_event = session.query(CalendarEvent).filter_by(
+            season=2024, round=1, session_type="sprint_qualifying"
+        ).one()
+
+    assert sprint_event.status == "ingested"
+    assert sq_event.status == "scheduled"
