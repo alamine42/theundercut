@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from theundercut.api.main import app
+from theundercut.api.v1 import race as race_module
 from theundercut.adapters.db import get_db
 from theundercut.models import CalendarEvent, SessionClassification
 
@@ -121,6 +122,55 @@ def seed_completed_race_weekend(session, *, season=2026, rnd=2, hours_since_race
 
     session.commit()
     return season, rnd
+
+
+def test_weekend_endpoint_backfills_results(monkeypatch, session_factory):
+    """Ensure GET /weekend triggers ingestion for completed sessions without results."""
+    SessionLocal = session_factory
+    db = SessionLocal()
+    season, rnd = seed_race_weekend(db)
+
+    # Remove seeded results to simulate missing classifications
+    db.query(SessionClassification).delete()
+    db.commit()
+
+    app.dependency_overrides[get_db] = _override_dependency(SessionLocal)
+    dummy_cache = DummyRedis()
+    monkeypatch.setattr("theundercut.api.v1.race.redis_client", dummy_cache)
+
+    ingested_sessions: list[str] = []
+
+    def fake_trigger(season_arg: int, round_arg: int, session_label: str):
+        ingested_sessions.append(session_label)
+        normalized = race_module._normalize_session_name(session_label)
+        with SessionLocal() as session:
+            session.add(SessionClassification(
+                season=season_arg,
+                round=round_arg,
+                session_type=normalized,
+                driver_code="VER",
+                driver_name="Max Verstappen",
+                team="Red Bull",
+                position=1,
+                time_ms=90123,
+                gap_ms=None,
+                laps=20,
+            ))
+            session.commit()
+
+    monkeypatch.setattr("theundercut.api.v1.race._trigger_session_ingest", fake_trigger)
+
+    client = TestClient(app)
+    resp = client.get(f"/api/v1/race/{season}/{rnd}/weekend")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    # FP1 should now have results populated via the backfill hook
+    assert body["sessions"]["fp1"]["results"][0]["driver_code"] == "VER"
+    # Ensure we attempted to ingest at least one completed session
+    assert any("fp1" in label.lower() for label in ingested_sessions)
+
+    app.dependency_overrides.clear()
 
 
 def test_race_schedule_endpoint(session_factory, monkeypatch):

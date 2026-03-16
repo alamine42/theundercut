@@ -18,6 +18,53 @@ from theundercut.services.cache import (
     SESSION_CACHE_PREFIX,
 )
 
+SESSION_RESULTS_TO_FETCH: Tuple[str, ...] = (
+    "fp1",
+    "fp2",
+    "fp3",
+    "qualifying",
+    "sprint_qualifying",
+    "sprint_race",
+    "race",
+)
+
+SESSION_ALIAS_MAP = {
+    "fp1": "fp1",
+    "practice_1": "fp1",
+    "practice1": "fp1",
+    "practice": "fp1",
+    "free_practice_1": "fp1",
+    "freepractice1": "fp1",
+    "fp2": "fp2",
+    "practice_2": "fp2",
+    "practice2": "fp2",
+    "free_practice_2": "fp2",
+    "fp3": "fp3",
+    "practice_3": "fp3",
+    "practice3": "fp3",
+    "free_practice_3": "fp3",
+    "qualifying": "qualifying",
+    "qualifying_session": "qualifying",
+    "q": "qualifying",
+    "sprint_qualifying": "sprint_qualifying",
+    "sprint-qualifying": "sprint_qualifying",
+    "sprintqualifying": "sprint_qualifying",
+    "sprint_shootout": "sprint_qualifying",
+    "sprintshootout": "sprint_qualifying",
+    "sq": "sprint_qualifying",
+    "ss": "sprint_qualifying",
+    "sprint": "sprint_race",
+    "sprint_race": "sprint_race",
+    "sprintrace": "sprint_race",
+    "race": "race",
+    "grand_prix": "race",
+    "grandprix": "race",
+    "gp": "race",
+}
+
+SESSION_BACKFILL_GRACE_MINUTES = 2
+SESSION_BACKFILL_LOCK_TTL_SECONDS = 300
+
 
 # --- Pydantic models for responses ---
 
@@ -124,7 +171,41 @@ def _format_gap(gap_ms: Optional[float]) -> Optional[str]:
 
 
 def _normalize_session_name(name: str) -> str:
-    return name.lower().replace(" ", "_")
+    if not name:
+        return ""
+    slug = (
+        name.strip()
+        .lower()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
+    # collapse duplicate underscores introduced by replacements
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return SESSION_ALIAS_MAP.get(slug, slug)
+
+
+def _derive_session_status(
+    status: Optional[str],
+    start: Optional[dt.datetime],
+    end: Optional[dt.datetime],
+    now: Optional[dt.datetime] = None,
+) -> str:
+    current = now or dt.datetime.now(dt.timezone.utc)
+    normalized = (status or "scheduled").lower()
+    if normalized == "ingested":
+        return "ingested"
+    if normalized == "completed":
+        return "completed"
+    start_ts = _ensure_utc(start)
+    end_ts = _ensure_utc(end)
+    if end_ts and end_ts <= current:
+        return "completed"
+    if start_ts and start_ts <= current:
+        return "live"
+    if normalized in {"running", "live"}:
+        return "live"
+    return normalized
 
 
 def _event_to_session(event: CalendarEvent) -> RaceSession:
@@ -134,7 +215,7 @@ def _event_to_session(event: CalendarEvent) -> RaceSession:
         session_type=_normalize_session_name(event.session_type),
         start_time=start.isoformat() if start else None,
         end_time=end.isoformat() if end else None,
-        status=(event.status or "scheduled").lower(),
+        status=_derive_session_status(event.status, start, end),
     )
 
 
@@ -157,12 +238,13 @@ def _build_timeline(events: List[CalendarEvent]) -> Optional[WeekendTimeline]:
         start = _ensure_utc(event.start_ts)
         default_end = start + dt.timedelta(hours=2) if start else None
         end = _ensure_utc(event.end_ts) if event.end_ts else _ensure_utc(default_end)
+        status = _derive_session_status(event.status, start, end, now)
         normalized.append(
             {
                 "session": _event_to_session(event),
                 "start": start,
                 "end": end,
-                "status": (event.status or "scheduled").lower(),
+                "status": status,
             }
         )
 
@@ -300,6 +382,60 @@ def _load_schedule(db: Session, season: int, round_num: int) -> Tuple[List[Calen
     )
     timeline = _build_timeline(events)
     return events, schedule, timeline
+
+
+def _maybe_backfill_session_results(
+    db: Session,
+    season: int,
+    round_num: int,
+    events: List[CalendarEvent],
+) -> List[str]:
+    errors: List[str] = []
+    if not events:
+        return errors
+
+    now = dt.datetime.now(dt.timezone.utc)
+    event_lookup = {}
+    for event in events:
+        normalized = _normalize_session_name(event.session_type)
+        if normalized in SESSION_RESULTS_TO_FETCH:
+            event_lookup[normalized] = event
+
+    if not event_lookup:
+        return errors
+
+    existing_types = {
+        row[0]
+        for row in (
+            db.query(SessionClassification.session_type)
+            .filter_by(season=season, round=round_num)
+            .distinct()
+            .all()
+        )
+    }
+
+    for normalized, event in event_lookup.items():
+        if normalized in existing_types:
+            continue
+        end_time = _ensure_utc(event.end_ts)
+        if not end_time:
+            continue
+        if end_time + dt.timedelta(minutes=SESSION_BACKFILL_GRACE_MINUTES) > now:
+            continue
+        lock_key = f"weekend:auto_ingest:{season}:{round_num}:{normalized}"
+        if redis_client.get(lock_key):
+            continue
+        redis_client.setex(lock_key, SESSION_BACKFILL_LOCK_TTL_SECONDS, "1")
+        try:
+            _trigger_session_ingest(event.season, event.round, event.session_type)
+            existing_types.add(normalized)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            errors.append(f"ingest_failed:{normalized}:{exc}")
+            redis_client.delete(lock_key)
+        else:
+            redis_client.delete(lock_key)
+
+    return errors
 
 
 def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
@@ -543,6 +679,8 @@ def get_race_weekend(
         events, schedule, timeline = _load_schedule(db, season, round)
         if not events:
             schedule = None
+        else:
+            errors.extend(_maybe_backfill_session_results(db, season, round, events))
     except Exception as e:
         errors.append(f"schedule: {str(e)}")
 
@@ -569,7 +707,7 @@ def get_race_weekend(
 
     # Get all session results
     session_results = {}
-    session_types_to_fetch = ["fp1", "fp2", "fp3", "qualifying", "sprint_qualifying", "sprint_race", "race"]
+    session_types_to_fetch = SESSION_RESULTS_TO_FETCH
 
     for stype in session_types_to_fetch:
         try:
@@ -625,6 +763,12 @@ def get_race_weekend(
     redis_client.setex(cache_key, 300, json.dumps(response.model_dump()))
 
     return response
+
+
+def _trigger_session_ingest(season: int, round_num: int, session_label: str) -> None:
+    from theundercut.services.ingestion import ingest_session
+
+    ingest_session(season, round_num, session_label)
 
 
 # --- Admin endpoints ---
