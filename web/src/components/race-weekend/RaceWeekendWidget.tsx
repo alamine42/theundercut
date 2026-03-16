@@ -375,7 +375,10 @@ export function RaceWeekendWidget({
 
   useEffect(() => {
     if (!liveUpdate) return;
-    if (!targetSeason || !targetRound) return;
+    if (targetSeason == null || targetRound == null) return;
+
+    const season = targetSeason as number;
+    const round = targetRound as number;
 
     let cancelled = false;
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -383,7 +386,7 @@ export function RaceWeekendWidget({
     async function refresh() {
       try {
         setIsRefreshing(true);
-        const latest = await fetchLatestWeekendData(targetSeason, targetRound);
+        const latest = await fetchLatestWeekendData(season, round);
         if (cancelled || !latest) return;
         setLiveWeekendData(latest);
         setRefreshError(null);
