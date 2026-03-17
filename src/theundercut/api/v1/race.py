@@ -17,6 +17,7 @@ from theundercut.services.cache import (
     history_cache_key,
     SESSION_CACHE_PREFIX,
 )
+from theundercut.services.standings import fetch_season_standings
 
 SESSION_RESULTS_TO_FETCH: Tuple[str, ...] = (
     "fp1",
@@ -64,6 +65,8 @@ SESSION_ALIAS_MAP = {
 
 SESSION_BACKFILL_GRACE_MINUTES = 2
 SESSION_BACKFILL_LOCK_TTL_SECONDS = 300
+WEEKEND_CACHE_TTL_SECONDS = 300
+HISTORY_CACHE_TTL_SECONDS = 3600
 
 
 # --- Pydantic models for responses ---
@@ -142,6 +145,22 @@ class WeekendResponse(BaseModel):
     sessions: dict[str, Optional[SessionResultsResponse]]
     meta: WeekendMeta
     timeline: Optional[WeekendTimeline] = None
+
+
+class NextRacePreview(BaseModel):
+    race_name: Optional[str] = None
+    circuit_name: Optional[str] = None
+    circuit_country: Optional[str] = None
+    fp1_date: Optional[str] = None
+    round: Optional[int] = None
+
+
+class WeekendSummaryResponse(BaseModel):
+    season: int
+    display_round: Optional[int] = None
+    display_weekend: Optional[WeekendResponse] = None
+    next_weekend: Optional[WeekendResponse] = None
+    next_race_info: Optional[NextRacePreview] = None
 
 
 router = APIRouter(
@@ -438,6 +457,107 @@ def _maybe_backfill_session_results(
     return errors
 
 
+def _build_weekend_response(
+    db: Session,
+    season: int,
+    round_num: int,
+) -> WeekendResponse:
+    last_updated = dt.datetime.utcnow().isoformat()
+    errors: List[str] = []
+    schedule = None
+    timeline = None
+    try:
+        events, schedule, timeline = _load_schedule(db, season, round_num)
+        if not events:
+            schedule = None
+        else:
+            errors.extend(_maybe_backfill_session_results(db, season, round_num, events))
+    except Exception as exc:
+        errors.append(f"schedule: {str(exc)}")
+    history = _load_circuit_history(db, season, round_num, schedule, errors)
+
+    session_results: dict[str, Optional[SessionResultsResponse]] = {}
+    for stype in SESSION_RESULTS_TO_FETCH:
+        try:
+            classifications = (
+                db.query(SessionClassification)
+                .filter_by(season=season, round=round_num, session_type=stype)
+                .order_by(SessionClassification.position)
+                .all()
+            )
+            if classifications:
+                results = [
+                    SessionResult(
+                        position=c.position,
+                        driver_code=c.driver_code,
+                        driver_name=c.driver_name,
+                        team=c.team,
+                        time=_format_lap_time(c.time_ms),
+                        gap=_format_gap(c.gap_ms),
+                        laps=c.laps,
+                        points=c.points,
+                        q1_time=_format_lap_time(c.q1_time_ms) if stype == "qualifying" else None,
+                        q2_time=_format_lap_time(c.q2_time_ms) if stype == "qualifying" else None,
+                        q3_time=_format_lap_time(c.q3_time_ms) if stype == "qualifying" else None,
+                        eliminated_in=c.eliminated_in if stype == "qualifying" else None,
+                    )
+                    for c in classifications
+                ]
+                session_results[stype] = SessionResultsResponse(
+                    season=season,
+                    round=round_num,
+                    session_type=stype,
+                    results=results,
+                )
+            else:
+                session_results[stype] = None
+        except Exception as exc:
+            errors.append(f"{stype}: {str(exc)}")
+            session_results[stype] = None
+
+    return WeekendResponse(
+        schedule=schedule,
+        history=history,
+        sessions=session_results,
+        meta=WeekendMeta(
+            last_updated=last_updated,
+            stale=False,
+            errors=errors,
+        ),
+        timeline=timeline,
+    )
+
+
+def _get_weekend_with_cache(db: Session, season: int, round_num: Optional[int]) -> Optional[WeekendResponse]:
+    if not round_num or round_num <= 0:
+        return None
+    cache_key = weekend_cache_key(season, round_num)
+    cached = redis_client.get(cache_key)
+    if cached:
+        try:
+            payload = json.loads(cached)
+            return WeekendResponse(**payload)
+        except Exception:
+            redis_client.delete(cache_key)
+
+    payload = _build_weekend_response(db, season, round_num)
+    redis_client.setex(cache_key, WEEKEND_CACHE_TTL_SECONDS, json.dumps(payload.model_dump()))
+    return payload
+
+
+def _build_next_race_preview(weekend: Optional[WeekendResponse]) -> Optional[NextRacePreview]:
+    if not weekend or not weekend.schedule:
+        return None
+    first_session = next((s for s in weekend.schedule.sessions if s.start_time), None)
+    return NextRacePreview(
+        race_name=weekend.schedule.race_name,
+        circuit_name=weekend.schedule.circuit_name,
+        circuit_country=weekend.schedule.circuit_country,
+        fp1_date=first_session.start_time if first_session else None,
+        round=weekend.schedule.round,
+    )
+
+
 def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
     """Get circuit info from Race and Circuit tables."""
     # Try to get from Race table with Circuit join
@@ -472,6 +592,44 @@ def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
             "race_name": None,
         }
     return {"circuit_id": None, "circuit_name": None, "circuit_country": None, "race_name": None}
+
+
+def _load_circuit_history(
+    db: Session,
+    season: int,
+    rnd: int,
+    schedule: Optional[RaceWeekendSchedule],
+    errors: List[str],
+) -> CircuitHistory:
+    circuit_id = schedule.circuit_id if schedule else f"circuit_{season}_{rnd}"
+    base_history = CircuitHistory(
+        circuit_id=circuit_id,
+        circuit_name=schedule.circuit_name if schedule else None,
+        previous_year=None,
+    )
+    cache_key = history_cache_key(season, circuit_id)
+    cached = redis_client.get(cache_key)
+    if cached:
+        try:
+            payload = json.loads(cached)
+            return CircuitHistory(**payload)
+        except Exception:
+            redis_client.delete(cache_key)
+
+    try:
+        from theundercut.api.v1.circuits import get_circuit_history
+
+        history_data = get_circuit_history(season, circuit_id)
+        if history_data and history_data.get("previous_year"):
+            redis_client.setex(cache_key, HISTORY_CACHE_TTL_SECONDS, json.dumps(history_data))
+            return CircuitHistory(
+                circuit_id=history_data.get("circuit_id", circuit_id),
+                circuit_name=history_data.get("circuit_name"),
+                previous_year=history_data.get("previous_year"),
+            )
+    except Exception as exc:
+        errors.append(f"history: {str(exc)}")
+    return base_history
 
 @router.get("/{season}/{round}/laps")
 def get_laps(
@@ -651,118 +809,57 @@ def get_race_weekend(
     """
     Return aggregated race weekend data: schedule, history, and all session results.
     Single endpoint to reduce API calls from the frontend.
-
-    Parameters
-    ----------
-    season : int
-        Championship year (e.g., 2026)
-    round : int
-        FIA round number within that season
-
-    Returns
-    -------
-    WeekendResponse
-        Aggregated weekend data with schedule, history, sessions, and metadata
     """
-    cache_key = weekend_cache_key(season, round)
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    payload = _get_weekend_with_cache(db, season, round)
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"No weekend found for {season}-{round}")
+    return payload
 
-    errors = []
-    last_updated = dt.datetime.utcnow().isoformat()
 
-    # Get schedule
-    schedule = None
-    timeline = None
-    try:
-        events, schedule, timeline = _load_schedule(db, season, round)
-        if not events:
-            schedule = None
-        else:
-            errors.extend(_maybe_backfill_session_results(db, season, round, events))
-    except Exception as e:
-        errors.append(f"schedule: {str(e)}")
+@router.get("/{season}/weekend/summary", response_model=WeekendSummaryResponse)
+def get_weekend_summary(
+    season: int,
+    db: Session = Depends(get_db),
+):
+    standings = fetch_season_standings(db, season)
+    races_completed = int(standings.get("races_completed", 0)) if standings else 0
+    last_round = races_completed or None
+    next_round = races_completed + 1 if races_completed else 1
 
-    # Get history from the circuits endpoint
-    circuit_id = schedule.circuit_id if schedule else f"circuit_{season}_{round}"
-    history = CircuitHistory(
-        circuit_id=circuit_id,
-        circuit_name=schedule.circuit_name if schedule else None,
-        previous_year=None,
+    last_weekend = _get_weekend_with_cache(db, season, last_round) if last_round else None
+    next_weekend = _get_weekend_with_cache(db, season, next_round)
+
+    if last_weekend and not last_weekend.schedule:
+        last_weekend = None
+    if next_weekend and not next_weekend.schedule:
+        next_weekend = None
+
+    display_weekend = None
+    display_round = None
+    if last_weekend and last_weekend.timeline and last_weekend.timeline.state != "off-week":
+        display_weekend = last_weekend
+        display_round = last_round
+    elif next_weekend:
+        display_weekend = next_weekend
+        display_round = next_round
+    else:
+        display_weekend = last_weekend
+        display_round = last_round
+
+    preview_source = next_weekend or display_weekend
+    next_race_info = _build_next_race_preview(preview_source)
+
+    include_next = (
+        next_weekend if next_weekend and (display_round is None or display_round != next_round) else None
     )
 
-    # Try to fetch actual history data
-    try:
-        from theundercut.api.v1.circuits import get_circuit_history
-        history_data = get_circuit_history(season, circuit_id)
-        if history_data and history_data.get("previous_year"):
-            history = CircuitHistory(
-                circuit_id=history_data.get("circuit_id", circuit_id),
-                circuit_name=history_data.get("circuit_name"),
-                previous_year=history_data.get("previous_year"),
-            )
-    except Exception as e:
-        errors.append(f"history: {str(e)}")
-
-    # Get all session results
-    session_results = {}
-    session_types_to_fetch = SESSION_RESULTS_TO_FETCH
-
-    for stype in session_types_to_fetch:
-        try:
-            classifications = (
-                db.query(SessionClassification)
-                .filter_by(season=season, round=round, session_type=stype)
-                .order_by(SessionClassification.position)
-                .all()
-            )
-            if classifications:
-                results = [
-                    SessionResult(
-                        position=c.position,
-                        driver_code=c.driver_code,
-                        driver_name=c.driver_name,
-                        team=c.team,
-                        time=_format_lap_time(c.time_ms),
-                        gap=_format_gap(c.gap_ms),
-                        laps=c.laps,
-                        points=c.points,
-                        q1_time=_format_lap_time(c.q1_time_ms) if stype == "qualifying" else None,
-                        q2_time=_format_lap_time(c.q2_time_ms) if stype == "qualifying" else None,
-                        q3_time=_format_lap_time(c.q3_time_ms) if stype == "qualifying" else None,
-                        eliminated_in=c.eliminated_in if stype == "qualifying" else None,
-                    )
-                    for c in classifications
-                ]
-                session_results[stype] = SessionResultsResponse(
-                    season=season,
-                    round=round,
-                    session_type=stype,
-                    results=results,
-                )
-            else:
-                session_results[stype] = None
-        except Exception as e:
-            errors.append(f"{stype}: {str(e)}")
-            session_results[stype] = None
-
-    response = WeekendResponse(
-        schedule=schedule,
-        history=history,
-        sessions=session_results,
-        meta=WeekendMeta(
-            last_updated=last_updated,
-            stale=False,
-            errors=errors,
-        ),
-        timeline=timeline,
+    return WeekendSummaryResponse(
+        season=season,
+        display_round=display_round,
+        display_weekend=display_weekend,
+        next_weekend=include_next,
+        next_race_info=next_race_info,
     )
-
-    # Cache for 5 minutes
-    redis_client.setex(cache_key, 300, json.dumps(response.model_dump()))
-
-    return response
 
 
 def _trigger_session_ingest(season: int, round_num: int, session_label: str) -> None:

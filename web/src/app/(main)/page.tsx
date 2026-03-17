@@ -6,15 +6,15 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TeamWithLogo } from "@/components/ui/team-logo";
 import { SeasonResultsTable } from "@/components/season-results-table";
 import { RaceWeekendWidget } from "@/components/race-weekend";
-import { fetchStandings, fetchTestingEvents, fetchWeekendData } from "@/lib/api";
+import { fetchStandings, fetchTestingEvents, fetchWeekendSummary } from "@/lib/api";
 import { DEFAULT_SEASON } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
-import type { TestingEvent, WeekendResponse } from "@/types/api";
+import type { TestingEvent, WeekendResponse, WeekendSummaryResponse } from "@/types/api";
 import type { NextRaceInfo } from "@/components/race-weekend/types";
 
 export const revalidate = 300; // 5 minutes ISR
 
-function buildNextRaceInfo(weekend: WeekendResponse | null): NextRaceInfo | null {
+function buildFallbackNextRaceInfo(weekend: WeekendResponse | null): NextRaceInfo | null {
   if (!weekend?.schedule) return null;
   const firstSession = weekend.schedule.sessions?.find((session) => session.start_time) ?? null;
   return {
@@ -26,34 +26,29 @@ function buildNextRaceInfo(weekend: WeekendResponse | null): NextRaceInfo | null
   };
 }
 
+function mapNextRaceInfo(preview: WeekendSummaryResponse["next_race_info"]): NextRaceInfo | null {
+  if (!preview) return null;
+  return {
+    raceName: preview.race_name,
+    circuitName: preview.circuit_name,
+    circuitCountry: preview.circuit_country,
+    fp1Date: preview.fp1_date,
+    round: preview.round ?? 0,
+  };
+}
+
 async function getHomeData() {
   try {
-    const [standings, testingData] = await Promise.all([
+    const [standings, testingData, weekendSummary] = await Promise.all([
       fetchStandings(DEFAULT_SEASON).catch(() => null),
       fetchTestingEvents(DEFAULT_SEASON).catch(() => ({ events: [] })),
+      fetchWeekendSummary(DEFAULT_SEASON).catch(() => null),
     ]);
 
-    const racesCompleted = standings?.races_completed ?? 0;
-    const lastRound = racesCompleted > 0 ? racesCompleted : null;
-    const nextRound = Math.max(1, racesCompleted + 1);
-
-    const [lastWeekend, nextWeekend] = await Promise.all([
-      lastRound ? fetchWeekendData(DEFAULT_SEASON, lastRound).catch(() => null) : Promise.resolve<WeekendResponse | null>(null),
-      fetchWeekendData(DEFAULT_SEASON, nextRound).catch(() => null),
-    ]);
-
-    let weekendData: WeekendResponse | null = null;
-    if (lastWeekend && lastWeekend.timeline && lastWeekend.timeline.state !== "off-week") {
-      weekendData = lastWeekend;
-    } else if (nextWeekend) {
-      weekendData = nextWeekend;
-    } else {
-      weekendData = lastWeekend;
-    }
-
+    const weekendData: WeekendResponse | null = weekendSummary?.display_weekend ?? null;
     const nextRaceInfo =
-      buildNextRaceInfo(nextWeekend) ??
-      (weekendData && weekendData.timeline?.state !== "off-week" ? buildNextRaceInfo(weekendData) : null);
+      mapNextRaceInfo(weekendSummary?.next_race_info ?? null) ??
+      (weekendData ? buildFallbackNextRaceInfo(weekendData) : null);
 
     return {
       standings,

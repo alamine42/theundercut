@@ -14,6 +14,7 @@ import type {
   SessionResultsResponse,
   CircuitHistoryResponse,
   WeekendResponse,
+  WeekendSummaryResponse,
   CircuitsCharacteristicsResponse,
   CircuitWithCharacteristics,
   CircuitsRankingResponse,
@@ -280,6 +281,14 @@ export async function fetchWeekendData(
   round: number
 ): Promise<WeekendResponse> {
   return apiFetch<WeekendResponse>(`/race/${season}/${round}/weekend`, {
+    revalidate: 5,
+  });
+}
+
+export async function fetchWeekendSummary(
+  season: number
+): Promise<WeekendSummaryResponse> {
+  return apiFetch<WeekendSummaryResponse>(`/race/${season}/weekend/summary`, {
     revalidate: 5,
   });
 }

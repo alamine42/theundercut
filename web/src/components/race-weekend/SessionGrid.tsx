@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { SessionCard } from "./SessionCard";
 import type { SessionGridProps } from "./types";
-import { normalizeSessionType } from "./utils";
 
 export function SessionGrid({
   sessions,
@@ -31,7 +30,7 @@ export function SessionGrid({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {sortedSessions.map((session) => {
-        const normalizedType = normalizeSessionType(session.session_type);
+        const normalizedType = session.session_type.toLowerCase();
         const results = sessionResults[normalizedType] || null;
 
         return (

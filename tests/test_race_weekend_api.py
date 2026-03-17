@@ -173,6 +173,32 @@ def test_weekend_endpoint_backfills_results(monkeypatch, session_factory):
     app.dependency_overrides.clear()
 
 
+def test_weekend_summary_endpoint(monkeypatch, session_factory):
+    """The weekend summary endpoint should return the current display weekend and next preview."""
+    SessionLocal = session_factory
+    db = SessionLocal()
+    season = 2026
+    seed_race_weekend(db, season=season, rnd=1)
+    seed_completed_race_weekend(db, season=season, rnd=2, hours_since_race_end=48)
+
+    app.dependency_overrides[get_db] = _override_dependency(SessionLocal)
+    dummy_cache = DummyRedis()
+    monkeypatch.setattr("theundercut.api.v1.race.redis_client", dummy_cache)
+    monkeypatch.setattr("theundercut.api.v1.race.fetch_season_standings", lambda _db, _season: {"races_completed": 1})
+
+    client = TestClient(app)
+    resp = client.get(f"/api/v1/race/{season}/weekend/summary")
+    assert resp.status_code == 200
+
+    body = resp.json()
+    assert body["display_round"] == 1
+    assert body["display_weekend"]["schedule"]["round"] == 1
+    assert body["next_weekend"]["schedule"]["round"] == 2
+    assert body["next_race_info"]["round"] == 2
+
+    app.dependency_overrides.clear()
+
+
 def test_race_schedule_endpoint(session_factory, monkeypatch):
     """Test GET /api/v1/race/{season}/{round}/schedule returns schedule."""
     SessionLocal = session_factory

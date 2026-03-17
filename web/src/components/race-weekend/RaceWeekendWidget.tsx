@@ -202,7 +202,7 @@ function getDaysUntilFP1(
 
   // Find FP1 or first session
   const fp1 = sessions.find(
-    (s) => s.session_type.toLowerCase() === "fp1" || s.session_type.toLowerCase() === "practice_1"
+    (s) => s.session_type.toLowerCase() === "fp1"
   );
   const firstSession = fp1 || sessions.find((s) => s.start_time);
 

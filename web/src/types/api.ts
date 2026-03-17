@@ -468,6 +468,22 @@ export interface WeekendResponse {
   timeline?: WeekendTimeline | null;
 }
 
+export interface NextRacePreview {
+  race_name: string | null;
+  circuit_name: string | null;
+  circuit_country: string | null;
+  fp1_date: string | null;
+  round: number | null;
+}
+
+export interface WeekendSummaryResponse {
+  season: number;
+  display_round: number | null;
+  display_weekend: WeekendResponse | null;
+  next_weekend: WeekendResponse | null;
+  next_race_info: NextRacePreview | null;
+}
+
 // =============================================================================
 // Circuit Characteristics Data
 // =============================================================================
