@@ -1,12 +1,17 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import type { RaceCountdownProps } from "./types";
 
-function formatCountdown(targetDate: string): {
+interface CountdownValues {
   days: number;
   hours: number;
   minutes: number;
   isImminent: boolean;
   hasStarted: boolean;
-} {
+}
+
+function formatCountdown(targetDate: string): CountdownValues {
   const target = new Date(targetDate);
   const now = new Date();
   const diffMs = target.getTime() - now.getTime();
@@ -21,6 +26,25 @@ function formatCountdown(targetDate: string): {
   const isImminent = diffMs < 24 * 60 * 60 * 1000; // Less than 24 hours
 
   return { days, hours, minutes, isImminent, hasStarted: false };
+}
+
+/**
+ * Hook that defers countdown calculation to the client to avoid hydration
+ * mismatches. Returns null on the server/initial render, then computes
+ * the live countdown after mount.
+ */
+function useCountdown(targetDate: string): CountdownValues | null {
+  const [countdown, setCountdown] = useState<CountdownValues | null>(null);
+
+  useEffect(() => {
+    setCountdown(formatCountdown(targetDate));
+    const interval = setInterval(() => {
+      setCountdown(formatCountdown(targetDate));
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  return countdown;
 }
 
 function formatDateTime(dateStr: string): { date: string; time: string } {
@@ -52,12 +76,35 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
 }
 
 export function RaceCountdown({ targetDate, sessionType, label }: RaceCountdownProps) {
-  const countdown = formatCountdown(targetDate);
+  const countdown = useCountdown(targetDate);
   const { date, time } = formatDateTime(targetDate);
 
   const displayLabel = label || (sessionType
     ? `${sessionType.replace(/_/g, " ").toUpperCase()} STARTS IN`
     : "RACE STARTS IN");
+
+  // Before hydration, render a placeholder that matches on server and client
+  if (!countdown) {
+    return (
+      <div className="countdown-container p-4 sm:p-6 md:p-8 text-center animate-fadeInUp">
+        <p className="text-[10px] sm:text-xs uppercase tracking-widest text-paper/50 mb-3 sm:mb-4">
+          {displayLabel}
+        </p>
+        <div className="flex items-center justify-center gap-3 sm:gap-6 md:gap-8">
+          <CountdownUnit value={0} label="days" />
+          <span className="text-2xl sm:text-3xl md:text-4xl text-paper/30 font-light">:</span>
+          <CountdownUnit value={0} label="hours" />
+          <span className="text-2xl sm:text-3xl md:text-4xl text-paper/30 font-light">:</span>
+          <CountdownUnit value={0} label="min" />
+        </div>
+        <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-paper/60">
+          <span className="text-xs sm:text-sm" suppressHydrationWarning>{date}</span>
+          <span className="hidden sm:inline text-paper/30">·</span>
+          <span className="text-xs sm:text-sm" suppressHydrationWarning>{time}</span>
+        </div>
+      </div>
+    );
+  }
 
   if (countdown.hasStarted) {
     return (
