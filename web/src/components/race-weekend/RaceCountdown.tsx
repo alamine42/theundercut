@@ -98,9 +98,9 @@ export function RaceCountdown({ targetDate, sessionType, label }: RaceCountdownP
       </div>
 
       <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-paper/60">
-        <span className="text-xs sm:text-sm">{date}</span>
+        <span className="text-xs sm:text-sm" suppressHydrationWarning>{date}</span>
         <span className="hidden sm:inline text-paper/30">·</span>
-        <span className="text-xs sm:text-sm">{time}</span>
+        <span className="text-xs sm:text-sm" suppressHydrationWarning>{time}</span>
       </div>
 
       {/* Progress bar showing time remaining (visual indicator) */}

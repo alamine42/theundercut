@@ -190,7 +190,7 @@ function StaleDataBanner({ lastUpdated }: { lastUpdated?: string }) {
       </svg>
       <div>
         <p className="font-semibold text-sm">Data may be outdated</p>
-        <p className="text-xs text-yellow-700">Last updated: {relativeTime}</p>
+        <p className="text-xs text-yellow-700" suppressHydrationWarning>Last updated: {relativeTime}</p>
       </div>
     </div>
   );
@@ -293,9 +293,10 @@ function OffWeekState({
   );
 }
 
-function EmptyState({ nextRaceInfo }: { nextRaceInfo?: NextRaceInfo | null }) {
+function EmptyState({ nextRaceInfo, hasMounted }: { nextRaceInfo?: NextRaceInfo | null; hasMounted: boolean }) {
   // If we have info about the next race from circuits data, show it
-  if (nextRaceInfo?.fp1Date) {
+  // Only compute date-dependent values after hydration to avoid mismatches
+  if (hasMounted && nextRaceInfo?.fp1Date) {
     const now = new Date();
     const fp1Date = new Date(nextRaceInfo.fp1Date);
     const diffMs = fp1Date.getTime() - now.getTime();
@@ -449,6 +450,14 @@ export function RaceWeekendWidget({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
+  // Prevent hydration mismatches from new Date() calls during render.
+  // On the server and initial client render, hasMounted is false — we rely
+  // solely on the server-provided timeline.state and skip all client-side
+  // Date calculations. After hydration completes, hasMounted flips to true
+  // and the component re-renders with live Date values.
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => { setHasMounted(true); }, []);
+
   useEffect(() => {
     setLiveWeekendData(weekendData);
   }, [weekendData]);
@@ -519,19 +528,22 @@ export function RaceWeekendWidget({
   const currentWeekendData = liveWeekendData ?? weekendData;
 
   if (!currentWeekendData || !currentWeekendData.schedule) {
-    return <EmptyState nextRaceInfo={nextRaceInfo} />;
+    return <EmptyState nextRaceInfo={nextRaceInfo} hasMounted={hasMounted} />;
   }
 
   const { schedule, history, sessions: sessionResults, meta, timeline } = currentWeekendData;
   const serverState = mapTimelineState(timeline?.state);
-  const widgetState = serverState ?? determineWidgetState(schedule);
+  // Before hydration, prefer the server-provided state to avoid Date mismatches
+  const widgetState = serverState ?? (hasMounted ? determineWidgetState(schedule) : "pre-weekend");
   const nextSessionFromTimeline = timeline?.next_session ?? null;
-  const nextSession = nextSessionFromTimeline ?? getNextSession(schedule.sessions);
+  const nextSession = nextSessionFromTimeline ?? (hasMounted ? getNextSession(schedule.sessions) : null);
 
   // Check if we're in "expired post-race" state (>24 hours since race ended)
   // In this state, we should show the countdown to the next race instead
-  const hoursSinceRaceEnd = getHoursSinceRaceEnd(schedule.sessions);
+  // Skip Date-dependent checks before hydration to avoid mismatches
+  const hoursSinceRaceEnd = hasMounted ? getHoursSinceRaceEnd(schedule.sessions) : null;
   const isExpiredPostRace = (() => {
+    if (!hasMounted) return false;
     if (timeline) {
       if (timeline.state !== "post-race") return false;
       if (!timeline.window_end) return false;
@@ -565,7 +577,9 @@ export function RaceWeekendWidget({
   }
 
   // For off-week state (>7 days until race), show simplified message
+  // Skip Date-dependent calculations before hydration
   const offWeekDays = (() => {
+    if (!hasMounted) return null;
     const nextRaceDate = nextRaceInfo?.fp1Date ?? timeline?.next_session?.start_time ?? null;
     const daysFromNextInfo = getDaysUntilDate(nextRaceDate);
     if (daysFromNextInfo) {
@@ -602,7 +616,7 @@ export function RaceWeekendWidget({
   const displayCircuitName = schedule.circuit_name || nextRaceInfo?.circuitName || null;
   const displayCircuitCountry = schedule.circuit_country || nextRaceInfo?.circuitCountry || null;
 
-  const isRaceWeekendActive = timeline?.is_active ?? fallbackRaceWeekendActive(widgetState, schedule.sessions);
+  const isRaceWeekendActive = timeline?.is_active ?? (hasMounted ? fallbackRaceWeekendActive(widgetState, schedule.sessions) : false);
 
   return (
     <Card accent>
