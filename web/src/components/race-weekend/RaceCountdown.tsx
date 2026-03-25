@@ -38,6 +38,10 @@ function useCountdown(targetDate: string): CountdownValues | null {
 
   useEffect(() => {
     setCountdown(formatCountdown(targetDate));
+    const interval = setInterval(() => {
+      setCountdown(formatCountdown(targetDate));
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
   }, [targetDate]);
 
   return countdown;
