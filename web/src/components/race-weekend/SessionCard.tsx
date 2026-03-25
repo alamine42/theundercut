@@ -118,7 +118,7 @@ function StatusBadge({
 
   const countdownText = startTime ? formatCountdownShort(startTime) : "Scheduled";
   return (
-    <span className="status-scheduled">
+    <span className="status-scheduled" suppressHydrationWarning>
       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
@@ -163,9 +163,9 @@ export function SessionCard({
               <span className="hidden sm:inline">{label}</span>
             </span>
             {!isCompleted && !sessionEnded && session.start_time && (
-              <span className="text-xs text-muted mt-0.5">
-                {formatSessionTime(session.start_time)}
-              </span>
+                      <span className="text-xs text-muted mt-0.5" suppressHydrationWarning>
+                        {formatSessionTime(session.start_time)}
+                      </span>
             )}
           </div>
         </div>
