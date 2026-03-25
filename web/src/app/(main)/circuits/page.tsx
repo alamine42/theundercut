@@ -15,34 +15,32 @@ export const metadata = {
   description: "F1 circuit analytics - track layouts, lap records, driver performance, and race statistics for the current season",
 };
 
+/** Race a promise against a timeout; returns null if it takes too long. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export default async function CircuitsPage() {
   const season = DEFAULT_SEASON;
 
-  // Fetch circuits data (required)
-  let circuitsData;
-  try {
-    circuitsData = await fetchCircuits(season);
-  } catch {
+  // Fetch all data in parallel — characteristics & rankings are optional
+  const [circuitsResult, characteristicsResult, rankingsResult] = await Promise.all([
+    fetchCircuits(season).catch(() => null),
+    withTimeout(fetchCircuitsCharacteristics(), 15_000).catch(() => null),
+    withTimeout(fetchAllCircuitRankings(), 30_000).catch(() => null),
+  ]);
+
+  // Circuits data is required
+  if (!circuitsResult) {
     notFound();
   }
+  const circuitsData = circuitsResult;
 
-  // Fetch characteristics and rankings data independently (optional, graceful degradation)
-  let characteristicsData: CircuitsCharacteristicsResponse | null = null;
-  let rankingsData: Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>> = new Map();
-
-  // Fetch characteristics (for table)
-  try {
-    characteristicsData = await fetchCircuitsCharacteristics();
-  } catch {
-    // Characteristics data is optional - continue without it
-  }
-
-  // Fetch rankings (for badges) - separate try/catch so characteristics still work if this fails
-  try {
-    rankingsData = await fetchAllCircuitRankings();
-  } catch {
-    // Rankings data is optional - continue without it
-  }
+  const characteristicsData: CircuitsCharacteristicsResponse | null = characteristicsResult;
+  const rankingsData: Map<string, Array<{ field: string; label: string; rank: number; value: number; isTop: boolean }>> = rankingsResult ?? new Map();
 
   const { circuits } = circuitsData;
 
