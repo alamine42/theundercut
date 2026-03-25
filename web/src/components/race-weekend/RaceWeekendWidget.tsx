@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ScoreBadge } from "@/components/ui/score-indicator";
 import { RaceHeader } from "./RaceHeader";
 import { RaceCountdown } from "./RaceCountdown";
 import { HistoricalData } from "./HistoricalData";
 import { SessionGrid } from "./SessionGrid";
 import { getCountryFlag } from "@/lib/utils";
-import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo, WeekendResponse } from "./types";
+import type { RaceWeekendWidgetProps, WidgetState, NextRaceInfo, WeekendResponse, CircuitCharacteristics } from "./types";
 import { hasMissingSessionResults } from "./utils";
 
 /** Number of hours after race end before the widget reverts to showing next race countdown */
@@ -355,9 +356,92 @@ function ErrorState({ error }: { error: string }) {
   );
 }
 
+function CircuitHighlights({
+  characteristics,
+  circuitId,
+  season,
+}: {
+  characteristics: CircuitCharacteristics;
+  circuitId: string | null;
+  season: number;
+}) {
+  const chars = characteristics;
+  const circuitLink = circuitId ? `/circuits/${season}/${circuitId}` : "/circuits";
+
+  // Collect the key highlights to show
+  const highlights: Array<{ label: string; score: number | null; detail?: string }> = [];
+
+  if (chars.downforce?.score != null) {
+    highlights.push({ label: "Downforce", score: chars.downforce.score, detail: chars.downforce.label ?? undefined });
+  }
+  if (chars.tire_degradation?.score != null) {
+    highlights.push({ label: "Tire Deg", score: chars.tire_degradation.score, detail: chars.tire_degradation.label ?? undefined });
+  }
+  if (chars.overtaking?.score != null) {
+    highlights.push({ label: "Overtaking", score: chars.overtaking.score, detail: chars.overtaking.label ?? undefined });
+  }
+  if (chars.full_throttle?.score != null) {
+    highlights.push({ label: "Throttle", score: chars.full_throttle.score, detail: chars.full_throttle.value ? `${chars.full_throttle.value}%` : undefined });
+  }
+
+  if (highlights.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-ink/10 animate-fadeInUp animation-delay-100">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">Circuit Characteristics</h3>
+        <Link
+          href={circuitLink}
+          className="text-xs font-medium text-accent hover:underline inline-flex items-center gap-1"
+        >
+          Learn more
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {highlights.map((h) => (
+          <div key={h.label} className="flex flex-col items-center gap-1 p-2 bg-ink/[0.03] rounded">
+            <span className="text-[11px] text-muted font-medium">{h.label}</span>
+            <ScoreBadge score={h.score} />
+            {h.detail && <span className="text-[10px] text-muted">{h.detail}</span>}
+          </div>
+        ))}
+      </div>
+      {/* Track info pills */}
+      {(chars.circuit_type || chars.track_length_km || chars.drs_zones != null || chars.corners?.total != null) && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {chars.circuit_type && (
+            <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium bg-ink/5 rounded">
+              {chars.circuit_type}
+            </span>
+          )}
+          {chars.track_length_km && (
+            <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium bg-ink/5 rounded">
+              {chars.track_length_km} km
+            </span>
+          )}
+          {chars.drs_zones != null && (
+            <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium bg-ink/5 rounded">
+              {chars.drs_zones} DRS zone{chars.drs_zones !== 1 ? "s" : ""}
+            </span>
+          )}
+          {chars.corners?.total != null && (
+            <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium bg-ink/5 rounded">
+              {chars.corners.total} corners
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RaceWeekendWidget({
   weekendData,
   nextRaceInfo,
+  circuitCharacteristics,
   error,
   liveUpdate = true,
 }: RaceWeekendWidgetProps) {
@@ -577,6 +661,15 @@ export function RaceWeekendWidget({
               sessionResults={sessionResults}
             />
           </div>
+        )}
+
+        {/* Circuit Characteristics - show before race weekend */}
+        {(widgetState === "pre-weekend" || widgetState === "race-week") && circuitCharacteristics && (
+          <CircuitHighlights
+            characteristics={circuitCharacteristics}
+            circuitId={schedule.circuit_id}
+            season={schedule.season}
+          />
         )}
 
         {/* Historical Data - show before race weekend */}

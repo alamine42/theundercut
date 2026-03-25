@@ -12,11 +12,16 @@ export function RaceHeader({
 }: RaceHeaderProps) {
   const flag = circuitCountry ? getCountryFlag(circuitCountry) : "";
   const roundLabel = totalRounds ? `Round ${round} of ${totalRounds}` : `Round ${round}`;
-  const displayTitle = isRaceWeekendActive && raceName ? raceName : "Upcoming Race";
+  const displayTitle = raceName || "Upcoming Race";
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
+        {!isRaceWeekendActive && raceName && (
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-0.5">
+            Upcoming Race
+          </p>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           {flag && (
             <span className="text-xl sm:text-2xl" role="img" aria-label={circuitCountry || "Country"}>
