@@ -6,10 +6,10 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TeamWithLogo } from "@/components/ui/team-logo";
 import { SeasonResultsTable } from "@/components/season-results-table";
 import { RaceWeekendWidget } from "@/components/race-weekend";
-import { fetchStandings, fetchTestingEvents, fetchWeekendSummary } from "@/lib/api";
-import { DEFAULT_SEASON } from "@/lib/constants";
+import { fetchStandings, fetchTestingEvents, fetchWeekendSummary, fetchCircuitsCharacteristics } from "@/lib/api";
+import { DEFAULT_SEASON, getCircuitNameFromJolpicaId } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/utils";
-import type { TestingEvent, WeekendResponse, WeekendSummaryResponse } from "@/types/api";
+import type { TestingEvent, WeekendResponse, WeekendSummaryResponse, CircuitCharacteristics } from "@/types/api";
 import type { NextRaceInfo } from "@/components/race-weekend/types";
 
 export const revalidate = 300; // 5 minutes ISR
@@ -37,12 +37,24 @@ function mapNextRaceInfo(preview: WeekendSummaryResponse["next_race_info"]): Nex
   };
 }
 
+function findCircuitCharacteristics(
+  weekendData: WeekendResponse | null,
+  characteristicsData: { circuits: Array<{ name: string; characteristics: CircuitCharacteristics | null }> } | null
+): CircuitCharacteristics | null {
+  if (!weekendData?.schedule?.circuit_id || !characteristicsData) return null;
+  const dbName = getCircuitNameFromJolpicaId(weekendData.schedule.circuit_id);
+  if (!dbName) return null;
+  const match = characteristicsData.circuits.find((c) => c.name === dbName);
+  return match?.characteristics ?? null;
+}
+
 async function getHomeData() {
   try {
-    const [standings, testingData, weekendSummary] = await Promise.all([
+    const [standings, testingData, weekendSummary, characteristicsData] = await Promise.all([
       fetchStandings(DEFAULT_SEASON).catch(() => null),
       fetchTestingEvents(DEFAULT_SEASON).catch(() => ({ events: [] })),
       fetchWeekendSummary(DEFAULT_SEASON).catch(() => null),
+      fetchCircuitsCharacteristics().catch(() => null),
     ]);
 
     const weekendData: WeekendResponse | null = weekendSummary?.display_weekend ?? null;
@@ -50,21 +62,24 @@ async function getHomeData() {
       mapNextRaceInfo(weekendSummary?.next_race_info ?? null) ??
       (weekendData ? buildFallbackNextRaceInfo(weekendData) : null);
 
+    const circuitCharacteristics = findCircuitCharacteristics(weekendData, characteristicsData);
+
     return {
       standings,
       testingEvents: testingData.events,
       weekendData,
       nextRaceInfo,
+      circuitCharacteristics,
       error: null,
     };
   } catch (error) {
     console.error("Failed to fetch homepage data:", error);
-    return { standings: null, testingEvents: [], weekendData: null, nextRaceInfo: null, error: "Failed to load data" };
+    return { standings: null, testingEvents: [], weekendData: null, nextRaceInfo: null, circuitCharacteristics: null, error: "Failed to load data" };
   }
 }
 
 export default async function HomePage() {
-  const { standings, testingEvents, weekendData, nextRaceInfo, error } = await getHomeData();
+  const { standings, testingEvents, weekendData, nextRaceInfo, circuitCharacteristics, error } = await getHomeData();
 
   const topDrivers = standings?.drivers.slice(0, 5) ?? [];
   const topConstructors = standings?.constructors.slice(0, 5) ?? [];
@@ -129,7 +144,7 @@ export default async function HomePage() {
           ) : (
             <div className="space-y-8">
               {/* Race Weekend Widget - shows current/upcoming race info and results */}
-              <RaceWeekendWidget weekendData={weekendData} nextRaceInfo={nextRaceInfo} />
+              <RaceWeekendWidget weekendData={weekendData} nextRaceInfo={nextRaceInfo} circuitCharacteristics={circuitCharacteristics} />
 
               {/* Pre-Season Testing Widget - only shown before first race and >24h from first session */}
               {showPreSeasonTesting && (

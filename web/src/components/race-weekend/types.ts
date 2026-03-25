@@ -8,6 +8,7 @@ import type {
   CircuitHistoryResponse,
   WeekendResponse,
   WeekendTimeline,
+  CircuitCharacteristics,
 } from "@/types/api";
 
 export type WidgetState =
@@ -28,6 +29,7 @@ export interface NextRaceInfo {
 export interface RaceWeekendWidgetProps {
   weekendData: WeekendResponse | null;
   nextRaceInfo?: NextRaceInfo | null;
+  circuitCharacteristics?: CircuitCharacteristics | null;
   error?: string | null;
   liveUpdate?: boolean;
 }
@@ -83,4 +85,5 @@ export {
   CircuitHistoryResponse,
   WeekendResponse,
   WeekendTimeline,
+  CircuitCharacteristics,
 };
