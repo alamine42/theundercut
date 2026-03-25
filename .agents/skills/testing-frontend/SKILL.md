@@ -1,56 +1,59 @@
 # Testing The Undercut Frontend
 
 ## Overview
-The Undercut is a Next.js 16 F1 analytics dashboard. The frontend lives in `web/` and connects to a FastAPI backend.
+The Undercut is a Next.js 16 F1 analytics dashboard. The frontend lives in `web/` and fetches data from a FastAPI backend.
 
-## Local Dev Server
+## Local Development Setup
 
-```bash
-cd web
-FASTAPI_URL=https://theundercut-web.onrender.com npm run dev
-```
+1. Navigate to `web/` directory
+2. Install dependencies: `npm install`
+3. Create `.env.local` with the backend URL:
+   ```
+   FASTAPI_URL=https://theundercut-web.onrender.com
+   ```
+4. For dev mode: `npx next dev -p 3000`
+5. For production-like testing (recommended for hydration issues): `npx next build && npx next start -p 3000`
 
-This starts the frontend at `http://localhost:4000` using the production backend API.
+## Devin Secrets Needed
+No secrets required. The production API at `https://theundercut-web.onrender.com` is publicly accessible (found in `render.yaml`).
 
-## Unit Tests
+## Running Tests
+- Unit tests: `npx vitest run` (from `web/` directory)
+- Currently 91 tests across 5 test files
 
-Tests use Vitest + React Testing Library:
+## Common Issues
 
-```bash
-cd web
-npx vitest run                    # run all tests
-npx vitest run src/components/race-weekend/__tests__/RaceWeekendWidget.test.tsx  # specific test file
-```
+### React Hydration Errors (#418)
+- **Symptom**: `Minified React error #418` in browser console
+- **Root cause**: `new Date()` calls during render produce different values at build/ISR time vs client hydration time
+- **How to reproduce**: Build with production API data (`FASTAPI_URL=... npx next build`), then `npx next start`. The statically generated HTML has stale date values that mismatch the client's live calculations.
+- **Fix pattern**: Use `useEffect` to defer date-dependent calculations to after hydration. For minor text differences (locale formatting), use `suppressHydrationWarning`.
+- **Important**: Files using React hooks (`useState`, `useEffect`) MUST have `"use client"` directive at the top for Turbopack compatibility.
 
-## Testing Time-Dependent Widget States
+### Build Timeouts on /circuits Page
+- The circuits page makes multiple API calls during static generation
+- If the backend is slow, these can exceed the 60-second build timeout
+- Solution: Parallelize API calls with `Promise.all` and add timeouts with fallbacks
 
-The Race Weekend Widget (`web/src/components/race-weekend/RaceWeekendWidget.tsx`) has 5 states that depend on session times relative to the current time: `off-week`, `pre-weekend`, `race-week`, `during-weekend`, `post-race`.
+### SVG Preload Warnings
+- Console shows many warnings about preloaded circuit SVGs not being used
+- These are benign warnings, not errors — they come from circuit map images preloaded but not visible in the viewport
 
-Since you can't manipulate time in the live app, create a **temporary test page** at `web/src/app/test-widget/page.tsx` that:
-1. Imports `RaceWeekendWidget` and the `WeekendResponse` type
-2. Creates mock `WeekendResponse` objects with session times relative to `new Date()` (using helpers like `hoursAgo(n)` and `hoursFromNow(n)`)
-3. Renders multiple widget instances side-by-side, one per state
-4. Navigate to `http://localhost:4000/test-widget` to visually verify
-
-**Important**: Remove the temporary test page after testing - do not commit it.
+## Testing Hydration Fixes
+To verify a hydration fix:
+1. Build the main branch with production API and confirm error #418 appears (baseline)
+2. Build the fix branch with production API and confirm error #418 does NOT appear
+3. Hard refresh 2-3 times to rule out intermittent issues
+4. Verify countdown widget shows correct non-zero values and ticks down over time
 
 ## Key Files
+- `web/src/components/race-weekend/RaceWeekendWidget.tsx` — Main widget component
+- `web/src/components/race-weekend/RaceCountdown.tsx` — Countdown timer (uses useCountdown hook)
+- `web/src/components/race-weekend/SessionCard.tsx` — Session cards with time-dependent text
+- `web/src/app/(main)/page.tsx` — Homepage
+- `render.yaml` — Contains production API URL
 
-- `web/src/components/race-weekend/RaceWeekendWidget.tsx` - Main widget with state machine logic
-- `web/src/components/race-weekend/RaceHeader.tsx` - Header component (title display)
-- `web/src/components/race-weekend/types.ts` - TypeScript interfaces
-- `web/src/app/page.tsx` - Homepage that renders the widget (around line 133)
-
-## API Notes
-
-- The backend at `https://theundercut-web.onrender.com` may return `race_name: null` from `/weekend` endpoint early in the season or between races
-- When `race_name` is null, the widget title correctly falls back to "Upcoming Race" regardless of state
-- To test the GP name title display, you need mock data with a non-null `race_name`
-
-## No Auth Required
-
-No authentication or secrets are needed for local frontend testing. The backend API is publicly accessible.
-
-## No CI Configured
-
-As of March 2026, this repo has no CI checks configured. Rely on local lint (`npm run lint`) and unit tests for verification.
+## Production
+- Frontend: https://www.theundercut.co/
+- Backend API: https://theundercut-web.onrender.com
+- Deployed via Render (see render.yaml)
