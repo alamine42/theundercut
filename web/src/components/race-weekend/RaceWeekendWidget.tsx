@@ -410,7 +410,7 @@ function CircuitHighlights({
         ))}
       </div>
       {/* Track info pills */}
-      {(chars.circuit_type || chars.track_length_km || chars.drs_zones != null) && (
+      {(chars.circuit_type || chars.track_length_km || chars.drs_zones != null || chars.corners?.total != null) && (
         <div className="mt-2 flex flex-wrap gap-2">
           {chars.circuit_type && (
             <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium bg-ink/5 rounded">
