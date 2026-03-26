@@ -2,7 +2,7 @@ import { TeamWithLogo } from "@/components/ui/team-logo";
 import type { HistoricalDataProps } from "./types";
 
 const POSITION_MEDALS = ["1st", "2nd", "3rd"];
-const POSITION_EMOJIS = ["\u{1F947}", "\u{1F948}", "\u{1F949}"]; // Gold, Silver, Bronze medals
+const POSITION_EMOJIS = ["🥇", "🥈", "🥉"]; // Gold, Silver, Bronze medals
 
 interface PodiumItemProps {
   position: number;
@@ -96,14 +96,14 @@ export function HistoricalData({ history }: HistoricalDataProps) {
         <div className="grid grid-cols-2 gap-2 content-start">
           {previous_year.pole && (
             <StatItem
-              icon="\u{2B50}"
+              icon="⭐"
               label="Pole Position"
               value={previous_year.pole.driver_code}
             />
           )}
           {previous_year.fastest_lap && (
             <StatItem
-              icon="\u{26A1}"
+              icon="⚡"
               label="Fastest Lap"
               value={`${previous_year.fastest_lap.driver_code}${
                 previous_year.fastest_lap.time ? ` ${previous_year.fastest_lap.time}` : ""
