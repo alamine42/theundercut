@@ -7,6 +7,7 @@ interface CountdownValues {
   days: number;
   hours: number;
   minutes: number;
+  seconds: number;
   isImminent: boolean;
   hasStarted: boolean;
 }
@@ -17,15 +18,16 @@ function formatCountdown(targetDate: string): CountdownValues {
   const diffMs = target.getTime() - now.getTime();
 
   if (diffMs <= 0) {
-    return { days: 0, hours: 0, minutes: 0, isImminent: true, hasStarted: true };
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, isImminent: true, hasStarted: true };
   }
 
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
   const isImminent = diffMs < 24 * 60 * 60 * 1000; // Less than 24 hours
 
-  return { days, hours, minutes, isImminent, hasStarted: false };
+  return { days, hours, minutes, seconds, isImminent, hasStarted: false };
 }
 
 /**
@@ -37,10 +39,10 @@ function useCountdown(targetDate: string): CountdownValues | null {
   const [countdown, setCountdown] = useState<CountdownValues | null>(null);
 
   useEffect(() => {
-    setCountdown(formatCountdown(targetDate));
-    const interval = setInterval(() => {
-      setCountdown(formatCountdown(targetDate));
-    }, 60000); // Update every minute
+    // Compute initial value and start ticking every second
+    const tick = () => setCountdown(formatCountdown(targetDate));
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [targetDate]);
 
@@ -96,6 +98,8 @@ export function RaceCountdown({ targetDate, sessionType, label }: RaceCountdownP
           <CountdownUnit value={0} label="hours" />
           <span className="text-2xl sm:text-3xl md:text-4xl text-paper/30 font-light">:</span>
           <CountdownUnit value={0} label="min" />
+          <span className="text-2xl sm:text-3xl md:text-4xl text-paper/30 font-light">:</span>
+          <CountdownUnit value={0} label="sec" />
         </div>
         <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-paper/60">
           <span className="text-xs sm:text-sm" suppressHydrationWarning>{date}</span>
@@ -126,7 +130,7 @@ export function RaceCountdown({ targetDate, sessionType, label }: RaceCountdownP
       }`}
       role="timer"
       aria-live="polite"
-      aria-label={`${displayLabel}: ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes`}
+      aria-label={`${displayLabel}: ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, ${countdown.seconds} seconds`}
     >
       <p className="text-[10px] sm:text-xs uppercase tracking-widest text-paper/50 mb-3 sm:mb-4">
         {displayLabel}
@@ -142,6 +146,8 @@ export function RaceCountdown({ targetDate, sessionType, label }: RaceCountdownP
         <CountdownUnit value={countdown.hours} label="hours" />
         <span className="text-2xl sm:text-3xl md:text-4xl text-paper/30 font-light">:</span>
         <CountdownUnit value={countdown.minutes} label="min" />
+        <span className="text-2xl sm:text-3xl md:text-4xl text-paper/30 font-light">:</span>
+        <CountdownUnit value={countdown.seconds} label="sec" />
       </div>
 
       <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-paper/60">
