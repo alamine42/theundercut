@@ -140,13 +140,13 @@ describe("RaceCountdown", () => {
   });
 
   describe("Accessibility", () => {
-    it("has role='timer' and aria-live='polite'", () => {
+    it("has role='timer' and aria-live='off'", () => {
       const targetDate = new Date("2026-03-17T14:00:00Z").toISOString();
 
       render(<RaceCountdown targetDate={targetDate} sessionType="race" />);
 
       const timer = screen.getByRole("timer");
-      expect(timer).toHaveAttribute("aria-live", "polite");
+      expect(timer).toHaveAttribute("aria-live", "off");
     });
 
     it("has descriptive aria-label", () => {

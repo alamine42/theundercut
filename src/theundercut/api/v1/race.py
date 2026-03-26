@@ -607,7 +607,7 @@ def _fetch_openf1_meeting(meeting_key: int) -> Optional[dict]:
                 meeting = data[0]
                 redis_client.setex(cache_key, OPENF1_MEETING_CACHE_TTL_SECONDS, json.dumps(meeting))
                 return meeting
-    except Exception as exc:
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
         logger.warning("Failed to fetch OpenF1 meeting %s: %s", meeting_key, exc)
     return None
 

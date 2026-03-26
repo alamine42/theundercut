@@ -129,7 +129,7 @@ export function RaceCountdown({ targetDate, sessionType, label }: RaceCountdownP
         countdown.isImminent ? "animate-countdownPulse" : ""
       }`}
       role="timer"
-      aria-live="polite"
+      aria-live="off"
       aria-label={`${displayLabel}: ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, ${countdown.seconds} seconds`}
     >
       <p className="text-[10px] sm:text-xs uppercase tracking-widest text-paper/50 mb-3 sm:mb-4">
