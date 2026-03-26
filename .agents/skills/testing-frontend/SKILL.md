@@ -1,59 +1,64 @@
 # Testing The Undercut Frontend
 
-## Overview
-The Undercut is a Next.js 16 F1 analytics dashboard. The frontend lives in `web/` and fetches data from a FastAPI backend.
+## Local Dev Server Setup
 
-## Local Development Setup
-
-1. Navigate to `web/` directory
-2. Install dependencies: `npm install`
-3. Create `.env.local` with the backend URL:
+1. Create `.env.local` in the `web/` directory:
    ```
    FASTAPI_URL=https://theundercut-web.onrender.com
    ```
-4. For dev mode: `npx next dev -p 3000`
-5. For production-like testing (recommended for hydration issues): `npx next build && npx next start -p 3000`
+2. Start the dev server:
+   ```bash
+   cd web && NEXT_PUBLIC_SITE_URL=http://localhost:3000 npx next dev -p 3000
+   ```
+3. If you get a lock file error, remove it:
+   ```bash
+   rm -f web/.next/dev/lock
+   fuser -k 3000/tcp 2>/dev/null
+   ```
 
 ## Devin Secrets Needed
-No secrets required. The production API at `https://theundercut-web.onrender.com` is publicly accessible (found in `render.yaml`).
 
-## Running Tests
-- Unit tests: `npx vitest run` (from `web/` directory)
-- Currently 91 tests across 5 test files
+No secrets are required for frontend testing against production. The production API at `https://theundercut-web.onrender.com` is publicly accessible.
+
+## Key Testing Scenarios
+
+### Countdown Timer
+- Navigate to homepage (`/`)
+- The countdown widget shows hours, minutes, and seconds (SEC unit)
+- Verify the seconds value changes every second by waiting 3-5 seconds
+- The countdown should tick live without page refresh
+
+### Hydration Errors (React #418)
+- Open browser console before navigating to the page
+- Navigate to homepage and check for `React error #418` or hydration mismatch warnings
+- Only unrelated warnings (e.g., Agentation session) should appear
+- The `hasMounted` pattern in `RaceWeekendWidget.tsx` prevents hydration mismatches from `new Date()` calls
+- `RaceCountdown.tsx` defers countdown calculation to client via `useCountdown` hook (returns null on server)
+
+### GP Name Display
+- The widget title shows the GP name (e.g., "Japanese Grand Prix") when the backend API returns `race_name` for the round
+- If `race_name` is null (backend fix not deployed or Race table not populated), it falls back to "Upcoming Race"
+- The backend uses OpenF1 API as fallback when no Race record exists (for upcoming/not-yet-ingested rounds)
+
+### Circuit Characteristics
+- Displayed below the countdown when `circuitCharacteristics` prop is non-null
+- Requires the backend to return a correct Jolpica-style `circuit_id` (e.g., `suzuka`, not `circuit_2026_3`)
+- The frontend maps `circuit_id` → full DB name via `getCircuitNameFromJolpicaId()` in `constants.ts`
+- Score badges show Downforce, Tire Deg, Overtaking, and Throttle scores
 
 ## Common Issues
 
-### React Hydration Errors (#418)
-- **Symptom**: `Minified React error #418` in browser console
-- **Root cause**: `new Date()` calls during render produce different values at build/ISR time vs client hydration time
-- **How to reproduce**: Build with production API data (`FASTAPI_URL=... npx next build`), then `npx next start`. The statically generated HTML has stale date values that mismatch the client's live calculations.
-- **Fix pattern**: Use `useEffect` to defer date-dependent calculations to after hydration. For minor text differences (locale formatting), use `suppressHydrationWarning`.
-- **Important**: Files using React hooks (`useState`, `useEffect`) MUST have `"use client"` directive at the top for Turbopack compatibility.
+- **Lock file error**: If the dev server crashes or is killed, a lock file at `web/.next/dev/lock` may prevent restart. Delete it manually.
+- **Backend returning nulls**: The production backend might return null for `race_name`, `circuit_name`, etc. if the OpenF1 fallback isn't deployed yet or the Race table hasn't been populated for that round.
+- **OpenF1 circuit_short_name mismatch**: The backend has an `OPENF1_TO_JOLPICA_CIRCUIT` mapping in `src/theundercut/api/v1/race.py` that maps OpenF1 names (e.g., "Melbourne") to Jolpica IDs (e.g., "albert_park"). If a new circuit is added, this mapping may need updating.
 
-### Build Timeouts on /circuits Page
-- The circuits page makes multiple API calls during static generation
-- If the backend is slow, these can exceed the 60-second build timeout
-- Solution: Parallelize API calls with `Promise.all` and add timeouts with fallbacks
+## Running Tests
 
-### SVG Preload Warnings
-- Console shows many warnings about preloaded circuit SVGs not being used
-- These are benign warnings, not errors — they come from circuit map images preloaded but not visible in the viewport
+```bash
+cd web && npx vitest run
+```
 
-## Testing Hydration Fixes
-To verify a hydration fix:
-1. Build the main branch with production API and confirm error #418 appears (baseline)
-2. Build the fix branch with production API and confirm error #418 does NOT appear
-3. Hard refresh 2-3 times to rule out intermittent issues
-4. Verify countdown widget shows correct non-zero values and ticks down over time
-
-## Key Files
-- `web/src/components/race-weekend/RaceWeekendWidget.tsx` — Main widget component
-- `web/src/components/race-weekend/RaceCountdown.tsx` — Countdown timer (uses useCountdown hook)
-- `web/src/components/race-weekend/SessionCard.tsx` — Session cards with time-dependent text
-- `web/src/app/(main)/page.tsx` — Homepage
-- `render.yaml` — Contains production API URL
-
-## Production
-- Frontend: https://www.theundercut.co/
-- Backend API: https://theundercut-web.onrender.com
-- Deployed via Render (see render.yaml)
+All 91 tests should pass. Key test files:
+- `RaceCountdown.test.tsx` — countdown display, ticking, accessibility
+- `RaceWeekendWidget.test.tsx` — widget states, hydration safety
+- `SessionCard.test.tsx` — session card rendering
