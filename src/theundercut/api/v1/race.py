@@ -26,6 +26,26 @@ logger = logging.getLogger(__name__)
 
 OPENF1_MEETING_CACHE_TTL_SECONDS = 3600  # 1 hour
 
+# Map OpenF1 circuit_short_name to Jolpica-style circuit IDs used by the frontend.
+# Only entries where the names diverge need to be listed; circuits whose
+# short_name.lower().replace(" ", "_") already matches the Jolpica ID are
+# resolved automatically.
+OPENF1_TO_JOLPICA_CIRCUIT: dict[str, str] = {
+    "Melbourne": "albert_park",
+    "Sakhir": "bahrain",
+    "Monte Carlo": "monaco",
+    "Montreal": "villeneuve",
+    "Spielberg": "red_bull_ring",
+    "Spa-Francorchamps": "spa",
+    "Singapore": "marina_bay",
+    "Austin": "americas",
+    "Mexico City": "rodriguez",
+    "Las Vegas": "vegas",
+    "Lusail": "losail",
+    "Yas Marina Circuit": "yas_marina",
+    "Madrid": "madring",
+}
+
 SESSION_RESULTS_TO_FETCH: Tuple[str, ...] = (
     "fp1",
     "fp2",
@@ -622,7 +642,11 @@ def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
         meeting = _fetch_openf1_meeting(event.meeting_key)
         if meeting:
             circuit_short = meeting.get("circuit_short_name") or ""
-            circuit_id = circuit_short.lower().replace(" ", "_").replace("-", "_") if circuit_short else f"circuit_{season}_{rnd}"
+            # Use explicit mapping first, then fall back to normalised short name
+            circuit_id = OPENF1_TO_JOLPICA_CIRCUIT.get(
+                circuit_short,
+                circuit_short.lower().replace(" ", "_").replace("-", "_") if circuit_short else f"circuit_{season}_{rnd}",
+            )
             return {
                 "circuit_id": circuit_id,
                 "circuit_name": circuit_short or None,
