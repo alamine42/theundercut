@@ -1,7 +1,10 @@
 # src/theundercut/api/v1/race.py
 import json
+import logging
 import datetime as dt
 from typing import Optional, Tuple, List
+
+import httpx
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
@@ -18,6 +21,30 @@ from theundercut.services.cache import (
     SESSION_CACHE_PREFIX,
 )
 from theundercut.services.standings import fetch_season_standings
+
+logger = logging.getLogger(__name__)
+
+OPENF1_MEETING_CACHE_TTL_SECONDS = 3600  # 1 hour
+
+# Map OpenF1 circuit_short_name to Jolpica-style circuit IDs used by the frontend.
+# Only entries where the names diverge need to be listed; circuits whose
+# short_name.lower().replace(" ", "_") already matches the Jolpica ID are
+# resolved automatically.
+OPENF1_TO_JOLPICA_CIRCUIT: dict[str, str] = {
+    "Melbourne": "albert_park",
+    "Sakhir": "bahrain",
+    "Monte Carlo": "monaco",
+    "Montreal": "villeneuve",
+    "Spielberg": "red_bull_ring",
+    "Spa-Francorchamps": "spa",
+    "Singapore": "marina_bay",
+    "Austin": "americas",
+    "Mexico City": "rodriguez",
+    "Las Vegas": "vegas",
+    "Lusail": "losail",
+    "Yas Marina Circuit": "yas_marina",
+    "Madrid": "madring",
+}
 
 SESSION_RESULTS_TO_FETCH: Tuple[str, ...] = (
     "fp1",
@@ -558,8 +585,35 @@ def _build_next_race_preview(weekend: Optional[WeekendResponse]) -> Optional[Nex
     )
 
 
+def _fetch_openf1_meeting(meeting_key: int) -> Optional[dict]:
+    """Fetch meeting metadata from OpenF1, with Redis caching."""
+    cache_key = f"openf1:meeting:{meeting_key}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached)
+        except Exception:
+            redis_client.delete(cache_key)
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(
+                "https://api.openf1.org/v1/meetings",
+                params={"meeting_key": meeting_key},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data and isinstance(data, list) and len(data) > 0:
+                meeting = data[0]
+                redis_client.setex(cache_key, OPENF1_MEETING_CACHE_TTL_SECONDS, json.dumps(meeting))
+                return meeting
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+        logger.warning("Failed to fetch OpenF1 meeting %s: %s", meeting_key, exc)
+    return None
+
+
 def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
-    """Get circuit info from Race and Circuit tables."""
+    """Get circuit info from Race and Circuit tables, falling back to OpenF1."""
     # Try to get from Race table with Circuit join
     race = (
         db.query(Race, Circuit)
@@ -578,12 +632,28 @@ def _get_circuit_info(season: int, rnd: int, db: Session) -> dict:
             "race_name": race_obj.slug.replace("-", " ").title() if race_obj.slug else None,
         }
 
-    # Fallback to calendar event if Race not found
+    # Fallback: use OpenF1 meeting data via calendar event meeting_key
     event = (
         db.query(CalendarEvent)
         .filter_by(season=season, round=rnd)
         .first()
     )
+    if event and event.meeting_key:
+        meeting = _fetch_openf1_meeting(event.meeting_key)
+        if meeting:
+            circuit_short = meeting.get("circuit_short_name") or ""
+            # Use explicit mapping first, then fall back to normalised short name
+            circuit_id = OPENF1_TO_JOLPICA_CIRCUIT.get(
+                circuit_short,
+                circuit_short.lower().replace(" ", "_").replace("-", "_") if circuit_short else f"circuit_{season}_{rnd}",
+            )
+            return {
+                "circuit_id": circuit_id,
+                "circuit_name": circuit_short or None,
+                "circuit_country": meeting.get("country_name") or None,
+                "race_name": meeting.get("meeting_name") or None,
+            }
+
     if event:
         return {
             "circuit_id": f"circuit_{season}_{rnd}",
